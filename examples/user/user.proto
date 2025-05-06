@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package user;
+
+option go_package = "github.com/platinummonkey/spoke/examples/user";
+
+import "common/common.proto";
+
+// User represents a system user
+message User {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  UserRole role = 4;
+  common.Status status = 5;
+  common.Metadata metadata = 6;
+}
+
+// UserRole represents the role of a user
+enum UserRole {
+  USER_ROLE_UNSPECIFIED = 0;
+  USER_ROLE_ADMIN = 1;
+  USER_ROLE_USER = 2;
+  USER_ROLE_GUEST = 3;
+}
+
+// CreateUserRequest represents a request to create a new user
+message CreateUserRequest {
+  string email = 1;
+  string name = 2;
+  UserRole role = 3;
+}
+
+// CreateUserResponse represents the response after creating a user
+message CreateUserResponse {
+  User user = 1;
+}
+
+// GetUserRequest represents a request to get a user
+message GetUserRequest {
+  string id = 1;
+}
+
+// GetUserResponse represents the response containing a user
+message GetUserResponse {
+  User user = 1;
+}
+
+// ListUsersRequest represents a request to list users
+message ListUsersRequest {
+  common.PaginationRequest pagination = 1;
+  UserRole role = 2;
+  common.Status status = 3;
+}
+
+// ListUsersResponse represents the response containing a list of users
+message ListUsersResponse {
+  repeated User users = 1;
+  common.PaginationResponse pagination = 2;
+}
+
+// UserService provides methods for managing users
+service UserService {
+  // CreateUser creates a new user
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+  
+  // GetUser retrieves a user by ID
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+  
+  // ListUsers retrieves a list of users
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+} 

@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package common;
+
+option go_package = "github.com/platinummonkey/spoke/examples/common";
+
+// Common status codes used across services
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_OK = 1;
+  STATUS_ERROR = 2;
+  STATUS_PENDING = 3;
+}
+
+// Common error response
+message Error {
+  string code = 1;
+  string message = 2;
+  map<string, string> details = 3;
+}
+
+// Common metadata for all resources
+message Metadata {
+  string created_at = 1;
+  string updated_at = 2;
+  string created_by = 3;
+  map<string, string> labels = 4;
+}
+
+// Common pagination request
+message PaginationRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+// Common pagination response
+message PaginationResponse {
+  int32 total_count = 1;
+  string next_page_token = 2;
+  bool has_more = 3;
+} 

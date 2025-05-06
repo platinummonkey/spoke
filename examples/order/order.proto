@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package order;
+
+option go_package = "github.com/platinummonkey/spoke/examples/order";
+
+import "common/common.proto";
+import "user/user.proto";
+
+// Order represents a customer order
+message Order {
+  string id = 1;
+  string user_id = 2;
+  OrderStatus status = 3;
+  repeated OrderItem items = 4;
+  double total_amount = 5;
+  common.Metadata metadata = 6;
+}
+
+// OrderStatus represents the status of an order
+enum OrderStatus {
+  ORDER_STATUS_UNSPECIFIED = 0;
+  ORDER_STATUS_PENDING = 1;
+  ORDER_STATUS_PROCESSING = 2;
+  ORDER_STATUS_SHIPPED = 3;
+  ORDER_STATUS_DELIVERED = 4;
+  ORDER_STATUS_CANCELLED = 5;
+}
+
+// OrderItem represents an item in an order
+message OrderItem {
+  string product_id = 1;
+  string name = 2;
+  int32 quantity = 3;
+  double unit_price = 4;
+}
+
+// CreateOrderRequest represents a request to create a new order
+message CreateOrderRequest {
+  string user_id = 1;
+  repeated OrderItem items = 2;
+}
+
+// CreateOrderResponse represents the response after creating an order
+message CreateOrderResponse {
+  Order order = 1;
+}
+
+// GetOrderRequest represents a request to get an order
+message GetOrderRequest {
+  string id = 1;
+}
+
+// GetOrderResponse represents the response containing an order
+message GetOrderResponse {
+  Order order = 1;
+  user.User user = 2;  // Include user information
+}
+
+// ListOrdersRequest represents a request to list orders
+message ListOrdersRequest {
+  common.PaginationRequest pagination = 1;
+  string user_id = 2;
+  OrderStatus status = 3;
+}
+
+// ListOrdersResponse represents the response containing a list of orders
+message ListOrdersResponse {
+  repeated Order orders = 1;
+  common.PaginationResponse pagination = 2;
+}
+
+// UpdateOrderStatusRequest represents a request to update an order's status
+message UpdateOrderStatusRequest {
+  string id = 1;
+  OrderStatus status = 2;
+}
+
+// UpdateOrderStatusResponse represents the response after updating an order's status
+message UpdateOrderStatusResponse {
+  Order order = 1;
+}
+
+// OrderService provides methods for managing orders
+service OrderService {
+  // CreateOrder creates a new order
+  rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse);
+  
+  // GetOrder retrieves an order by ID
+  rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
+  
+  // ListOrders retrieves a list of orders
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
+  
+  // UpdateOrderStatus updates the status of an order
+  rpc UpdateOrderStatus(UpdateOrderStatusRequest) returns (UpdateOrderStatusResponse);
+} 
