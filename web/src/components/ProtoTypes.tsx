@@ -313,21 +313,6 @@ export const ProtoTypes: React.FC<ProtoTypesProps> = ({
   
   return (
     <VStack align="stretch" spacing={6}>
-      <Box>
-        <Select
-          value={version}
-          onChange={(e) => onVersionChange(e.target.value)}
-          size="sm"
-          width="200px"
-        >
-          {versions.map((v) => (
-            <option key={v} value={v}>
-              {v}
-            </option>
-          ))}
-        </Select>
-      </Box>
-
       {files.map((file) => {
         console.log('Processing file:', file);
         return (

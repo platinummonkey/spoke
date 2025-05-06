@@ -21,8 +21,14 @@ import {
   BreadcrumbLink,
   Flex,
   Link,
+  Select,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  Button as ChakraButton,
 } from '@chakra-ui/react';
-import { ChevronRightIcon } from '@chakra-ui/icons';
+import { ChevronRightIcon, ChevronDownIcon } from '@chakra-ui/icons';
 import { Link as RouterLink } from 'react-router-dom';
 import { Module } from '../types';
 import { ProtoTypes } from './ProtoTypes';
@@ -36,14 +42,18 @@ interface ModuleDetailProps {
 }
 
 export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, error, retry, initialVersion }) => {
-  const [selectedVersion, setSelectedVersion] = useState<string | null>(initialVersion || null);
+  const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
 
-  // Update selectedVersion when initialVersion changes
+  // Update selectedVersion when module or initialVersion changes
   useEffect(() => {
+    if (!module) return;
+    
     if (initialVersion) {
       setSelectedVersion(initialVersion);
+    } else if (module.versions && module.versions.length > 0) {
+      setSelectedVersion(module.versions[0].version);
     }
-  }, [initialVersion]);
+  }, [module, initialVersion]);
 
   if (loading) {
     return (
@@ -106,10 +116,44 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
       </Breadcrumb>
 
       <Box>
-        <Heading size="lg">{module.name}</Heading>
-        <Text mt={2} color="gray.600">
-          {module.description || 'No description available'}
-        </Text>
+        <Flex justify="space-between" align="center">
+          <Box>
+            <Heading size="lg">{module.name}</Heading>
+            <Text mt={2} color="gray.600">
+              {module.description || 'No description available'}
+            </Text>
+          </Box>
+          <Menu>
+            <MenuButton
+              as={ChakraButton}
+              rightIcon={<ChevronDownIcon />}
+              size="sm"
+              width="300px"
+              textAlign="left"
+            >
+              {selectedVersion || 'Select version'}
+            </MenuButton>
+            <MenuList>
+              {versions.map((v) => {
+                const versionData = module.versions?.find(ver => ver.version === v);
+                return (
+                  <MenuItem
+                    key={v}
+                    onClick={() => setSelectedVersion(v)}
+                    display="flex"
+                    flexDirection="column"
+                    alignItems="flex-start"
+                  >
+                    <Text fontWeight="bold">{v}</Text>
+                    <Text fontSize="xs" color="gray.500">
+                      {versionData ? formatDate(versionData.created_at) : ''}
+                    </Text>
+                  </MenuItem>
+                );
+              })}
+            </MenuList>
+          </Menu>
+        </Flex>
       </Box>
 
       <Tabs>
@@ -150,7 +194,6 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
                           </Text>
                           <Box mt={1}>
                             {version.dependencies.map((dep) => {
-                              // Split the dependency string into module name and version
                               const [moduleName, depVersion] = dep.split('@');
                               return (
                                 <Link
