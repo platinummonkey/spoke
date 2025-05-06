@@ -11,9 +11,9 @@ const ModuleListPage = () => {
 };
 
 const ModuleDetailPage = () => {
-  const { moduleName } = useParams<{ moduleName: string }>();
+  const { moduleName, version } = useParams<{ moduleName: string; version?: string }>();
   const { module, loading, error, retry } = useModule(moduleName || '');
-  return <ModuleDetail module={module} loading={loading} error={error} retry={retry} />;
+  return <ModuleDetail module={module} loading={loading} error={error} retry={retry} initialVersion={version} />;
 };
 
 function App() {
@@ -24,6 +24,7 @@ function App() {
           <Routes>
             <Route path="/" element={<ModuleListPage />} />
             <Route path="/modules/:moduleName" element={<ModuleDetailPage />} />
+            <Route path="/modules/:moduleName/versions/:version" element={<ModuleDetailPage />} />
           </Routes>
         </Container>
       </Router>

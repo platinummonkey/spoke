@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   VStack,
@@ -16,7 +16,14 @@ import {
   TabPanels,
   Tab,
   TabPanel,
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  Flex,
+  Link,
 } from '@chakra-ui/react';
+import { ChevronRightIcon } from '@chakra-ui/icons';
+import { Link as RouterLink } from 'react-router-dom';
 import { Module } from '../types';
 import { ProtoTypes } from './ProtoTypes';
 
@@ -25,10 +32,18 @@ interface ModuleDetailProps {
   loading: boolean;
   error: Error | null;
   retry: () => void;
+  initialVersion?: string;
 }
 
-export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, error, retry }) => {
-  const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
+export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, error, retry, initialVersion }) => {
+  const [selectedVersion, setSelectedVersion] = useState<string | null>(initialVersion || null);
+
+  // Update selectedVersion when initialVersion changes
+  useEffect(() => {
+    if (initialVersion) {
+      setSelectedVersion(initialVersion);
+    }
+  }, [initialVersion]);
 
   if (loading) {
     return (
@@ -64,8 +79,32 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
   const versions = module.versions?.map(v => v.version) || [];
   const selectedVersionData = module.versions?.find(v => v.version === selectedVersion) || module.versions?.[0];
 
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+  };
+
   return (
     <VStack align="stretch" spacing={6}>
+      <Breadcrumb spacing="8px" separator={<ChevronRightIcon color="gray.500" />}>
+        <BreadcrumbItem>
+          <BreadcrumbLink as={RouterLink} to="/">
+            Modules
+          </BreadcrumbLink>
+        </BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>
+          <BreadcrumbLink>{module.name}</BreadcrumbLink>
+        </BreadcrumbItem>
+      </Breadcrumb>
+
       <Box>
         <Heading size="lg">{module.name}</Heading>
         <Text mt={2} color="gray.600">
@@ -95,7 +134,12 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
                       cursor="pointer"
                       onClick={() => setSelectedVersion(version.version)}
                     >
-                      <Text fontWeight="bold">{version.version}</Text>
+                      <Flex justify="space-between" align="center">
+                        <Text fontWeight="bold">{version.version}</Text>
+                        <Text fontSize="xs" color="gray.500">
+                          {formatDate(version.created_at)}
+                        </Text>
+                      </Flex>
                       <Text fontSize="sm" color="gray.600">
                         {version.files?.length || 0} files
                       </Text>
@@ -105,11 +149,27 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
                             Dependencies:
                           </Text>
                           <Box mt={1}>
-                            {version.dependencies.map((dep) => (
-                              <Badge key={dep} mr={2} mb={1}>
-                                {dep}
-                              </Badge>
-                            ))}
+                            {version.dependencies.map((dep) => {
+                              // Split the dependency string into module name and version
+                              const [moduleName, depVersion] = dep.split('@');
+                              return (
+                                <Link
+                                  key={dep}
+                                  as={RouterLink}
+                                  to={`/modules/${moduleName}/versions/${depVersion}`}
+                                  _hover={{ textDecoration: 'none' }}
+                                >
+                                  <Badge
+                                    mr={2}
+                                    mb={1}
+                                    _hover={{ bg: 'blue.100' }}
+                                    transition="background-color 0.2s"
+                                  >
+                                    {dep}
+                                  </Badge>
+                                </Link>
+                              );
+                            })}
                           </Box>
                         </Box>
                       )}

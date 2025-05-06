@@ -8,6 +8,7 @@ export interface Version {
   version: string;
   files: ProtoFile[];
   dependencies: string[];
+  created_at: string;
 }
 
 export interface ProtoFile {
