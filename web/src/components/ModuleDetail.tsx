@@ -27,8 +27,11 @@ import {
   MenuList,
   MenuItem,
   Button as ChakraButton,
+  Input,
+  InputGroup,
+  InputLeftElement,
 } from '@chakra-ui/react';
-import { ChevronRightIcon, ChevronDownIcon } from '@chakra-ui/icons';
+import { ChevronRightIcon, ChevronDownIcon, SearchIcon } from '@chakra-ui/icons';
 import { Link as RouterLink } from 'react-router-dom';
 import { Module } from '../types';
 import { ProtoTypes } from './ProtoTypes';
@@ -43,6 +46,7 @@ interface ModuleDetailProps {
 
 export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, error, retry, initialVersion }) => {
   const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Update selectedVersion when module or initialVersion changes
   useEffect(() => {
@@ -103,6 +107,30 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
       hour12: false,
     });
   };
+
+  // Filter versions based on search query
+  const filteredVersions = module.versions?.filter(version => {
+    if (!searchQuery) return true;
+    
+    const query = searchQuery.toLowerCase();
+    
+    // Check version info
+    if (
+      version.version.toLowerCase().includes(query) ||
+      version.source_info.repository.toLowerCase().includes(query) ||
+      version.source_info.commit_sha.toLowerCase().includes(query) ||
+      version.source_info.branch.toLowerCase().includes(query)
+    ) {
+      return true;
+    }
+    
+    // Check dependencies
+    if (version.dependencies) {
+      return version.dependencies.some(dep => dep.toLowerCase().includes(query));
+    }
+    
+    return false;
+  }) || [];
 
   return (
     <VStack align="stretch" spacing={6}>
@@ -168,9 +196,21 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
           <TabPanel>
             <VStack align="stretch" spacing={4}>
               <Box>
-                <Heading size="md" mb={2}>Versions</Heading>
+                <Flex justify="space-between" align="center" mb={4}>
+                  <Heading size="md">Versions</Heading>
+                  <InputGroup maxW="400px">
+                    <InputLeftElement pointerEvents="none">
+                      <SearchIcon color="gray.300" />
+                    </InputLeftElement>
+                    <Input
+                      placeholder="Search by version, repository, commit, or branch..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </InputGroup>
+                </Flex>
                 <VStack align="stretch" spacing={2}>
-                  {module.versions?.map((version) => (
+                  {filteredVersions.map((version) => (
                     <Box
                       key={version.version}
                       p={3}
@@ -189,6 +229,14 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
                       <Text fontSize="sm" color="gray.600">
                         {version.files?.length || 0} files
                       </Text>
+                      <Box mt={2}>
+                        <Text fontSize="sm" color="gray.600">
+                          Source: {version.source_info.repository} ({version.source_info.branch})
+                        </Text>
+                        <Text fontSize="xs" color="gray.500">
+                          Commit: {version.source_info.commit_sha}
+                        </Text>
+                      </Box>
                       {version.dependencies?.length > 0 && (
                         <Box mt={2}>
                           <Text fontSize="sm" fontWeight="medium">
