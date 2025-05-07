@@ -34,7 +34,7 @@ import {
 import { ChevronRightIcon, ChevronDownIcon, SearchIcon } from '@chakra-ui/icons';
 import { Link as RouterLink } from 'react-router-dom';
 import { Module } from '../types';
-import { ProtoTypes } from './ProtoTypes';
+import { ProtoTypes, ProtoFile } from './ProtoTypes';
 
 interface ModuleDetailProps {
   module: Module | null;
@@ -209,6 +209,32 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
                     />
                   </InputGroup>
                 </Flex>
+
+                {/* Add Download Section */}
+                {selectedVersionData && (
+                  <Box mb={6} p={4} borderWidth={1} borderRadius="md" bg="gray.50">
+                    <Heading size="sm" mb={3}>Download Compiled Version</Heading>
+                    <Flex align="center" gap={4}>
+                      <Select
+                        placeholder="Select language"
+                        width="200px"
+                        onChange={(e) => {
+                          const language = e.target.value;
+                          if (language) {
+                            window.location.href = `/api/modules/${module.name}/versions/${selectedVersionData.version}/download/${language}`;
+                          }
+                        }}
+                      >
+                        <option value="go">Go</option>
+                        <option value="python">Python</option>
+                      </Select>
+                      <Text fontSize="sm" color="gray.600">
+                        Select a language to download the compiled version
+                      </Text>
+                    </Flex>
+                  </Box>
+                )}
+
                 <VStack align="stretch" spacing={2}>
                   {filteredVersions.map((version) => (
                     <Box
@@ -237,7 +263,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
                           Commit: {version.source_info.commit_sha}
                         </Text>
                       </Box>
-                      {version.dependencies?.length > 0 && (
+                      {version.dependencies && version.dependencies.length > 0 && (
                         <Box mt={2}>
                           <Text fontSize="sm" fontWeight="medium">
                             Dependencies:
@@ -276,7 +302,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
           <TabPanel>
             {selectedVersionData && (
               <ProtoTypes
-                files={selectedVersionData.files}
+                files={selectedVersionData.files as unknown as ProtoFile[]}
                 moduleName={module.name}
                 version={selectedVersionData.version}
                 versions={versions}
