@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -51,6 +52,55 @@ func extractModuleFromImport(importPath string) string {
 		return parts[0]
 	}
 	return ""
+}
+
+// getGitInfo attempts to get git information from the current directory
+func getGitInfo(dir string) (api.SourceInfo, error) {
+	info := api.SourceInfo{
+		Repository: "unknown",
+		CommitSHA:  "unknown",
+		Branch:     "unknown",
+	}
+
+	// Check if directory is a git repository
+	if _, err := os.Stat(filepath.Join(dir, ".git")); os.IsNotExist(err) {
+		return info, nil
+	}
+
+	// Get repository URL
+	cmd := exec.Command("git", "config", "--get", "remote.origin.url")
+	cmd.Dir = dir
+	if output, err := cmd.Output(); err == nil {
+		repo := strings.TrimSpace(string(output))
+		// Convert git@github.com:user/repo.git to https://github.com/user/repo
+		if strings.HasPrefix(repo, "git@") {
+			// Remove git@ prefix
+			repo = strings.TrimPrefix(repo, "git@")
+			// Replace : with / for the path separator
+			repo = strings.Replace(repo, ":", "/", 1)
+			// Add https:// prefix
+			repo = "https://" + repo
+		}
+		// Remove .git suffix if present
+		repo = strings.TrimSuffix(repo, ".git")
+		info.Repository = repo
+	}
+
+	// Get current commit SHA
+	cmd = exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = dir
+	if output, err := cmd.Output(); err == nil {
+		info.CommitSHA = strings.TrimSpace(string(output))
+	}
+
+	// Get current branch
+	cmd = exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Dir = dir
+	if output, err := cmd.Output(); err == nil {
+		info.Branch = strings.TrimSpace(string(output))
+	}
+
+	return info, nil
 }
 
 func runPush(args []string) error {
@@ -133,6 +183,13 @@ func runPush(args []string) error {
 		deps = append(deps, fmt.Sprintf("%s@%s", depModule, depVersion))
 	}
 
+	// Get git information if available
+	sourceInfo, err := getGitInfo(dir)
+	if err != nil {
+		// Log the error but continue with default values
+		fmt.Printf("Warning: Failed to get git information: %v\n", err)
+	}
+
 	// Create version
 	versionURL := fmt.Sprintf("%s/modules/%s/versions", registry, module)
 	versionData := api.Version{
@@ -140,6 +197,7 @@ func runPush(args []string) error {
 		Version:       version,
 		Files:         files,
 		Dependencies:  deps,
+		SourceInfo:    sourceInfo,
 	}
 
 	versionJSON, err := json.Marshal(versionData)

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -82,6 +83,89 @@ message TestMessage {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestGetGitInfo(t *testing.T) {
+	tests := []struct {
+		name           string
+		remoteURL      string
+		expectedRepo   string
+		setupGit       bool
+	}{
+		{
+			name:           "ssh url",
+			remoteURL:      "git@github.com:test/repo.git",
+			expectedRepo:   "https://github.com/test/repo",
+			setupGit:       true,
+		},
+		{
+			name:           "https url",
+			remoteURL:      "https://github.com/test/repo.git",
+			expectedRepo:   "https://github.com/test/repo",
+			setupGit:       true,
+		},
+		{
+			name:           "non-git directory",
+			remoteURL:      "",
+			expectedRepo:   "unknown",
+			setupGit:       false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a temporary directory for the test
+			testDir := t.TempDir()
+
+			if tt.setupGit {
+				// Initialize git repository
+				cmd := exec.Command("git", "init")
+				cmd.Dir = testDir
+				err := cmd.Run()
+				require.NoError(t, err)
+
+				// Set up git remote
+				cmd = exec.Command("git", "remote", "add", "origin", tt.remoteURL)
+				cmd.Dir = testDir
+				err = cmd.Run()
+				require.NoError(t, err)
+
+				// Create a test file and commit it
+				testFile := filepath.Join(testDir, "test.txt")
+				err = os.WriteFile(testFile, []byte("test"), 0644)
+				require.NoError(t, err)
+
+				cmd = exec.Command("git", "add", "test.txt")
+				cmd.Dir = testDir
+				err = cmd.Run()
+				require.NoError(t, err)
+
+				cmd = exec.Command("git", "commit", "-m", "test commit")
+				cmd.Dir = testDir
+				err = cmd.Run()
+				require.NoError(t, err)
+			}
+
+			// Test git info collection
+			info, err := getGitInfo(testDir)
+			require.NoError(t, err)
+
+			// Verify repository URL
+			assert.Equal(t, tt.expectedRepo, info.Repository)
+
+			if tt.setupGit {
+				// Verify commit SHA is not empty
+				assert.NotEmpty(t, info.CommitSHA)
+
+				// Verify branch is not empty
+				assert.NotEmpty(t, info.Branch)
+			} else {
+				// Verify default values for non-git directory
+				assert.Equal(t, "unknown", info.CommitSHA)
+				assert.Equal(t, "unknown", info.Branch)
 			}
 		})
 	}

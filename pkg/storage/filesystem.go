@@ -88,6 +88,17 @@ func (s *FileSystemStorage) CreateVersion(version *api.Version) error {
 		return fmt.Errorf("failed to create version directory: %w", err)
 	}
 
+	// Initialize SourceInfo with default values if not set
+	if version.SourceInfo.Repository == "" {
+		version.SourceInfo.Repository = "unknown"
+	}
+	if version.SourceInfo.CommitSHA == "" {
+		version.SourceInfo.CommitSHA = "unknown"
+	}
+	if version.SourceInfo.Branch == "" {
+		version.SourceInfo.Branch = "unknown"
+	}
+
 	// Write version metadata
 	versionFile := filepath.Join(versionDir, "version.json")
 	data, err := json.Marshal(version)

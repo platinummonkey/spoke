@@ -10,13 +10,21 @@ type Module struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+// SourceInfo represents information about the source code of a version
+type SourceInfo struct {
+	Repository string `json:"repository"` // Can be github.com URL or custom domain
+	CommitSHA  string `json:"commit_sha"`
+	Branch     string `json:"branch"`
+}
+
 // Version represents a specific version of a protobuf module
 type Version struct {
-	ModuleName  string    `json:"module_name"`
-	Version     string    `json:"version"` // Can be semantic version or commit hash
-	Files       []File    `json:"files"`
-	CreatedAt   time.Time `json:"created_at"`
-	Dependencies []string `json:"dependencies,omitempty"`
+	ModuleName    string     `json:"module_name"`
+	Version       string     `json:"version"` // Can be semantic version or commit hash
+	Files         []File     `json:"files"`
+	CreatedAt     time.Time  `json:"created_at"`
+	Dependencies  []string   `json:"dependencies,omitempty"`
+	SourceInfo    SourceInfo `json:"source_info"`
 }
 
 // File represents a single protobuf file

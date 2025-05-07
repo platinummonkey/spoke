@@ -1,3 +1,9 @@
+export interface SourceInfo {
+  repository: string;
+  commit_sha: string;
+  branch: string;
+}
+
 export interface Module {
   name: string;
   description: string;
@@ -5,10 +11,12 @@ export interface Module {
 }
 
 export interface Version {
-  moduleName: string;
+  module_name: string;
   version: string;
   files: File[];
-  dependencies: string[];
+  created_at: string;
+  dependencies?: string[];
+  source_info: SourceInfo;
 }
 
 export interface File {

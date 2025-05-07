@@ -1,5 +1,6 @@
-import React from 'react';
-import { Box, Heading, VStack, Text, Link, Spinner, Alert, AlertIcon, Button, Badge, Breadcrumb, BreadcrumbItem, BreadcrumbLink, Flex } from '@chakra-ui/react';
+import React, { useState, useMemo } from 'react';
+import { Box, Heading, VStack, Text, Link, Spinner, Alert, AlertIcon, Button, Badge, Breadcrumb, BreadcrumbItem, BreadcrumbLink, Flex, Input, InputGroup, InputLeftElement, HStack, Tooltip } from '@chakra-ui/react';
+import { SearchIcon, ExternalLinkIcon } from '@chakra-ui/icons';
 import { Module } from '../types';
 import { Link as RouterLink } from 'react-router-dom';
 
@@ -11,6 +12,17 @@ interface ModuleListProps {
 }
 
 export const ModuleList: React.FC<ModuleListProps> = ({ modules = [], loading, error, retry }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredModules = useMemo(() => {
+    if (!searchQuery.trim()) return modules;
+    const query = searchQuery.toLowerCase();
+    return modules.filter(module => 
+      module.name.toLowerCase().includes(query) || 
+      (module.description && module.description.toLowerCase().includes(query))
+    );
+  }, [modules, searchQuery]);
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleString('en-US', {
@@ -54,12 +66,25 @@ export const ModuleList: React.FC<ModuleListProps> = ({ modules = [], loading, e
         </BreadcrumbItem>
       </Breadcrumb>
 
-      <Heading size="lg" mb={4}>Available Modules</Heading>
-      {!modules || modules.length === 0 ? (
-        <Text>No modules available</Text>
+      <Flex justify="space-between" align="center" mb={4}>
+        <Heading size="lg">Available Modules</Heading>
+        <InputGroup maxW="400px">
+          <InputLeftElement pointerEvents="none">
+            <SearchIcon color="gray.300" />
+          </InputLeftElement>
+          <Input
+            placeholder="Search modules..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </InputGroup>
+      </Flex>
+
+      {!filteredModules || filteredModules.length === 0 ? (
+        <Text>No modules found</Text>
       ) : (
         <VStack align="stretch" spacing={4}>
-          {modules.map((module) => {
+          {filteredModules.map((module) => {
             const latestVersion = module.versions?.[0];
             return (
               <Box
@@ -73,19 +98,45 @@ export const ModuleList: React.FC<ModuleListProps> = ({ modules = [], loading, e
                   <Heading size="md">{module.name}</Heading>
                 </Link>
                 <Text mt={2}>{module.description || 'No description available'}</Text>
-                <Box mt={2} display="flex" alignItems="center" gap={2}>
-                  <Text fontSize="sm" color="gray.500">
-                    {module.versions?.length || 0} version{(module.versions?.length || 0) !== 1 ? 's' : ''}
-                  </Text>
-                  {latestVersion && (
-                    <Flex alignItems="center" gap={2}>
-                      <Badge colorScheme="blue">
-                        Latest: {latestVersion.version}
-                      </Badge>
-                      <Text fontSize="xs" color="gray.500">
-                        {formatDate(latestVersion.created_at)}
-                      </Text>
-                    </Flex>
+                <Box mt={2} display="flex" flexDirection="column" gap={2}>
+                  <HStack>
+                    <Text fontSize="sm" color="gray.500">
+                      {module.versions?.length || 0} version{(module.versions?.length || 0) !== 1 ? 's' : ''}
+                    </Text>
+                    {latestVersion && (
+                      <Flex alignItems="center" gap={2}>
+                        <Badge colorScheme="blue">
+                          Latest: {latestVersion.version}
+                        </Badge>
+                        <Text fontSize="xs" color="gray.500">
+                          {formatDate(latestVersion.created_at)}
+                        </Text>
+                      </Flex>
+                    )}
+                  </HStack>
+                  {latestVersion && latestVersion.source_info && (
+                    <HStack spacing={4} fontSize="sm" color="gray.600">
+                      {latestVersion.source_info.repository !== 'unknown' && (
+                        <Tooltip label="View Repository">
+                          <Link href={latestVersion.source_info.repository} isExternal>
+                            <HStack spacing={1}>
+                              <Text>Repository</Text>
+                              <ExternalLinkIcon />
+                            </HStack>
+                          </Link>
+                        </Tooltip>
+                      )}
+                      {latestVersion.source_info.commit_sha !== 'unknown' && (
+                        <Tooltip label="Commit SHA">
+                          <Text>Commit: {latestVersion.source_info.commit_sha.substring(0, 7)}</Text>
+                        </Tooltip>
+                      )}
+                      {latestVersion.source_info.branch !== 'unknown' && (
+                        <Tooltip label="Branch">
+                          <Text>Branch: {latestVersion.source_info.branch}</Text>
+                        </Tooltip>
+                      )}
+                    </HStack>
                   )}
                 </Box>
               </Box>
