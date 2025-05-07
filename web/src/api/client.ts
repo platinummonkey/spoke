@@ -129,21 +129,30 @@ export const getModule = async (name: string): Promise<Module> => {
   // Ensure versions exists and is an array
   const versions = Array.isArray(data.versions) ? data.versions : [];
   
-  // Process proto files for each version
+  // Process proto files for each version and sort by newest first
   const processedVersions = await Promise.all(versions.map(async version => ({
     ...version,
     files: await processProtoFiles(version.files || []),
   })));
+
+  // Sort versions by created_at timestamp, newest first
+  const sortedVersions = processedVersions.sort((a, b) => 
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
   
   return {
     ...data,
-    versions: processedVersions,
+    versions: sortedVersions,
   };
 };
 
-export const getFile = async (moduleName: string, version: string, path: string): Promise<string> => {
+interface FileResponse {
+  content: string;
+}
+
+export const getFile = async (moduleName: string, version: string, path: string): Promise<FileResponse> => {
   const response = await api.get(`/modules/${moduleName}/versions/${version}/files/${path}`);
-  return handleResponse<string>(response);
+  return handleResponse<FileResponse>(response);
 };
 
 export const getVersion = async (moduleName: string, version: string): Promise<Version> => {

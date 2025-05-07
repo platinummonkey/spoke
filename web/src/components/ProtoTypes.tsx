@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   VStack,
@@ -24,6 +24,7 @@ import {
   Tooltip,
   Select,
   HStack,
+  Flex,
 } from '@chakra-ui/react';
 import { CopyIcon, DownloadIcon } from '@chakra-ui/icons';
 import { ProtoFile, Message, Enum, Service } from '../types';
@@ -38,6 +39,10 @@ interface ProtoTypesProps {
   version: string;
   versions: string[];
   onVersionChange: (version: string) => void;
+}
+
+interface FileResponse {
+  content: string;
 }
 
 const MessageFields: React.FC<{ message: Message }> = ({ message }) => (
@@ -183,9 +188,9 @@ const FileContent: React.FC<{
     try {
       setLoading(true);
       setError(null);
-      const data = await getFile(moduleName, version, path);
-      console.log('Fetched file content:', { path, content: data });
-      setContent(data);
+      const response = await getFile(moduleName, version, path);
+      console.log('Fetched file content:', { path, response });
+      setContent(response.content);
     } catch (err) {
       console.error('Error fetching file content:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch file content');
@@ -228,74 +233,91 @@ const FileContent: React.FC<{
     }
   };
 
-  if (loading) {
-    return <Spinner size="sm" />;
-  }
+  // Fetch content when component mounts
+  useEffect(() => {
+    fetchContent();
+  }, [moduleName, version, path]);
 
-  if (error) {
-    return (
-      <Box>
-        <Text color="red.500">{error}</Text>
-        <Button size="sm" mt={2} onClick={fetchContent}>
-          Retry
-        </Button>
-      </Box>
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <Box textAlign="center" py={4}>
+          <Spinner size="sm" />
+        </Box>
+      );
+    }
+
+    if (error) {
+      return (
+        <Box>
+          <Text color="red.500">{error}</Text>
+          <Button size="sm" mt={2} onClick={fetchContent}>
+            Retry
+          </Button>
+        </Box>
+      );
+    }
+
+    if (!content) {
+      return (
+        <Box textAlign="center" py={4}>
+          <Button size="sm" onClick={fetchContent}>
+            Load File Content
+          </Button>
+        </Box>
+      );
+    }
+
+    const highlightedContent = Prism.highlight(
+      String(content),
+      Prism.languages.protobuf,
+      'protobuf'
     );
-  }
 
-  if (!content) {
     return (
-      <Button size="sm" onClick={fetchContent}>
-        Show File Content
-      </Button>
+      <Box
+        as="pre"
+        p={4}
+        bg="gray.50"
+        borderRadius="md"
+        overflowX="auto"
+        fontSize="sm"
+        dangerouslySetInnerHTML={{ __html: highlightedContent }}
+      />
     );
-  }
-
-  const highlightedContent = Prism.highlight(
-    content,
-    Prism.languages.protobuf,
-    'protobuf'
-  );
+  };
 
   return (
     <Accordion allowToggle>
       <AccordionItem>
-        <AccordionButton>
-          <Box flex="1" textAlign="left">
-            <Text fontWeight="bold">File Content</Text>
-          </Box>
-          <AccordionIcon />
-        </AccordionButton>
+        <Flex>
+          <AccordionButton flex="1">
+            <Box flex="1" textAlign="left">
+              <Text fontWeight="bold">File Content</Text>
+            </Box>
+            <AccordionIcon />
+          </AccordionButton>
+          <HStack spacing={2} px={2} align="center">
+            <Tooltip label="Copy to clipboard">
+              <IconButton
+                aria-label="Copy to clipboard"
+                icon={<CopyIcon />}
+                size="sm"
+                onClick={copyToClipboard}
+              />
+            </Tooltip>
+            <Tooltip label="Download proto file">
+              <IconButton
+                aria-label="Download proto file"
+                icon={<DownloadIcon />}
+                size="sm"
+                onClick={downloadFile}
+              />
+            </Tooltip>
+          </HStack>
+        </Flex>
         <AccordionPanel pb={4}>
-          <Box position="relative">
-            <HStack position="absolute" top={2} right={2} spacing={2} zIndex={1}>
-              <Tooltip label="Copy to clipboard">
-                <IconButton
-                  aria-label="Copy to clipboard"
-                  icon={<CopyIcon />}
-                  size="sm"
-                  onClick={copyToClipboard}
-                />
-              </Tooltip>
-              <Tooltip label="Download proto file">
-                <IconButton
-                  aria-label="Download proto file"
-                  icon={<DownloadIcon />}
-                  size="sm"
-                  onClick={downloadFile}
-                />
-              </Tooltip>
-            </HStack>
-            <Box
-              as="pre"
-              p={4}
-              bg="gray.50"
-              borderRadius="md"
-              overflowX="auto"
-              fontSize="sm"
-              dangerouslySetInnerHTML={{ __html: highlightedContent }}
-            />
-          </Box>
+          {renderContent()}
         </AccordionPanel>
       </AccordionItem>
     </Accordion>

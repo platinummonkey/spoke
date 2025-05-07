@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -86,6 +87,11 @@ func (s *Server) listModules(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Sort versions by newest first
+		sort.Slice(versions, func(i, j int) bool {
+			return versions[i].CreatedAt.After(versions[j].CreatedAt)
+		})
+
 		modulesWithVersions[i] = struct {
 			*Module
 			Versions []*Version `json:"versions"`
@@ -113,6 +119,11 @@ func (s *Server) getModule(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Sort versions by newest first
+	sort.Slice(versions, func(i, j int) bool {
+		return versions[i].CreatedAt.After(versions[j].CreatedAt)
+	})
 
 	// Add versions to the module response
 	moduleWithVersions := struct {

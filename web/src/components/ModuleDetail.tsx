@@ -51,6 +51,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
     if (initialVersion) {
       setSelectedVersion(initialVersion);
     } else if (module.versions && module.versions.length > 0) {
+      // Default to the first version (newest) if no initialVersion is provided
       setSelectedVersion(module.versions[0].version);
     }
   }, [module, initialVersion]);
@@ -86,6 +87,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
     );
   }
 
+  // Versions are already sorted by newest first from the API
   const versions = module.versions?.map(v => v.version) || [];
   const selectedVersionData = module.versions?.find(v => v.version === selectedVersion) || module.versions?.[0];
 
