@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -307,14 +308,47 @@ func (s *Server) compileGo(version *Version) (CompilationInfo, error) {
 		return CompilationInfo{}, fmt.Errorf("failed to create go output dir: %w", err)
 	}
 
+	// Create a directory for all proto files
+	protoDir := filepath.Join(tmpDir, "proto")
+	if err := os.MkdirAll(protoDir, 0755); err != nil {
+		return CompilationInfo{}, fmt.Errorf("failed to create proto dir: %w", err)
+	}
+
 	// Write all proto files to the temp directory
 	for _, file := range version.Files {
-		filePath := filepath.Join(tmpDir, file.Path)
+		filePath := filepath.Join(protoDir, file.Path)
 		if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
 			return CompilationInfo{}, fmt.Errorf("failed to create proto file dir: %w", err)
 		}
 		if err := os.WriteFile(filePath, []byte(file.Content), 0644); err != nil {
 			return CompilationInfo{}, fmt.Errorf("failed to write proto file: %w", err)
+		}
+	}
+
+	// Handle dependencies
+	for _, dep := range version.Dependencies {
+		parts := strings.Split(dep, "@")
+		if len(parts) != 2 {
+			continue
+		}
+		depModule := parts[0]
+		depVersion := parts[1]
+
+		// Get the dependency version
+		depVer, err := s.storage.GetVersion(depModule, depVersion)
+		if err != nil {
+			return CompilationInfo{}, fmt.Errorf("failed to get dependency %s@%s: %w", depModule, depVersion, err)
+		}
+
+		// Write dependency proto files
+		for _, file := range depVer.Files {
+			filePath := filepath.Join(protoDir, depModule, file.Path)
+			if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+				return CompilationInfo{}, fmt.Errorf("failed to create dependency proto file dir: %w", err)
+			}
+			if err := os.WriteFile(filePath, []byte(file.Content), 0644); err != nil {
+				return CompilationInfo{}, fmt.Errorf("failed to write dependency proto file: %w", err)
+			}
 		}
 	}
 
@@ -333,13 +367,13 @@ require (
 	// Run protoc to generate Go code
 	protoFiles := make([]string, 0, len(version.Files))
 	for _, file := range version.Files {
-		protoFiles = append(protoFiles, filepath.Join(tmpDir, file.Path))
+		protoFiles = append(protoFiles, filepath.Join(protoDir, file.Path))
 	}
 
 	args := append([]string{
 		"--go_out=" + goOutDir,
 		"--go_opt=paths=source_relative",
-		"-I" + tmpDir,
+		"-I" + protoDir,
 	}, protoFiles...)
 	cmd := exec.Command("protoc", args...)
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -415,14 +449,47 @@ func (s *Server) compilePython(version *Version) (CompilationInfo, error) {
 		return CompilationInfo{}, fmt.Errorf("failed to create python output dir: %w", err)
 	}
 
+	// Create a directory for all proto files
+	protoDir := filepath.Join(tmpDir, "proto")
+	if err := os.MkdirAll(protoDir, 0755); err != nil {
+		return CompilationInfo{}, fmt.Errorf("failed to create proto dir: %w", err)
+	}
+
 	// Write all proto files to the temp directory
 	for _, file := range version.Files {
-		filePath := filepath.Join(tmpDir, file.Path)
+		filePath := filepath.Join(protoDir, file.Path)
 		if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
 			return CompilationInfo{}, fmt.Errorf("failed to create proto file dir: %w", err)
 		}
 		if err := os.WriteFile(filePath, []byte(file.Content), 0644); err != nil {
 			return CompilationInfo{}, fmt.Errorf("failed to write proto file: %w", err)
+		}
+	}
+
+	// Handle dependencies
+	for _, dep := range version.Dependencies {
+		parts := strings.Split(dep, "@")
+		if len(parts) != 2 {
+			continue
+		}
+		depModule := parts[0]
+		depVersion := parts[1]
+
+		// Get the dependency version
+		depVer, err := s.storage.GetVersion(depModule, depVersion)
+		if err != nil {
+			return CompilationInfo{}, fmt.Errorf("failed to get dependency %s@%s: %w", depModule, depVersion, err)
+		}
+
+		// Write dependency proto files
+		for _, file := range depVer.Files {
+			filePath := filepath.Join(protoDir, depModule, file.Path)
+			if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+				return CompilationInfo{}, fmt.Errorf("failed to create dependency proto file dir: %w", err)
+			}
+			if err := os.WriteFile(filePath, []byte(file.Content), 0644); err != nil {
+				return CompilationInfo{}, fmt.Errorf("failed to write dependency proto file: %w", err)
+			}
 		}
 	}
 
@@ -453,12 +520,12 @@ build-backend = "setuptools.build_meta"`
 	// Run protoc to generate Python code
 	protoFiles := make([]string, 0, len(version.Files))
 	for _, file := range version.Files {
-		protoFiles = append(protoFiles, filepath.Join(tmpDir, file.Path))
+		protoFiles = append(protoFiles, filepath.Join(protoDir, file.Path))
 	}
 
 	args := append([]string{
 		"--python_out=" + pyOutDir,
-		"-I" + tmpDir,
+		"-I" + protoDir,
 	}, protoFiles...)
 	cmd := exec.Command("protoc", args...)
 	if output, err := cmd.CombinedOutput(); err != nil {
