@@ -17,14 +17,31 @@ type SourceInfo struct {
 	Branch     string `json:"branch"`
 }
 
+// Language represents supported programming languages
+type Language string
+
+const (
+	LanguageGo     Language = "go"
+	LanguagePython Language = "python"
+)
+
+// CompilationInfo contains information about compiled libraries
+type CompilationInfo struct {
+	Language    Language `json:"language"`
+	PackageName string   `json:"package_name"`
+	Version     string   `json:"version"`
+	Files       []File   `json:"files"`
+}
+
 // Version represents a specific version of a protobuf module
 type Version struct {
-	ModuleName    string     `json:"module_name"`
-	Version       string     `json:"version"` // Can be semantic version or commit hash
-	Files         []File     `json:"files"`
-	CreatedAt     time.Time  `json:"created_at"`
-	Dependencies  []string   `json:"dependencies,omitempty"`
-	SourceInfo    SourceInfo `json:"source_info"`
+	ModuleName       string           `json:"module_name"`
+	Version          string           `json:"version"` // Can be semantic version or commit hash
+	Files            []File           `json:"files"`
+	CreatedAt        time.Time        `json:"created_at"`
+	Dependencies     []string         `json:"dependencies,omitempty"`
+	SourceInfo       SourceInfo       `json:"source_info"`
+	CompilationInfo  []CompilationInfo `json:"compilation_info,omitempty"`
 }
 
 // File represents a single protobuf file
@@ -44,6 +61,7 @@ type Storage interface {
 	CreateVersion(version *Version) error
 	GetVersion(moduleName, version string) (*Version, error)
 	ListVersions(moduleName string) ([]*Version, error)
+	UpdateVersion(version *Version) error
 	
 	// File operations
 	GetFile(moduleName, version, path string) (*File, error)

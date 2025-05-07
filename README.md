@@ -1,6 +1,13 @@
 # Spoke - Protobuf Schema Registry
 
+![Spoke Logo](./web/public/logos/logo_main.png)
+
+THIS IS A POC HACK WEEK PROJECT. NOT FOR PRODUCTION USE.
+
 Spoke is a Protobuf Schema Registry that helps manage and version your Protocol Buffer definitions. It provides a simple way to store, retrieve, and compile protobuf files with dependency management.
+
+Build Once. Connect Everywhere. The Hub of Schema-Driven Development.
+
 
 ## Features
 
@@ -28,7 +35,7 @@ cd spoke
 2. Build the server and CLI:
 ```bash
 go build -o bin/spoke-server cmd/spoke/main.go
-go build -o bin/spoke-cli cmd/spoke-cli/main.go
+go build -o bin/spoke cmd/spoke-cli/main.go
 ```
 
 3. Add the binaries to your PATH:
@@ -56,7 +63,7 @@ spoke-server -port 8080 -storage-dir /path/to/storage
 
 Push protobuf files to the registry:
 ```bash
-spoke-cli push -module mymodule -version v1.0.0 -dir ./proto
+spoke push -module mymodule -version v1.0.0 -dir ./proto
 ```
 
 Options:
@@ -70,7 +77,7 @@ Options:
 
 Pull protobuf files from the registry:
 ```bash
-spoke-cli pull -module mymodule -version v1.0.0 -dir ./proto
+spoke pull -module mymodule -version v1.0.0 -dir ./proto
 ```
 
 Options:
@@ -84,7 +91,7 @@ Options:
 
 Compile protobuf files using protoc:
 ```bash
-spoke-cli compile -dir ./proto -out ./generated -lang go
+spoke compile -dir ./proto -out ./generated -lang go
 ```
 
 Options:
@@ -98,7 +105,7 @@ Options:
 
 Validate protobuf files:
 ```bash
-spoke-cli validate -dir ./proto
+spoke validate -dir ./proto
 ```
 
 Options:
@@ -122,16 +129,16 @@ message Hello {
 EOF
 
 # Push to registry
-spoke-cli push -module example -version v1.0.0 -dir ./proto
+spoke push -module example -version v1.0.0 -dir ./proto
 ```
 
 2. Pull and use the module:
 ```bash
 # Pull the module
-spoke-cli pull -module example -version v1.0.0 -dir ./myproject/proto
+spoke pull -module example -version v1.0.0 -dir ./myproject/proto
 
 # Compile to Go
-spoke-cli compile -dir ./myproject/proto -out ./myproject/generated -lang go
+spoke compile -dir ./myproject/proto -out ./myproject/generated -lang go
 ```
 
 ## API Endpoints
@@ -145,6 +152,74 @@ The server provides the following HTTP endpoints:
 - `GET /modules/{name}/versions` - List all versions of a module
 - `GET /modules/{name}/versions/{version}` - Get a specific version
 - `GET /modules/{name}/versions/{version}/files/{path}` - Get a specific file from a version
+- `POST /modules/{name}/versions/{version}/compile/{language}` - Compile a version for a specific language
+- `GET /modules/{name}/versions/{version}/download/{language}` - Download compiled library for a specific language
+
+## Language Integration
+
+### Go Integration
+
+To use Spoke with Go modules:
+
+1. Configure your Go environment to use Spoke as a proxy:
+```bash
+# Add this to your ~/.gitconfig or project's .gitconfig
+[url "http://localhost:8080/modules/"]
+    insteadOf = https://spoke.example.com/
+```
+
+2. In your Go project's `go.mod`, reference the module:
+```go
+module myproject
+
+go 1.21
+
+require (
+    spoke.example.com/mymodule v1.0.0
+)
+```
+
+3. Download and compile the module:
+```bash
+# Compile the module
+curl -X POST http://localhost:8080/modules/mymodule/versions/v1.0.0/compile/go
+
+# Download the compiled code
+curl -O http://localhost:8080/modules/mymodule/versions/v1.0.0/download/go
+```
+
+4. Extract the downloaded zip and use in your project:
+```bash
+unzip mymodule-v1.0.0-go.zip -d $GOPATH/src/spoke.example.com/mymodule
+```
+
+### Python Integration
+
+To use Spoke with Python pip:
+
+1. Configure pip to use Spoke as a package index:
+```bash
+# Create or edit ~/.pip/pip.conf
+[global]
+index-url = http://localhost:8080/simple/
+trusted-host = localhost
+```
+
+2. Install packages using pip:
+```bash
+# First compile the module
+curl -X POST http://localhost:8080/modules/mymodule/versions/v1.0.0/compile/python
+
+# Then install using pip
+pip install mymodule==1.0.0
+```
+
+3. Use in your Python code:
+```python
+import mymodule
+
+# Your code here
+```
 
 ## Contributing
 

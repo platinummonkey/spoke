@@ -177,4 +177,25 @@ func (s *FileSystemStorage) GetFile(moduleName, version, path string) (*api.File
 		Path:    path,
 		Content: string(content),
 	}, nil
+}
+
+// UpdateVersion implements Storage.UpdateVersion
+func (s *FileSystemStorage) UpdateVersion(version *api.Version) error {
+	versionDir := filepath.Join(s.rootDir, version.ModuleName, "versions", version.Version)
+	if err := os.MkdirAll(versionDir, 0755); err != nil {
+		return fmt.Errorf("failed to create version directory: %w", err)
+	}
+
+	// Write version metadata
+	versionFile := filepath.Join(versionDir, "version.json")
+	data, err := json.Marshal(version)
+	if err != nil {
+		return fmt.Errorf("failed to marshal version: %w", err)
+	}
+
+	if err := os.WriteFile(versionFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to write version file: %w", err)
+	}
+
+	return nil
 } 
