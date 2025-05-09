@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -86,8 +86,18 @@ func getGitInfo(dir string) (api.SourceInfo, error) {
 	}
 
 	// Check if directory is a git repository
-	if _, err := os.Stat(filepath.Join(dir, ".git")); os.IsNotExist(err) {
-		return info, nil
+	gitDir := filepath.Join(dir, ".git")
+	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
+		// Try running git rev-parse to find git repository
+		cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+		cmd.Dir = dir
+		if output, err := cmd.Output(); err == nil {
+			// Found git repository
+			gitDir = filepath.Join(strings.TrimSpace(string(output)), ".git")
+		} else {
+			// Not a git repository
+			return info, fmt.Errorf("not a git repository: %v", err)
+		}
 	}
 
 	// Get repository URL
@@ -97,16 +107,19 @@ func getGitInfo(dir string) (api.SourceInfo, error) {
 		repo := strings.TrimSpace(string(output))
 		// Convert git@github.com:user/repo.git to https://github.com/user/repo
 		if strings.HasPrefix(repo, "git@") {
-			// Remove git@ prefix
-			repo = strings.TrimPrefix(repo, "git@")
-			// Replace : with / for the path separator
-			repo = strings.Replace(repo, ":", "/", 1)
-			// Add https:// prefix
-			repo = "https://" + repo
+			// Parse git@github.com:user/repo.git format
+			sshParts := strings.SplitN(repo, ":", 2)
+			if len(sshParts) == 2 {
+				host := strings.TrimPrefix(sshParts[0], "git@")
+				path := sshParts[1]
+				repo = fmt.Sprintf("https://%s/%s", host, path)
+			}
 		}
 		// Remove .git suffix if present
 		repo = strings.TrimSuffix(repo, ".git")
 		info.Repository = repo
+	} else {
+		fmt.Printf("Warning: Failed to get repository URL: %v\n", err)
 	}
 
 	// Get current commit SHA
@@ -114,13 +127,27 @@ func getGitInfo(dir string) (api.SourceInfo, error) {
 	cmd.Dir = dir
 	if output, err := cmd.Output(); err == nil {
 		info.CommitSHA = strings.TrimSpace(string(output))
+	} else {
+		fmt.Printf("Warning: Failed to get commit SHA: %v\n", err)
 	}
 
 	// Get current branch
 	cmd = exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
 	cmd.Dir = dir
 	if output, err := cmd.Output(); err == nil {
-		info.Branch = strings.TrimSpace(string(output))
+		branch := strings.TrimSpace(string(output))
+		// If we're in a detached HEAD state, try to get branch from env vars (CI systems often set this)
+		if branch == "HEAD" {
+			// Try CI environment variables
+			if githubRef := os.Getenv("GITHUB_REF"); githubRef != "" {
+				branch = strings.TrimPrefix(githubRef, "refs/heads/")
+			} else if branchName := os.Getenv("CI_COMMIT_REF_NAME"); branchName != "" {
+				branch = branchName
+			}
+		}
+		info.Branch = branch
+	} else {
+		fmt.Printf("Warning: Failed to get branch name: %v\n", err)
 	}
 
 	return info, nil
@@ -169,7 +196,7 @@ func runPush(args []string) error {
 			return err
 		}
 		if !info.IsDir() && strings.HasSuffix(path, ".proto") {
-			content, err := ioutil.ReadFile(path)
+			content, err := os.ReadFile(path)
 			if err != nil {
 				return fmt.Errorf("failed to read file %s: %w", path, err)
 			}
@@ -208,7 +235,15 @@ func runPush(args []string) error {
 	sourceInfo, err := getGitInfo(dir)
 	if err != nil {
 		// Log the error but continue with default values
-		fmt.Printf("Warning: Failed to get git information: %v\n", err)
+		fmt.Printf("Warning: Failed to get git information: %v\nUsing default values for source info.\n", err)
+		sourceInfo = api.SourceInfo{
+			Repository: "unknown",
+			CommitSHA:  "unknown",
+			Branch:     "unknown",
+		}
+	} else {
+		fmt.Printf("Source info found:\n - Repository: %s\n - Branch: %s\n - Commit: %s\n", 
+			sourceInfo.Repository, sourceInfo.Branch, sourceInfo.CommitSHA)
 	}
 
 	// Create version
@@ -230,7 +265,13 @@ func runPush(args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create version: %w", err)
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to create version: %s: %s", resp.Status, string(body))
+	}
 
 	fmt.Printf("Successfully pushed module %s version %s\n", module, version)
 	return nil
