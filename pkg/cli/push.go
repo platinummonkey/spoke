@@ -32,14 +32,37 @@ func newPushCommand() *Command {
 	return cmd
 }
 
+// ProtoImport represents a parsed import statement with version information
+type ProtoImport struct {
+	Module  string
+	Version string
+	Path    string
+}
+
 // parseProtoImports extracts import statements from a proto file
-func parseProtoImports(content string) []string {
-	imports := make([]string, 0)
+func parseProtoImports(content string) []ProtoImport {
+	imports := make([]ProtoImport, 0)
 	importRegex := regexp.MustCompile(`import\s+"([^"]+)"`)
 	matches := importRegex.FindAllStringSubmatch(content, -1)
 	for _, match := range matches {
 		if len(match) > 1 {
-			imports = append(imports, match[1])
+			path := match[1]
+			parts := strings.Split(path, "/")
+			if len(parts) >= 3 && strings.HasPrefix(parts[1], "v") {
+				// Path contains version: module/v1.0.0/file.proto
+				imports = append(imports, ProtoImport{
+					Module:  parts[0],
+					Version: parts[1],
+					Path:    path,
+				})
+			} else {
+				// No version specified, use latest
+				imports = append(imports, ProtoImport{
+					Module:  parts[0],
+					Version: "latest",
+					Path:    path,
+				})
+			}
 		}
 	}
 	return imports
@@ -164,10 +187,8 @@ func runPush(args []string) error {
 			// Parse imports and add dependencies
 			imports := parseProtoImports(string(content))
 			for _, imp := range imports {
-				if depModule := extractModuleFromImport(imp); depModule != "" && depModule != module {
-					// For now, we'll use v1.0.0 as the default version for dependencies
-					// In a real implementation, you might want to get this from a config file or command line
-					dependencies[depModule] = "v1.0.0"
+				if imp.Module != "" && imp.Module != module {
+					dependencies[imp.Module] = imp.Version
 				}
 			}
 		}

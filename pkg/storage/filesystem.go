@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/platinummonkey/spoke/pkg/api"
 )
@@ -127,6 +130,11 @@ func (s *FileSystemStorage) CreateVersion(version *api.Version) error {
 
 // GetVersion implements Storage.GetVersion
 func (s *FileSystemStorage) GetVersion(moduleName, version string) (*api.Version, error) {
+	// Special handling for "latest" version
+	if version == "latest" {
+		return s.getLatestVersion(moduleName)
+	}
+
 	versionFile := filepath.Join(s.rootDir, moduleName, "versions", version, "version.json")
 	data, err := os.ReadFile(versionFile)
 	if err != nil {
@@ -139,6 +147,68 @@ func (s *FileSystemStorage) GetVersion(moduleName, version string) (*api.Version
 	}
 
 	return &ver, nil
+}
+
+// getLatestVersion finds the latest semantic version for a module
+func (s *FileSystemStorage) getLatestVersion(moduleName string) (*api.Version, error) {
+	versions, err := s.ListVersions(moduleName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list versions for module %s: %w", moduleName, err)
+	}
+
+	if len(versions) == 0 {
+		return nil, fmt.Errorf("no versions found for module %s", moduleName)
+	}
+
+	// Sort versions in reverse order (newest first)
+	// First try to sort by semantic version
+	sort.Slice(versions, func(i, j int) bool {
+		vi := versions[i].Version
+		vj := versions[j].Version
+
+		// Skip the "v" prefix if present
+		if len(vi) > 0 && vi[0] == 'v' {
+			vi = vi[1:]
+		}
+		if len(vj) > 0 && vj[0] == 'v' {
+			vj = vj[1:]
+		}
+
+		// Split versions by dots
+		partsI := strings.Split(vi, ".")
+		partsJ := strings.Split(vj, ".")
+
+		// Compare major, minor, patch versions
+		for k := 0; k < len(partsI) && k < len(partsJ); k++ {
+			numI, errI := strconv.Atoi(partsI[k])
+			numJ, errJ := strconv.Atoi(partsJ[k])
+			
+			// If we can't parse as integers, fall back to string comparison
+			if errI != nil || errJ != nil {
+				// If string comparison determines they're different
+				if partsI[k] != partsJ[k] {
+					return partsI[k] > partsJ[k] // lexicographic comparison
+				}
+				continue // They're the same, continue to next part
+			}
+			
+			// If numeric comparison determines they're different
+			if numI != numJ {
+				return numI > numJ // numeric comparison
+			}
+		}
+		
+		// If one version has more parts than the other
+		if len(partsI) != len(partsJ) {
+			return len(partsI) > len(partsJ)
+		}
+		
+		// If semantic versions appear identical, fall back to creation time
+		return versions[i].CreatedAt.After(versions[j].CreatedAt)
+	})
+
+	// Return the first (newest) version
+	return versions[0], nil
 }
 
 // ListVersions implements Storage.ListVersions

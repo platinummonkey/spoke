@@ -175,22 +175,50 @@ func TestParseProtoImports(t *testing.T) {
 	tests := []struct {
 		name     string
 		content  string
-		expected []string
+		expected []ProtoImport
 	}{
 		{
 			name:     "no imports",
 			content:  `syntax = "proto3"; package test;`,
-			expected: []string{},
+			expected: []ProtoImport{},
 		},
 		{
-			name:     "single import",
+			name:     "single import without version",
 			content:  `syntax = "proto3"; package test; import "common/common.proto";`,
-			expected: []string{"common/common.proto"},
+			expected: []ProtoImport{
+				{
+					Module:  "common",
+					Version: "latest",
+					Path:    "common/common.proto",
+				},
+			},
 		},
 		{
-			name:     "multiple imports",
-			content:  `syntax = "proto3"; package test; import "common/common.proto"; import "user/user.proto";`,
-			expected: []string{"common/common.proto", "user/user.proto"},
+			name:     "single import with version",
+			content:  `syntax = "proto3"; package test; import "common/v1.0.0/common.proto";`,
+			expected: []ProtoImport{
+				{
+					Module:  "common",
+					Version: "v1.0.0",
+					Path:    "common/v1.0.0/common.proto",
+				},
+			},
+		},
+		{
+			name:     "multiple imports with mixed versions",
+			content:  `syntax = "proto3"; package test; import "common/v1.0.0/common.proto"; import "user/user.proto";`,
+			expected: []ProtoImport{
+				{
+					Module:  "common",
+					Version: "v1.0.0",
+					Path:    "common/v1.0.0/common.proto",
+				},
+				{
+					Module:  "user",
+					Version: "latest",
+					Path:    "user/user.proto",
+				},
+			},
 		},
 	}
 

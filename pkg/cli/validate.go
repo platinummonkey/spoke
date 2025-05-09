@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -118,6 +119,22 @@ func validateProtoFile(content string) error {
 		return fmt.Errorf("missing syntax version")
 	}
 
+	// Validate import statements
+	importRegex := regexp.MustCompile(`import\s+"([^"]+)"`)
+	matches := importRegex.FindAllStringSubmatch(content, -1)
+	for _, match := range matches {
+		if len(match) > 1 {
+			path := match[1]
+			parts := strings.Split(path, "/")
+			if len(parts) >= 3 && strings.HasPrefix(parts[1], "v") {
+				// Validate version format if present
+				if !isValidVersion(parts[1]) {
+					return fmt.Errorf("invalid version format in import path: %s", path)
+				}
+			}
+		}
+	}
+
 	// Check for common issues
 	lines := strings.Split(content, "\n")
 	openBraces := 0
@@ -155,4 +172,11 @@ func validateProtoFile(content string) error {
 	}
 
 	return nil
+}
+
+// isValidVersion checks if a version string follows semantic versioning format
+func isValidVersion(version string) bool {
+	// Basic semantic version validation (v1.0.0 or 1.0.0)
+	versionRegex := regexp.MustCompile(`^v?\d+\.\d+\.\d+$`)
+	return versionRegex.MatchString(version)
 } 
