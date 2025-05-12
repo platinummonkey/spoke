@@ -1,6 +1,6 @@
 # Protobuf AST Parser
 
-This package provides an Abstract Syntax Tree (AST) parser for Protocol Buffer (protobuf) files. Instead of using regular expressions for parsing proto files, this package offers a more robust and feature-rich approach to extract information from and validate protobuf definitions.
+This package provides an Abstract Syntax Tree (AST) parser for Protocol Buffer (protobuf) files.
 
 ## Features
 
@@ -83,14 +83,6 @@ if err != nil {
     fmt.Println("Proto file is valid")
 }
 ```
-
-## Advantages Over Regexp
-
-- **Accuracy**: AST parsing understands the structure of the language, making it more accurate than regex-based solutions
-- **Comments**: Properly extracts and associates comments with declarations
-- **Structure Awareness**: Understands nested declarations, scope, and relationships between elements
-- **Maintainability**: Easier to extend and maintain than complex regular expressions
-- **Validation**: Can perform structural validation beyond simple pattern matching
 
 ## Implementation Details
 

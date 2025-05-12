@@ -84,6 +84,45 @@ message Test {
 				"Count of items",
 			},
 		},
+		{
+			name: "With Validations",
+			content: `// This is a test proto file
+syntax = "proto3";
+
+// Package test contains test entities
+package test;
+
+// Import common definitions
+import "common/common.proto";
+
+// Test message represents a test entity
+message Test {
+  // Unique identifier
+  string id = 1 [
+		(validate.rules).string.min_len = 1,
+		(validate.rules).string.max_len = 10,
+		(validate.rules).string.pattern = "^[a-z0-9_-]+$",
+	];
+  // Count of items
+  int32 count = 2 [
+		(validate.rules).int32.gt = 0,
+		(validate.rules).int32.lt = 100,
+    ];
+}`,
+			expectError:     false,
+			expectedSyntax:  "proto3",
+			expectedPkg:     "test",
+			expectedImports: []string{"common/common.proto"},
+			expectedMessages: []string{"Test"},
+			expectedComments: []string{
+				"This is a test proto file", 
+				"Package test contains test entities", 
+				"Import common definitions",
+				"Test message represents a test entity",
+				"Unique identifier",
+				"Count of items",
+			},
+		},
 	}
 
 	for _, tc := range testCases {
