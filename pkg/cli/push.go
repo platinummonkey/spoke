@@ -9,10 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/platinummonkey/spoke/pkg/api"
+	"github.com/platinummonkey/spoke/pkg/api/protobuf"
 )
 
 func newPushCommand() *Command {
@@ -32,38 +32,12 @@ func newPushCommand() *Command {
 	return cmd
 }
 
-// ProtoImport represents a parsed import statement with version information
-type ProtoImport struct {
-	Module  string
-	Version string
-	Path    string
-}
-
 // parseProtoImports extracts import statements from a proto file
-func parseProtoImports(content string) []ProtoImport {
-	imports := make([]ProtoImport, 0)
-	importRegex := regexp.MustCompile(`import\s+"([^"]+)"`)
-	matches := importRegex.FindAllStringSubmatch(content, -1)
-	for _, match := range matches {
-		if len(match) > 1 {
-			path := match[1]
-			parts := strings.Split(path, "/")
-			if len(parts) >= 3 && strings.HasPrefix(parts[1], "v") {
-				// Path contains version: module/v1.0.0/file.proto
-				imports = append(imports, ProtoImport{
-					Module:  parts[0],
-					Version: parts[1],
-					Path:    path,
-				})
-			} else {
-				// No version specified, use latest
-				imports = append(imports, ProtoImport{
-					Module:  parts[0],
-					Version: "latest",
-					Path:    path,
-				})
-			}
-		}
+func parseProtoImports(content string) []protobuf.ProtoImport {
+	imports, err := protobuf.ExtractImports(content)
+	if err != nil {
+		fmt.Printf("Warning: Failed to parse proto imports: %v\n", err)
+		return []protobuf.ProtoImport{}
 	}
 	return imports
 }
@@ -211,7 +185,7 @@ func runPush(args []string) error {
 				Content: string(content),
 			})
 
-			// Parse imports and add dependencies
+			// Parse imports and add dependencies using the new parser
 			imports := parseProtoImports(string(content))
 			for _, imp := range imports {
 				if imp.Module != "" && imp.Module != module {
@@ -249,11 +223,10 @@ func runPush(args []string) error {
 	// Create version
 	versionURL := fmt.Sprintf("%s/modules/%s/versions", registry, module)
 	versionData := api.Version{
-		ModuleName:    module,
-		Version:       version,
-		Files:         files,
-		Dependencies:  deps,
-		SourceInfo:    sourceInfo,
+		Version:      version,
+		Files:        files,
+		Dependencies: deps,
+		SourceInfo:   sourceInfo,
 	}
 
 	versionJSON, err := json.Marshal(versionData)
@@ -267,12 +240,11 @@ func runPush(args []string) error {
 	}
 	defer resp.Body.Close()
 
-	// Check response status
-	if resp.StatusCode != http.StatusCreated {
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to create version: %s: %s", resp.Status, string(body))
+		return fmt.Errorf("failed to create version: %s", string(body))
 	}
 
-	fmt.Printf("Successfully pushed module %s version %s\n", module, version)
+	fmt.Printf("Successfully pushed %d files to module %s version %s\n", len(files), module, version)
 	return nil
 } 

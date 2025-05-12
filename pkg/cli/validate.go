@@ -6,8 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
-	"strings"
+
+	"github.com/platinummonkey/spoke/pkg/api/protobuf"
 )
 
 func newValidateCommand() *Command {
@@ -91,92 +91,19 @@ func runValidate(args []string) error {
 		return fmt.Errorf("validation failed: %v", err)
 	}
 
-	// Additional validations
+	// Additional validations using our AST parser
 	for _, file := range protoFiles {
 		content, err := os.ReadFile(file)
 		if err != nil {
 			return fmt.Errorf("failed to read file %s: %w", file, err)
 		}
 
-		// Check for common issues
-		if err := validateProtoFile(string(content)); err != nil {
+		// Validate using our new AST parser
+		if err := protobuf.ValidateProtoFile(string(content)); err != nil {
 			return fmt.Errorf("validation failed for %s: %w", file, err)
 		}
 	}
 
 	fmt.Println("All proto files are valid")
 	return nil
-}
-
-func validateProtoFile(content string) error {
-	// Check for package declaration
-	if !strings.Contains(content, "package") {
-		return fmt.Errorf("missing package declaration")
-	}
-
-	// Check for syntax version
-	if !strings.Contains(content, "syntax =") {
-		return fmt.Errorf("missing syntax version")
-	}
-
-	// Validate import statements
-	importRegex := regexp.MustCompile(`import\s+"([^"]+)"`)
-	matches := importRegex.FindAllStringSubmatch(content, -1)
-	for _, match := range matches {
-		if len(match) > 1 {
-			path := match[1]
-			parts := strings.Split(path, "/")
-			if len(parts) >= 3 && strings.HasPrefix(parts[1], "v") {
-				// Validate version format if present
-				if !isValidVersion(parts[1]) {
-					return fmt.Errorf("invalid version format in import path: %s", path)
-				}
-			}
-		}
-	}
-
-	// Check for common issues
-	lines := strings.Split(content, "\n")
-	openBraces := 0
-	for i, line := range lines {
-		line = strings.TrimSpace(line)
-		
-		// Skip empty lines and comments
-		if line == "" || strings.HasPrefix(line, "//") {
-			continue
-		}
-
-		// Check for message/enum/service declarations
-		if strings.HasPrefix(line, "message") || strings.HasPrefix(line, "enum") || strings.HasPrefix(line, "service") {
-			// Look for opening brace in the same line or next line
-			if !strings.Contains(line, "{") {
-				if i+1 >= len(lines) || !strings.Contains(strings.TrimSpace(lines[i+1]), "{") {
-					return fmt.Errorf("invalid declaration at line %d: missing opening brace", i+1)
-				}
-			}
-		}
-
-		// Count braces
-		openBraces += strings.Count(line, "{")
-		openBraces -= strings.Count(line, "}")
-
-		// Check for unclosed braces
-		if openBraces < 0 {
-			return fmt.Errorf("unmatched closing brace at line %d", i+1)
-		}
-	}
-
-	// Check for unclosed braces at the end
-	if openBraces > 0 {
-		return fmt.Errorf("unclosed braces at end of file")
-	}
-
-	return nil
-}
-
-// isValidVersion checks if a version string follows semantic versioning format
-func isValidVersion(version string) bool {
-	// Basic semantic version validation (v1.0.0 or 1.0.0)
-	versionRegex := regexp.MustCompile(`^v?\d+\.\d+\.\d+$`)
-	return versionRegex.MatchString(version)
 } 

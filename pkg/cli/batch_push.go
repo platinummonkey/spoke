@@ -9,11 +9,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/platinummonkey/spoke/pkg/api"
+	"github.com/platinummonkey/spoke/pkg/api/protobuf"
 )
 
 func newBatchPushCommand() *Command {
@@ -89,19 +89,12 @@ func isExcluded(path string, excludePatterns []string) bool {
 
 // extractPackageName gets the package name from a proto file content
 func extractPackageName(content string) string {
-	packageRegex := regexp.MustCompile(`package\s+([^;]+);`)
-	matches := packageRegex.FindStringSubmatch(content)
-	if len(matches) > 1 {
-		// Get the package name and clean it up
-		packageName := strings.TrimSpace(matches[1])
-		
-		// Handle nested packages (convert to single name)
-		// For example: "my.company.service" -> "my_company_service"
-		packageName = strings.ReplaceAll(packageName, ".", "_")
-		
-		return packageName
+	packageName, err := protobuf.ExtractPackageName(content)
+	if err != nil {
+		fmt.Printf("Warning: Failed to extract package name: %v\n", err)
+		return ""
 	}
-	return ""
+	return packageName
 }
 
 // getFileGitInfo gets git information specific to a file
