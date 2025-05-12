@@ -377,6 +377,7 @@ type Parser struct {
 	scanner *Scanner
 	current Token
 	next    Token
+	root    *RootNode
 }
 
 // NewParser creates a new Parser
@@ -410,13 +411,16 @@ func (p *Parser) Parse() (*RootNode, error) {
 		Comments: make([]*CommentNode, 0),
 		Pos:      p.current.Pos,
 	}
+	
+	// Set the root node in the parser so message parsing can access it
+	p.root = root
 
 	// Parse top-level statements
 	for p.current.Type != TokenEOF {
 		if p.current.Type == TokenComment {
 			comment := p.parseComment()
 			root.Comments = append(root.Comments, comment)
-			continue
+			continue // parseComment already calls p.advance()
 		}
 
 		switch p.current.Text {
@@ -497,14 +501,28 @@ func (p *Parser) expect(tokenType TokenType, text string) error {
 
 // parseComment parses a comment
 func (p *Parser) parseComment() *CommentNode {
+	// Extract just the text portion of the comment
+	text := p.current.Text
+	
+	// Handle line comments
+	if strings.HasPrefix(text, "//") {
+		text = strings.TrimPrefix(text, "//")
+		text = strings.TrimSpace(text)
+	} else if strings.HasPrefix(text, "/*") && strings.HasSuffix(text, "*/") {
+		// Handle block comments
+		text = strings.TrimPrefix(text, "/*")
+		text = strings.TrimSuffix(text, "*/")
+		text = strings.TrimSpace(text)
+	}
+	
 	comment := &CommentNode{
-		Text:     strings.TrimPrefix(strings.TrimPrefix(p.current.Text, "//"), " "),
+		Text:     text,
 		Leading:  true, // We'll adjust this later if needed
 		Trailing: false,
 		Pos:      p.current.Pos,
 		EndPos:   Position{p.current.Pos.Line, p.current.Pos.Column + len(p.current.Text), p.current.Pos.Offset + len(p.current.Text)},
 	}
-	p.advance()
+	p.advance() // Advance to the next token
 	return comment
 }
 
@@ -649,10 +667,37 @@ func (p *Parser) parseMessage() (*MessageNode, error) {
 		return nil, err
 	}
 	
+	msg := &MessageNode{
+		Name:     name,
+		Fields:   make([]*FieldNode, 0),
+		Nested:   make([]*MessageNode, 0),
+		Enums:    make([]*EnumNode, 0),
+		OneOfs:   make([]*OneOfNode, 0),
+		Options:  make([]*OptionNode, 0),
+		Comments: make([]*CommentNode, 0),
+		Pos:      pos,
+	}
+	
 	// For now, just consume everything until the closing brace
 	// This is a simplified version and would need to be expanded
 	braceCount := 1
 	for braceCount > 0 && p.current.Type != TokenEOF {
+		// Handle comments inside the message definition
+		if p.current.Type == TokenComment {
+			// Extract the comment and add it to the message's comments
+			comment := p.parseComment() // parseComment also advances to the next token
+			
+			// Add this comment both to the message's comments and the root's comments
+			msg.Comments = append(msg.Comments, comment)
+			
+			// Store this comment in the parent root node as well
+			if p.root != nil {
+				p.root.Comments = append(p.root.Comments, comment)
+			}
+			
+			continue // Skip the p.advance() at the end of the loop
+		}
+	
 		if p.current.Type == TokenPunctuation {
 			if p.current.Text == "{" {
 				braceCount++
@@ -663,11 +708,8 @@ func (p *Parser) parseMessage() (*MessageNode, error) {
 		p.advance()
 	}
 	
-	return &MessageNode{
-		Name:   name,
-		Pos:    pos,
-		EndPos: p.current.Pos,
-	}, nil
+	msg.EndPos = p.current.Pos
+	return msg, nil
 }
 
 // parseEnum parses an enum definition
@@ -687,9 +729,32 @@ func (p *Parser) parseEnum() (*EnumNode, error) {
 		return nil, err
 	}
 	
+	enum := &EnumNode{
+		Name:     name,
+		Values:   make([]*EnumValueNode, 0),
+		Options:  make([]*OptionNode, 0),
+		Comments: make([]*CommentNode, 0),
+		Pos:      pos,
+	}
+	
 	// For now, just consume everything until the closing brace
 	braceCount := 1
 	for braceCount > 0 && p.current.Type != TokenEOF {
+		// Handle comments inside the enum definition
+		if p.current.Type == TokenComment {
+			comment := p.parseComment()
+			
+			// Add this comment both to the enum's comments and the root's comments
+			enum.Comments = append(enum.Comments, comment)
+			
+			// Store this comment in the parent root node as well
+			if p.root != nil {
+				p.root.Comments = append(p.root.Comments, comment)
+			}
+			
+			continue
+		}
+		
 		if p.current.Type == TokenPunctuation {
 			if p.current.Text == "{" {
 				braceCount++
@@ -700,11 +765,8 @@ func (p *Parser) parseEnum() (*EnumNode, error) {
 		p.advance()
 	}
 	
-	return &EnumNode{
-		Name:   name,
-		Pos:    pos,
-		EndPos: p.current.Pos,
-	}, nil
+	enum.EndPos = p.current.Pos
+	return enum, nil
 }
 
 // parseService parses a service definition
@@ -724,9 +786,32 @@ func (p *Parser) parseService() (*ServiceNode, error) {
 		return nil, err
 	}
 	
+	service := &ServiceNode{
+		Name:     name,
+		RPCs:     make([]*RPCNode, 0),
+		Options:  make([]*OptionNode, 0),
+		Comments: make([]*CommentNode, 0),
+		Pos:      pos,
+	}
+	
 	// For now, just consume everything until the closing brace
 	braceCount := 1
 	for braceCount > 0 && p.current.Type != TokenEOF {
+		// Handle comments inside the service definition
+		if p.current.Type == TokenComment {
+			comment := p.parseComment()
+			
+			// Add this comment both to the service's comments and the root's comments
+			service.Comments = append(service.Comments, comment)
+			
+			// Store this comment in the parent root node as well
+			if p.root != nil {
+				p.root.Comments = append(p.root.Comments, comment)
+			}
+			
+			continue
+		}
+		
 		if p.current.Type == TokenPunctuation {
 			if p.current.Text == "{" {
 				braceCount++
@@ -737,9 +822,6 @@ func (p *Parser) parseService() (*ServiceNode, error) {
 		p.advance()
 	}
 	
-	return &ServiceNode{
-		Name:   name,
-		Pos:    pos,
-		EndPos: p.current.Pos,
-	}, nil
+	service.EndPos = p.current.Pos
+	return service, nil
 } 
