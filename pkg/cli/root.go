@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 )
 
 // Command represents a CLI command
@@ -26,6 +27,7 @@ func NewRootCommand() *Command {
 
 	// Add subcommands
 	root.Subcommands["push"] = newPushCommand()
+	root.Subcommands["batch-push"] = newBatchPushCommand()
 	root.Subcommands["pull"] = newPullCommand()
 	root.Subcommands["compile"] = newCompileCommand()
 	root.Subcommands["validate"] = newValidateCommand()
@@ -41,7 +43,7 @@ func (c *Command) Execute() error {
 	}
 
 	// Check for help flag
-	if args[0] == "-h" || args[0] == "--help" {
+	if strings.EqualFold(args[0], "-h") ||  strings.EqualFold(args[0], "--help") {
 		return c.usage()
 	}
 
