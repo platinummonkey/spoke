@@ -227,4 +227,35 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Spoke Components
+
+### Spoke Server (`spoke`)
+
+The main Spoke Schema Registry server that provides a REST API for creating, retrieving, and managing protobuf schemas.
+
+### Spoke CLI (`spoke-cli`)
+
+The command-line interface for interacting with the Spoke Schema Registry.
+
+### Sprocket (`sprocket`)
+
+A background watcher service that automatically detects changes to protobuf files in the registry and recompiles them
+after a delay. It also handles recompiling any dependent modules when their dependencies change.
+
+#### Usage:
+
+```bash
+sprocket -storage-dir ./spoke-data -delay 10
+```
+
+Options:
+- `-storage-dir`: Directory where protobuf files are stored (default: OS temp directory)
+- `-delay`: Delay in seconds before recompiling changed files (default: 10)
+
+## Usage
+
+### Server
+
+Start the Spoke Schema Registry server: 

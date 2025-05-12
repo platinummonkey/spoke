@@ -47,8 +47,7 @@ func (s *Server) setupRoutes() {
 	// File routes
 	s.router.HandleFunc("/modules/{name}/versions/{version}/files/{path:.*}", s.getFile).Methods("GET")
 
-	// Compilation routes
-	s.router.HandleFunc("/modules/{name}/versions/{version}/compile/{language}", s.compileVersion).Methods("POST")
+	// Download compilation results
 	s.router.HandleFunc("/modules/{name}/versions/{version}/download/{language}", s.downloadCompiled).Methods("GET")
 }
 
@@ -203,49 +202,6 @@ func (s *Server) getFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(file)
-}
-
-// compileVersion handles POST /modules/{name}/versions/{version}/compile/{language}
-func (s *Server) compileVersion(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	language := Language(vars["language"])
-
-	// Validate language
-	if language != LanguageGo && language != LanguagePython {
-		http.Error(w, "unsupported language", http.StatusBadRequest)
-		return
-	}
-
-	// Get the version
-	version, err := s.storage.GetVersion(vars["name"], vars["version"])
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-
-	// Compile based on language
-	var compilationInfo CompilationInfo
-	switch language {
-	case LanguageGo:
-		compilationInfo, err = s.compileGo(version)
-	case LanguagePython:
-		compilationInfo, err = s.compilePython(version)
-	}
-
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Add compilation info to version
-	version.CompilationInfo = append(version.CompilationInfo, compilationInfo)
-	if err := s.storage.UpdateVersion(version); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(compilationInfo)
 }
 
 // downloadCompiled handles GET /modules/{name}/versions/{version}/download/{language}
