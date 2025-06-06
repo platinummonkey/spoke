@@ -1,6 +1,7 @@
 package protobuf
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -125,7 +126,6 @@ message Test {
 			expectedComments: []string{
 				"This is a test proto file", 
 				"Package test contains test entities", 
-				"@spoke:domain:github.com/example/test",
 				"Import common definitions",
 				"Test message represents a test entity",
 				"Unique identifier",
@@ -239,3 +239,276 @@ message Test {
 		})
 	}
 }
+
+func TestParseSpokeDirectives(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected int // expected number of spoke directives
+		option   string
+		value    string
+	}{
+		{
+			name:     "domain directive",
+			input:    `// @spoke:domain:github.com/example/text`,
+			expected: 1,
+			option:   "domain",
+			value:    "github.com/example/text",
+		},
+		{
+			name:     "option directive",
+			input:    `// @spoke:option:some-value`,
+			expected: 1,
+			option:   "option",
+			value:    "some-value",
+		},
+		{
+			name:     "regular comment",
+			input:    `// This is a regular comment`,
+			expected: 0,
+			option:   "",
+			value:    "",
+		},
+		{
+			name:     "multiple directives",
+			input: `// @spoke:domain:github.com/example/text
+// @spoke:option:test-value`,
+			expected: 2,
+			option:   "domain", // we'll check the first one
+			value:    "github.com/example/text",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			parser := NewStringParser(tc.input)
+			root, err := parser.Parse()
+			if err != nil {
+				t.Fatalf("Failed to parse: %v", err)
+			}
+
+			if len(root.SpokeDirectives) != tc.expected {
+				t.Errorf("Expected %d spoke directives, got %d", tc.expected, len(root.SpokeDirectives))
+			}
+
+			if tc.expected > 0 {
+				directive := root.SpokeDirectives[0]
+				if directive.Option != tc.option {
+					t.Errorf("Expected option %q, got %q", tc.option, directive.Option)
+				}
+				if directive.Value != tc.value {
+					t.Errorf("Expected value %q, got %q", tc.value, directive.Value)
+				}
+			}
+		})
+	}
+}
+
+func TestSpokeDirectiveInMessage(t *testing.T) {
+	input := `syntax = "proto3";
+
+message TestMessage {
+    // @spoke:domain:github.com/example/test
+    // Regular comment
+    string field1 = 1;
+}`
+
+	parser := NewStringParser(input)
+	root, err := parser.Parse()
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+
+	// Check that spoke directives are captured at both root and message level
+	if len(root.SpokeDirectives) != 1 {
+		t.Errorf("Expected 1 spoke directive at root level, got %d", len(root.SpokeDirectives))
+	}
+
+	if len(root.Messages) != 1 {
+		t.Fatalf("Expected 1 message, got %d", len(root.Messages))
+	}
+
+	message := root.Messages[0]
+	if len(message.SpokeDirectives) != 1 {
+		t.Errorf("Expected 1 spoke directive in message, got %d", len(message.SpokeDirectives))
+	}
+
+	if len(message.Comments) != 1 {
+		t.Errorf("Expected 1 regular comment in message, got %d", len(message.Comments))
+	}
+
+	directive := message.SpokeDirectives[0]
+	if directive.Option != "domain" {
+		t.Errorf("Expected option 'domain', got %q", directive.Option)
+	}
+	if directive.Value != "github.com/example/test" {
+		t.Errorf("Expected value 'github.com/example/test', got %q", directive.Value)
+	}
+}
+
+func TestInvalidSpokeDirective(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "missing value",
+			input: `// @spoke:domain`,
+		},
+		{
+			name:  "invalid option type",
+			input: `// @spoke:invalid:value`,
+		},
+		{
+			name:  "malformed",
+			input: `// @spoke:`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			parser := NewStringParser(tc.input)
+			_, err := parser.Parse()
+			if err == nil {
+				t.Error("Expected error for invalid spoke directive")
+			}
+		})
+	}
+}
+
+func Example() {
+	protoContent := `syntax = "proto3";
+
+// @spoke:domain:github.com/example/user
+package user;
+
+import "google/protobuf/timestamp.proto";
+
+// @spoke:option:validation-enabled
+message User {
+    // @spoke:domain:github.com/example/user/id
+    string id = 1;
+    
+    // Regular comment about the name field
+    string name = 2;
+    
+    // @spoke:option:email-validation
+    string email = 3;
+    
+    google.protobuf.Timestamp created_at = 4;
+}
+
+// @spoke:domain:github.com/example/user/service
+service UserService {
+    // @spoke:option:auth-required
+    rpc GetUser(GetUserRequest) returns (User);
+    
+    rpc CreateUser(CreateUserRequest) returns (User);
+}`
+
+	parser := NewStringParser(protoContent)
+	root, err := parser.Parse()
+	if err != nil {
+		fmt.Printf("Error parsing: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Found %d spoke directives at root level:\n", len(root.SpokeDirectives))
+	for i, directive := range root.SpokeDirectives {
+		fmt.Printf("  %d. Option: %s, Value: %s\n", i+1, directive.Option, directive.Value)
+	}
+
+	if len(root.Messages) > 0 {
+		msg := root.Messages[0]
+		fmt.Printf("\nMessage '%s' has %d spoke directives:\n", msg.Name, len(msg.SpokeDirectives))
+		for i, directive := range msg.SpokeDirectives {
+			fmt.Printf("  %d. Option: %s, Value: %s\n", i+1, directive.Option, directive.Value)
+		}
+	}
+
+	if len(root.Services) > 0 {
+		svc := root.Services[0]
+		fmt.Printf("\nService '%s' has %d spoke directives:\n", svc.Name, len(svc.SpokeDirectives))
+		for i, directive := range svc.SpokeDirectives {
+			fmt.Printf("  %d. Option: %s, Value: %s\n", i+1, directive.Option, directive.Value)
+		}
+	}
+
+	// Output:
+	// Found 6 spoke directives at root level:
+	//   1. Option: domain, Value: github.com/example/user
+	//   2. Option: option, Value: validation-enabled
+	//   3. Option: domain, Value: github.com/example/user/id
+	//   4. Option: option, Value: email-validation
+	//   5. Option: domain, Value: github.com/example/user/service
+	//   6. Option: option, Value: auth-required
+	//
+	// Message 'User' has 2 spoke directives:
+	//   1. Option: domain, Value: github.com/example/user/id
+	//   2. Option: option, Value: email-validation
+	//
+	// Service 'UserService' has 1 spoke directives:
+	//   1. Option: option, Value: auth-required
+}
+
+func TestExampleSpokeDirectiveParsing(t *testing.T) {
+	// This test ensures the example above works correctly
+	protoContent := `syntax = "proto3";
+
+// @spoke:domain:github.com/example/user
+package user;
+
+// @spoke:option:validation-enabled
+message User {
+    // @spoke:domain:github.com/example/user/id
+    string id = 1;
+    string name = 2;
+}`
+
+	parser := NewStringParser(protoContent)
+	root, err := parser.Parse()
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+
+	// Should have 3 spoke directives total
+	expectedDirectives := 3
+	if len(root.SpokeDirectives) != expectedDirectives {
+		t.Errorf("Expected %d spoke directives at root level, got %d", expectedDirectives, len(root.SpokeDirectives))
+	}
+
+	// Check specific directives
+	expectedRootDirectives := []struct {
+		option string
+		value  string
+	}{
+		{"domain", "github.com/example/user"},
+		{"option", "validation-enabled"},
+		{"domain", "github.com/example/user/id"},
+	}
+
+	for i, expected := range expectedRootDirectives {
+		if i >= len(root.SpokeDirectives) {
+			t.Errorf("Missing spoke directive %d", i+1)
+			continue
+		}
+		directive := root.SpokeDirectives[i]
+		if directive.Option != expected.option {
+			t.Errorf("Directive %d: expected option %q, got %q", i+1, expected.option, directive.Option)
+		}
+		if directive.Value != expected.value {
+			t.Errorf("Directive %d: expected value %q, got %q", i+1, expected.value, directive.Value)
+		}
+	}
+
+	// Check message-level directives
+	if len(root.Messages) != 1 {
+		t.Fatalf("Expected 1 message, got %d", len(root.Messages))
+	}
+
+	msg := root.Messages[0]
+	expectedMsgDirectives := 1 // Only the directive inside the message body
+	if len(msg.SpokeDirectives) != expectedMsgDirectives {
+		t.Errorf("Expected %d spoke directives in message, got %d", expectedMsgDirectives, len(msg.SpokeDirectives))
+	}
+} 

@@ -24,6 +24,7 @@ const (
 	NodeTypeComment
 	NodeTypeOneOf
 	NodeTypeExtend
+	NodeTypeSpoke
 )
 
 // Position represents the position in the source code
@@ -42,16 +43,17 @@ type Node interface {
 
 // RootNode represents the root of the protobuf AST
 type RootNode struct {
-	Syntax   *SyntaxNode
-	Package  *PackageNode
-	Imports  []*ImportNode
-	Options  []*OptionNode
-	Messages []*MessageNode
-	Enums    []*EnumNode
-	Services []*ServiceNode
-	Comments []*CommentNode
-	Pos      Position
-	EndPos   Position
+	Syntax          *SyntaxNode
+	Package         *PackageNode
+	Imports         []*ImportNode
+	Options         []*OptionNode
+	Messages        []*MessageNode
+	Enums           []*EnumNode
+	Services        []*ServiceNode
+	Comments        []*CommentNode
+	SpokeDirectives []*SpokeDirectiveNode
+	Pos             Position
+	EndPos          Position
 }
 
 // NodeType returns the node type
@@ -71,10 +73,11 @@ func (n *RootNode) End() Position {
 
 // SyntaxNode represents a syntax statement in protobuf
 type SyntaxNode struct {
-	Value     string // proto2 or proto3
-	Comments  []*CommentNode
-	Pos       Position
-	EndPos    Position
+	Value           string // proto2 or proto3
+	Comments        []*CommentNode
+	SpokeDirectives []*SpokeDirectiveNode
+	Pos             Position
+	EndPos          Position
 }
 
 // NodeType returns the node type
@@ -94,10 +97,11 @@ func (n *SyntaxNode) End() Position {
 
 // PackageNode represents a package statement in protobuf
 type PackageNode struct {
-	Name      string
-	Comments  []*CommentNode
-	Pos       Position
-	EndPos    Position
+	Name            string
+	Comments        []*CommentNode
+	SpokeDirectives []*SpokeDirectiveNode
+	Pos             Position
+	EndPos          Position
 }
 
 // NodeType returns the node type
@@ -117,12 +121,13 @@ func (n *PackageNode) End() Position {
 
 // ImportNode represents an import statement in protobuf
 type ImportNode struct {
-	Path      string
-	Public    bool
-	Weak      bool
-	Comments  []*CommentNode
-	Pos       Position
-	EndPos    Position
+	Path            string
+	Public          bool
+	Weak            bool
+	Comments        []*CommentNode
+	SpokeDirectives []*SpokeDirectiveNode
+	Pos             Position
+	EndPos          Position
 }
 
 // NodeType returns the node type
@@ -142,11 +147,12 @@ func (n *ImportNode) End() Position {
 
 // OptionNode represents an option statement in protobuf
 type OptionNode struct {
-	Name      string
-	Value     string
-	Comments  []*CommentNode
-	Pos       Position
-	EndPos    Position
+	Name            string
+	Value           string
+	Comments        []*CommentNode
+	SpokeDirectives []*SpokeDirectiveNode
+	Pos             Position
+	EndPos          Position
 }
 
 // NodeType returns the node type
@@ -166,16 +172,17 @@ func (n *OptionNode) End() Position {
 
 // FieldNode represents a field in a message or service
 type FieldNode struct {
-	Name       string
-	Type       string
-	Number     int
-	Repeated   bool
-	Optional   bool
-	Required   bool
-	Options    []*OptionNode
-	Comments   []*CommentNode
-	Pos        Position
-	EndPos     Position
+	Name            string
+	Type            string
+	Number          int
+	Repeated        bool
+	Optional        bool
+	Required        bool
+	Options         []*OptionNode
+	Comments        []*CommentNode
+	SpokeDirectives []*SpokeDirectiveNode
+	Pos             Position
+	EndPos          Position
 }
 
 // NodeType returns the node type
@@ -195,15 +202,16 @@ func (n *FieldNode) End() Position {
 
 // MessageNode represents a message definition in protobuf
 type MessageNode struct {
-	Name       string
-	Fields     []*FieldNode
-	Nested     []*MessageNode
-	Enums      []*EnumNode
-	OneOfs     []*OneOfNode
-	Options    []*OptionNode
-	Comments   []*CommentNode
-	Pos        Position
-	EndPos     Position
+	Name            string
+	Fields          []*FieldNode
+	Nested          []*MessageNode
+	Enums           []*EnumNode
+	OneOfs          []*OneOfNode
+	Options         []*OptionNode
+	Comments        []*CommentNode
+	SpokeDirectives []*SpokeDirectiveNode
+	Pos             Position
+	EndPos          Position
 }
 
 // NodeType returns the node type
@@ -223,12 +231,13 @@ func (n *MessageNode) End() Position {
 
 // EnumValueNode represents an enum value
 type EnumValueNode struct {
-	Name      string
-	Number    int
-	Options   []*OptionNode
-	Comments  []*CommentNode
-	Pos       Position
-	EndPos    Position
+	Name            string
+	Number          int
+	Options         []*OptionNode
+	Comments        []*CommentNode
+	SpokeDirectives []*SpokeDirectiveNode
+	Pos             Position
+	EndPos          Position
 }
 
 // NodeType returns the node type
@@ -248,12 +257,13 @@ func (n *EnumValueNode) End() Position {
 
 // EnumNode represents an enum definition in protobuf
 type EnumNode struct {
-	Name      string
-	Values    []*EnumValueNode
-	Options   []*OptionNode
-	Comments  []*CommentNode
-	Pos       Position
-	EndPos    Position
+	Name            string
+	Values          []*EnumValueNode
+	Options         []*OptionNode
+	Comments        []*CommentNode
+	SpokeDirectives []*SpokeDirectiveNode
+	Pos             Position
+	EndPos          Position
 }
 
 // NodeType returns the node type
@@ -273,15 +283,16 @@ func (n *EnumNode) End() Position {
 
 // RPCNode represents an RPC method in a service
 type RPCNode struct {
-	Name           string
-	InputType      string
-	OutputType     string
+	Name            string
+	InputType       string
+	OutputType      string
 	ClientStreaming bool
 	ServerStreaming bool
-	Options        []*OptionNode
-	Comments       []*CommentNode
-	Pos            Position
-	EndPos         Position
+	Options         []*OptionNode
+	Comments        []*CommentNode
+	SpokeDirectives []*SpokeDirectiveNode
+	Pos             Position
+	EndPos          Position
 }
 
 // NodeType returns the node type
@@ -301,12 +312,13 @@ func (n *RPCNode) End() Position {
 
 // ServiceNode represents a service definition in protobuf
 type ServiceNode struct {
-	Name      string
-	RPCs      []*RPCNode
-	Options   []*OptionNode
-	Comments  []*CommentNode
-	Pos       Position
-	EndPos    Position
+	Name            string
+	RPCs            []*RPCNode
+	Options         []*OptionNode
+	Comments        []*CommentNode
+	SpokeDirectives []*SpokeDirectiveNode
+	Pos             Position
+	EndPos          Position
 }
 
 // NodeType returns the node type
@@ -348,17 +360,42 @@ func (n *CommentNode) End() Position {
 	return n.EndPos
 }
 
-// OneOfNode represents a oneof field in a message
-type OneOfNode struct {
-	Name      string
-	Fields    []*FieldNode
+// SpokeDirectiveNode represents a @spoke directive in protobuf comments
+type SpokeDirectiveNode struct {
+	Option    string // The option type (e.g., "domain", "option")
+	Value     string // The value after the second colon
 	Comments  []*CommentNode
 	Pos       Position
 	EndPos    Position
 }
 
-// Type returns the node type
-func (n *OneOfNode) Type() NodeType {
+// NodeType returns the node type
+func (n *SpokeDirectiveNode) NodeType() NodeType {
+	return NodeTypeSpoke
+}
+
+// Position returns the start position
+func (n *SpokeDirectiveNode) Position() Position {
+	return n.Pos
+}
+
+// End returns the end position
+func (n *SpokeDirectiveNode) End() Position {
+	return n.EndPos
+}
+
+// OneOfNode represents a oneof field in a message
+type OneOfNode struct {
+	Name            string
+	Fields          []*FieldNode
+	Comments        []*CommentNode
+	SpokeDirectives []*SpokeDirectiveNode
+	Pos             Position
+	EndPos          Position
+}
+
+// NodeType returns the node type
+func (n *OneOfNode) NodeType() NodeType {
 	return NodeTypeOneOf
 }
 
@@ -403,13 +440,14 @@ func (p *Parser) Parse() (*RootNode, error) {
 	p.advance()
 
 	root := &RootNode{
-		Imports:  make([]*ImportNode, 0),
-		Options:  make([]*OptionNode, 0),
-		Messages: make([]*MessageNode, 0),
-		Enums:    make([]*EnumNode, 0),
-		Services: make([]*ServiceNode, 0),
-		Comments: make([]*CommentNode, 0),
-		Pos:      p.current.Pos,
+		Imports:         make([]*ImportNode, 0),
+		Options:         make([]*OptionNode, 0),
+		Messages:        make([]*MessageNode, 0),
+		Enums:           make([]*EnumNode, 0),
+		Services:        make([]*ServiceNode, 0),
+		Comments:        make([]*CommentNode, 0),
+		SpokeDirectives: make([]*SpokeDirectiveNode, 0),
+		Pos:             p.current.Pos,
 	}
 	
 	// Set the root node in the parser so message parsing can access it
@@ -418,9 +456,31 @@ func (p *Parser) Parse() (*RootNode, error) {
 	// Parse top-level statements
 	for p.current.Type != TokenEOF {
 		if p.current.Type == TokenComment {
-			comment := p.parseComment()
-			root.Comments = append(root.Comments, comment)
-			continue // parseComment already calls p.advance()
+			// Check if this comment contains a spoke directive
+			text := p.current.Text
+			
+			// Handle line comments
+			if strings.HasPrefix(text, "//") {
+				text = strings.TrimPrefix(text, "//")
+				text = strings.TrimSpace(text)
+			} else if strings.HasPrefix(text, "/*") && strings.HasSuffix(text, "*/") {
+				// Handle block comments
+				text = strings.TrimPrefix(text, "/*")
+				text = strings.TrimSuffix(text, "*/")
+				text = strings.TrimSpace(text)
+			}
+			
+			if p.isSpokeDirective(text) {
+				directive, err := p.parseSpokeDirective()
+				if err != nil {
+					return nil, err
+				}
+				root.SpokeDirectives = append(root.SpokeDirectives, directive)
+			} else {
+				comment := p.parseComment()
+				root.Comments = append(root.Comments, comment)
+			}
+			continue // parseComment and parseSpokeDirective already call p.advance()
 		}
 
 		switch p.current.Text {
@@ -524,6 +584,61 @@ func (p *Parser) parseComment() *CommentNode {
 	}
 	p.advance() // Advance to the next token
 	return comment
+}
+
+// isSpokeDirective checks if a comment text contains a spoke directive
+func (p *Parser) isSpokeDirective(text string) bool {
+	return strings.HasPrefix(text, "@spoke:")
+}
+
+// parseSpokeDirective parses a spoke directive from a comment
+func (p *Parser) parseSpokeDirective() (*SpokeDirectiveNode, error) {
+	// Extract the text portion of the comment
+	text := p.current.Text
+	
+	// Handle line comments
+	if strings.HasPrefix(text, "//") {
+		text = strings.TrimPrefix(text, "//")
+		text = strings.TrimSpace(text)
+	} else if strings.HasPrefix(text, "/*") && strings.HasSuffix(text, "*/") {
+		// Handle block comments
+		text = strings.TrimPrefix(text, "/*")
+		text = strings.TrimSuffix(text, "*/")
+		text = strings.TrimSpace(text)
+	}
+	
+	// Parse the spoke directive format: @spoke:option:value
+	if !strings.HasPrefix(text, "@spoke:") {
+		return nil, errors.New("not a spoke directive")
+	}
+	
+	// Remove the @spoke: prefix
+	directiveText := strings.TrimPrefix(text, "@spoke:")
+	
+	// Split by colon to get option and value
+	parts := strings.SplitN(directiveText, ":", 2)
+	if len(parts) != 2 {
+		return nil, errors.New("invalid spoke directive format, expected @spoke:option:value")
+	}
+	
+	option := strings.TrimSpace(parts[0])
+	value := strings.TrimSpace(parts[1])
+	
+	// Validate option type
+	if option != "domain" && option != "option" {
+		return nil, errors.New("unsupported spoke directive option: " + option)
+	}
+	
+	directive := &SpokeDirectiveNode{
+		Option:   option,
+		Value:    value,
+		Comments: make([]*CommentNode, 0),
+		Pos:      p.current.Pos,
+		EndPos:   Position{p.current.Pos.Line, p.current.Pos.Column + len(p.current.Text), p.current.Pos.Offset + len(p.current.Text)},
+	}
+	
+	p.advance() // Advance to the next token
+	return directive, nil
 }
 
 // parseSyntax parses a syntax statement
@@ -668,14 +783,15 @@ func (p *Parser) parseMessage() (*MessageNode, error) {
 	}
 	
 	msg := &MessageNode{
-		Name:     name,
-		Fields:   make([]*FieldNode, 0),
-		Nested:   make([]*MessageNode, 0),
-		Enums:    make([]*EnumNode, 0),
-		OneOfs:   make([]*OneOfNode, 0),
-		Options:  make([]*OptionNode, 0),
-		Comments: make([]*CommentNode, 0),
-		Pos:      pos,
+		Name:            name,
+		Fields:          make([]*FieldNode, 0),
+		Nested:          make([]*MessageNode, 0),
+		Enums:           make([]*EnumNode, 0),
+		OneOfs:          make([]*OneOfNode, 0),
+		Options:         make([]*OptionNode, 0),
+		Comments:        make([]*CommentNode, 0),
+		SpokeDirectives: make([]*SpokeDirectiveNode, 0),
+		Pos:             pos,
 	}
 	
 	// For now, just consume everything until the closing brace
@@ -684,15 +800,43 @@ func (p *Parser) parseMessage() (*MessageNode, error) {
 	for braceCount > 0 && p.current.Type != TokenEOF {
 		// Handle comments inside the message definition
 		if p.current.Type == TokenComment {
-			// Extract the comment and add it to the message's comments
-			comment := p.parseComment() // parseComment also advances to the next token
+			// Check if this comment contains a spoke directive
+			text := p.current.Text
 			
-			// Add this comment both to the message's comments and the root's comments
-			msg.Comments = append(msg.Comments, comment)
+			// Handle line comments
+			if strings.HasPrefix(text, "//") {
+				text = strings.TrimPrefix(text, "//")
+				text = strings.TrimSpace(text)
+			} else if strings.HasPrefix(text, "/*") && strings.HasSuffix(text, "*/") {
+				// Handle block comments
+				text = strings.TrimPrefix(text, "/*")
+				text = strings.TrimSuffix(text, "*/")
+				text = strings.TrimSpace(text)
+			}
 			
-			// Store this comment in the parent root node as well
-			if p.root != nil {
-				p.root.Comments = append(p.root.Comments, comment)
+			if p.isSpokeDirective(text) {
+				directive, err := p.parseSpokeDirective()
+				if err != nil {
+					return nil, err
+				}
+				// Add this directive both to the message's directives and the root's directives
+				msg.SpokeDirectives = append(msg.SpokeDirectives, directive)
+				
+				// Store this directive in the parent root node as well
+				if p.root != nil {
+					p.root.SpokeDirectives = append(p.root.SpokeDirectives, directive)
+				}
+			} else {
+				// Extract the comment and add it to the message's comments
+				comment := p.parseComment() // parseComment also advances to the next token
+				
+				// Add this comment both to the message's comments and the root's comments
+				msg.Comments = append(msg.Comments, comment)
+				
+				// Store this comment in the parent root node as well
+				if p.root != nil {
+					p.root.Comments = append(p.root.Comments, comment)
+				}
 			}
 			
 			continue // Skip the p.advance() at the end of the loop
@@ -730,11 +874,12 @@ func (p *Parser) parseEnum() (*EnumNode, error) {
 	}
 	
 	enum := &EnumNode{
-		Name:     name,
-		Values:   make([]*EnumValueNode, 0),
-		Options:  make([]*OptionNode, 0),
-		Comments: make([]*CommentNode, 0),
-		Pos:      pos,
+		Name:            name,
+		Values:          make([]*EnumValueNode, 0),
+		Options:         make([]*OptionNode, 0),
+		Comments:        make([]*CommentNode, 0),
+		SpokeDirectives: make([]*SpokeDirectiveNode, 0),
+		Pos:             pos,
 	}
 	
 	// For now, just consume everything until the closing brace
@@ -742,14 +887,42 @@ func (p *Parser) parseEnum() (*EnumNode, error) {
 	for braceCount > 0 && p.current.Type != TokenEOF {
 		// Handle comments inside the enum definition
 		if p.current.Type == TokenComment {
-			comment := p.parseComment()
+			// Check if this comment contains a spoke directive
+			text := p.current.Text
 			
-			// Add this comment both to the enum's comments and the root's comments
-			enum.Comments = append(enum.Comments, comment)
+			// Handle line comments
+			if strings.HasPrefix(text, "//") {
+				text = strings.TrimPrefix(text, "//")
+				text = strings.TrimSpace(text)
+			} else if strings.HasPrefix(text, "/*") && strings.HasSuffix(text, "*/") {
+				// Handle block comments
+				text = strings.TrimPrefix(text, "/*")
+				text = strings.TrimSuffix(text, "*/")
+				text = strings.TrimSpace(text)
+			}
 			
-			// Store this comment in the parent root node as well
-			if p.root != nil {
-				p.root.Comments = append(p.root.Comments, comment)
+			if p.isSpokeDirective(text) {
+				directive, err := p.parseSpokeDirective()
+				if err != nil {
+					return nil, err
+				}
+				// Add this directive both to the enum's directives and the root's directives
+				enum.SpokeDirectives = append(enum.SpokeDirectives, directive)
+				
+				// Store this directive in the parent root node as well
+				if p.root != nil {
+					p.root.SpokeDirectives = append(p.root.SpokeDirectives, directive)
+				}
+			} else {
+				comment := p.parseComment()
+				
+				// Add this comment both to the enum's comments and the root's comments
+				enum.Comments = append(enum.Comments, comment)
+				
+				// Store this comment in the parent root node as well
+				if p.root != nil {
+					p.root.Comments = append(p.root.Comments, comment)
+				}
 			}
 			
 			continue
@@ -787,11 +960,12 @@ func (p *Parser) parseService() (*ServiceNode, error) {
 	}
 	
 	service := &ServiceNode{
-		Name:     name,
-		RPCs:     make([]*RPCNode, 0),
-		Options:  make([]*OptionNode, 0),
-		Comments: make([]*CommentNode, 0),
-		Pos:      pos,
+		Name:            name,
+		RPCs:            make([]*RPCNode, 0),
+		Options:         make([]*OptionNode, 0),
+		Comments:        make([]*CommentNode, 0),
+		SpokeDirectives: make([]*SpokeDirectiveNode, 0),
+		Pos:             pos,
 	}
 	
 	// For now, just consume everything until the closing brace
@@ -799,14 +973,42 @@ func (p *Parser) parseService() (*ServiceNode, error) {
 	for braceCount > 0 && p.current.Type != TokenEOF {
 		// Handle comments inside the service definition
 		if p.current.Type == TokenComment {
-			comment := p.parseComment()
+			// Check if this comment contains a spoke directive
+			text := p.current.Text
 			
-			// Add this comment both to the service's comments and the root's comments
-			service.Comments = append(service.Comments, comment)
+			// Handle line comments
+			if strings.HasPrefix(text, "//") {
+				text = strings.TrimPrefix(text, "//")
+				text = strings.TrimSpace(text)
+			} else if strings.HasPrefix(text, "/*") && strings.HasSuffix(text, "*/") {
+				// Handle block comments
+				text = strings.TrimPrefix(text, "/*")
+				text = strings.TrimSuffix(text, "*/")
+				text = strings.TrimSpace(text)
+			}
 			
-			// Store this comment in the parent root node as well
-			if p.root != nil {
-				p.root.Comments = append(p.root.Comments, comment)
+			if p.isSpokeDirective(text) {
+				directive, err := p.parseSpokeDirective()
+				if err != nil {
+					return nil, err
+				}
+				// Add this directive both to the service's directives and the root's directives
+				service.SpokeDirectives = append(service.SpokeDirectives, directive)
+				
+				// Store this directive in the parent root node as well
+				if p.root != nil {
+					p.root.SpokeDirectives = append(p.root.SpokeDirectives, directive)
+				}
+			} else {
+				comment := p.parseComment()
+				
+				// Add this comment both to the service's comments and the root's comments
+				service.Comments = append(service.Comments, comment)
+				
+				// Store this comment in the parent root node as well
+				if p.root != nil {
+					p.root.Comments = append(p.root.Comments, comment)
+				}
 			}
 			
 			continue
