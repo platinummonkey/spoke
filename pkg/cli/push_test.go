@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/platinummonkey/spoke/pkg/api"
+	"github.com/platinummonkey/spoke/pkg/api/protobuf"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -175,49 +176,40 @@ func TestParseProtoImports(t *testing.T) {
 	tests := []struct {
 		name     string
 		content  string
-		expected []ProtoImport
+		expected []protobuf.ProtoImport
 	}{
 		{
 			name:     "no imports",
 			content:  `syntax = "proto3"; package test;`,
-			expected: []ProtoImport{},
+			expected: []protobuf.ProtoImport{},
 		},
 		{
-			name:     "single import without version",
-			content:  `syntax = "proto3"; package test; import "common/common.proto";`,
-			expected: []ProtoImport{
-				{
-					Module:  "common",
-					Version: "latest",
-					Path:    "common/common.proto",
-				},
+			name: "single import",
+			content: `syntax = "proto3";
+import "google/protobuf/timestamp.proto";
+package test;`,
+			expected: []protobuf.ProtoImport{
+				{Path: "google/protobuf/timestamp.proto"},
 			},
 		},
 		{
-			name:     "single import with version",
-			content:  `syntax = "proto3"; package test; import "common/v1.0.0/common.proto";`,
-			expected: []ProtoImport{
-				{
-					Module:  "common",
-					Version: "v1.0.0",
-					Path:    "common/v1.0.0/common.proto",
-				},
+			name: "multiple imports",
+			content: `syntax = "proto3";
+import "google/protobuf/timestamp.proto";
+import public "common/types.proto";
+package test;`,
+			expected: []protobuf.ProtoImport{
+				{Path: "google/protobuf/timestamp.proto"},
+				{Path: "common/types.proto", Public: true},
 			},
 		},
 		{
-			name:     "multiple imports with mixed versions",
-			content:  `syntax = "proto3"; package test; import "common/v1.0.0/common.proto"; import "user/user.proto";`,
-			expected: []ProtoImport{
-				{
-					Module:  "common",
-					Version: "v1.0.0",
-					Path:    "common/v1.0.0/common.proto",
-				},
-				{
-					Module:  "user",
-					Version: "latest",
-					Path:    "user/user.proto",
-				},
+			name: "import with weak",
+			content: `syntax = "proto3";
+import weak "deprecated.proto";
+package test;`,
+			expected: []protobuf.ProtoImport{
+				{Path: "deprecated.proto", Weak: true},
 			},
 		},
 	}

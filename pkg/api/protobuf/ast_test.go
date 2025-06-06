@@ -460,7 +460,7 @@ package user;
 
 // @spoke:option:validation-enabled
 message User {
-    // @spoke:domain:github.com/example/user/id
+    // @spoke:option:foo bar
     string id = 1;
     string name = 2;
 }`
@@ -484,7 +484,7 @@ message User {
 	}{
 		{"domain", "github.com/example/user"},
 		{"option", "validation-enabled"},
-		{"domain", "github.com/example/user/id"},
+		{"option", "foo bar"},
 	}
 
 	for i, expected := range expectedRootDirectives {
