@@ -1,6 +1,7 @@
 package protobuf
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -11,6 +12,7 @@ func TestParseProtoFile(t *testing.T) {
 		expectError     bool
 		expectedSyntax  string
 		expectedPkg     string
+		expectedOptions map[string]string
 		expectedImports []string
 		expectedMessages []string
 		expectedEnums []string
@@ -90,7 +92,10 @@ message Test {
 syntax = "proto3";
 
 // Package test contains test entities
+// @spoke:domain:github.com/example/test
 package test;
+
+option go_package = "github.com/example/test";
 
 // Import common definitions
 import "common/common.proto";
@@ -112,11 +117,15 @@ message Test {
 			expectError:     false,
 			expectedSyntax:  "proto3",
 			expectedPkg:     "test",
+			expectedOptions: map[string]string{
+				"go_package": "\"github.com/example/test\"",
+			},
 			expectedImports: []string{"common/common.proto"},
 			expectedMessages: []string{"Test"},
 			expectedComments: []string{
 				"This is a test proto file", 
 				"Package test contains test entities", 
+				"@spoke:domain:github.com/example/test",
 				"Import common definitions",
 				"Test message represents a test entity",
 				"Unique identifier",
@@ -152,6 +161,20 @@ message Test {
 				t.Errorf("Expected package but got nil")
 			} else if ast.Package.Name != tc.expectedPkg {
 				t.Errorf("Expected package %q but got %q", tc.expectedPkg, ast.Package.Name)
+			}
+
+			if len(ast.Options) != len(tc.expectedOptions) {
+				t.Errorf("Expected %d options but got %d", len(tc.expectedOptions), len(ast.Options))
+			} else {
+				for _, option := range ast.Options {
+					if _, ok := tc.expectedOptions[option.Name]; !ok {
+						t.Errorf("Unexpected option %q", option.Name)
+					} else {
+						if !strings.EqualFold(option.Value, tc.expectedOptions[option.Name]) {
+							t.Errorf("Expected option %q to be %q but got %q", option.Name, tc.expectedOptions[option.Name], option.Value)
+						}
+					}
+				}
 			}
 			
 			// Check imports
