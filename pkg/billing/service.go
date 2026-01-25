@@ -156,8 +156,8 @@ func (s *PostgresService) CancelSubscription(orgID int64, immediately bool) erro
 			return fmt.Errorf("failed to cancel subscription: %w", err)
 		}
 
-		// Downgrade to free plan
-		quotas := s.orgService.GetDefaultQuotas(orgs.PlanFree)
+		// Downgrade to small tier
+		quotas := s.orgService.GetDefaultQuotas(orgs.QuotaTierSmall)
 		quotas.OrgID = orgID
 		if err := s.orgService.UpdateQuotas(orgID, quotas); err != nil {
 			return fmt.Errorf("failed to update quotas: %w", err)

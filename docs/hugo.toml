@@ -1,0 +1,95 @@
+baseURL = 'https://platinummonkey.github.io/spoke/'
+languageCode = 'en-us'
+title = 'Spoke - Protobuf Schema Registry'
+theme = 'book'
+
+# Book theme configuration
+[params]
+  # Repository configuration (for "Edit this page" links)
+  BookRepo = 'https://github.com/platinummonkey/spoke'
+  BookEditPath = 'edit/main/docs'
+
+  # Enable git info
+  BookEnableGitInfo = true
+
+  # Enable search
+  BookSearch = true
+
+  # Set source directory for content
+  BookSection = '*'
+
+  # Configure menu
+  BookMenuBundle = '/menu'
+
+  # Repository metadata
+  description = 'Spoke is a Protobuf Schema Registry that provides centralized storage, versioning, and pre-compilation of Protocol Buffer definitions.'
+  author = 'Spoke Developers'
+
+  # Table of contents
+  BookToC = true
+  BookCollapseSection = true
+
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+  [markup.highlight]
+    anchorLineNos = false
+    codeFences = true
+    guessSyntax = false
+    hl_Lines = ''
+    hl_inline = false
+    lineAnchors = ''
+    lineNoStart = 1
+    lineNos = false
+    lineNumbersInTable = true
+    noClasses = true
+    noHl = false
+    style = 'monokai'
+    tabWidth = 4
+
+[menu]
+  [[menu.main]]
+    identifier = 'getting-started'
+    name = 'Getting Started'
+    url = '/getting-started/'
+    weight = 1
+
+  [[menu.main]]
+    identifier = 'guides'
+    name = 'Guides'
+    url = '/guides/'
+    weight = 2
+
+  [[menu.main]]
+    identifier = 'tutorials'
+    name = 'Tutorials'
+    url = '/tutorials/'
+    weight = 3
+
+  [[menu.main]]
+    identifier = 'examples'
+    name = 'Examples'
+    url = '/examples/'
+    weight = 4
+
+  [[menu.main]]
+    identifier = 'architecture'
+    name = 'Architecture'
+    url = '/architecture/'
+    weight = 5
+
+  [[menu.main]]
+    identifier = 'deployment'
+    name = 'Deployment'
+    url = '/deployment/'
+    weight = 6
+
+  [[menu.main]]
+    identifier = 'api'
+    name = 'API Reference'
+    url = '/api/'
+    weight = 7
+
+[outputs]
+  home = ['HTML', 'RSS', 'JSON']

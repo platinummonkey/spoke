@@ -21,7 +21,7 @@ const (
 type Subscription struct {
 	ID                   int64              `json:"id"`
 	OrgID                int64              `json:"org_id"`
-	Plan                 orgs.PlanTier      `json:"plan"`
+	Plan                 orgs.QuotaTier     `json:"plan"`
 	StripeCustomerID     string             `json:"stripe_customer_id,omitempty"`
 	StripeSubscriptionID string             `json:"stripe_subscription_id,omitempty"`
 	Status               SubscriptionStatus `json:"status"`
@@ -95,14 +95,14 @@ type PaymentMethod struct {
 
 // CreateSubscriptionRequest represents request to create a subscription
 type CreateSubscriptionRequest struct {
-	Plan              orgs.PlanTier `json:"plan"`
+	Plan              orgs.QuotaTier `json:"plan"`
 	PaymentMethodID   string        `json:"payment_method_id,omitempty"`
 	TrialPeriodDays   int           `json:"trial_period_days,omitempty"`
 }
 
 // UpdateSubscriptionRequest represents request to update a subscription
 type UpdateSubscriptionRequest struct {
-	Plan   *orgs.PlanTier `json:"plan,omitempty"`
+	Plan   *orgs.QuotaTier `json:"plan,omitempty"`
 	CancelAtPeriodEnd bool `json:"cancel_at_period_end,omitempty"`
 }
 
@@ -152,7 +152,7 @@ type Service interface {
 
 // PlanPricing defines pricing for subscription plans
 type PlanPricing struct {
-	Plan                orgs.PlanTier
+	Plan                orgs.QuotaTier
 	BasePriceCents      int64   // Base monthly price
 	StoragePricePerGB   int64   // Price per GB over quota
 	CompileJobPrice     int64   // Price per compile job over quota
@@ -163,10 +163,10 @@ type PlanPricing struct {
 }
 
 // DefaultPlanPricing returns default pricing for each plan
-func DefaultPlanPricing() map[orgs.PlanTier]PlanPricing {
-	return map[orgs.PlanTier]PlanPricing{
-		orgs.PlanFree: {
-			Plan:                orgs.PlanFree,
+func DefaultPlanPricing() map[orgs.QuotaTier]PlanPricing {
+	return map[orgs.QuotaTier]PlanPricing{
+		orgs.QuotaTierSmall: {
+			Plan:                orgs.QuotaTierSmall,
 			BasePriceCents:      0,
 			StoragePricePerGB:   0,
 			CompileJobPrice:     0,
@@ -175,8 +175,8 @@ func DefaultPlanPricing() map[orgs.PlanTier]PlanPricing {
 			IncludedCompileJobs: 100,
 			IncludedAPIRequests: 1000 * 60, // 1000/hour * 60 hours
 		},
-		orgs.PlanPro: {
-			Plan:                orgs.PlanPro,
+		orgs.QuotaTierMedium: {
+			Plan:                orgs.QuotaTierMedium,
 			BasePriceCents:      4900, // $49/month
 			StoragePricePerGB:   500,  // $5/GB over quota
 			CompileJobPrice:     5,    // $0.05 per job over quota
@@ -185,8 +185,8 @@ func DefaultPlanPricing() map[orgs.PlanTier]PlanPricing {
 			IncludedCompileJobs: 1000,
 			IncludedAPIRequests: 10000 * 60, // 10000/hour * 60 hours
 		},
-		orgs.PlanEnterprise: {
-			Plan:                orgs.PlanEnterprise,
+		orgs.QuotaTierLarge: {
+			Plan:                orgs.QuotaTierLarge,
 			BasePriceCents:      49900, // $499/month
 			StoragePricePerGB:   300,   // $3/GB over quota
 			CompileJobPrice:     3,     // $0.03 per job over quota

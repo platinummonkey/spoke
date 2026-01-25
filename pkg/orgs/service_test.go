@@ -73,40 +73,51 @@ func TestGetDefaultQuotas(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		tier     PlanTier
+		tier     QuotaTier
 		expected *OrgQuotas
 	}{
 		{
-			name: "free plan",
-			tier: PlanFree,
+			name: "small tier",
+			tier: QuotaTierSmall,
 			expected: &OrgQuotas{
-				MaxModules:             5,
-				MaxVersionsPerModule:   50,
-				MaxStorageBytes:        1 * 1024 * 1024 * 1024,
-				MaxCompileJobsPerMonth: 100,
-				APIRateLimitPerHour:    1000,
+				MaxModules:             10,
+				MaxVersionsPerModule:   100,
+				MaxStorageBytes:        5 * 1024 * 1024 * 1024,
+				MaxCompileJobsPerMonth: 5000,
+				APIRateLimitPerHour:    5000,
 			},
 		},
 		{
-			name: "pro plan",
-			tier: PlanPro,
+			name: "medium tier",
+			tier: QuotaTierMedium,
 			expected: &OrgQuotas{
 				MaxModules:             50,
 				MaxVersionsPerModule:   500,
-				MaxStorageBytes:        10 * 1024 * 1024 * 1024,
-				MaxCompileJobsPerMonth: 1000,
-				APIRateLimitPerHour:    10000,
+				MaxStorageBytes:        25 * 1024 * 1024 * 1024,
+				MaxCompileJobsPerMonth: 25000,
+				APIRateLimitPerHour:    25000,
 			},
 		},
 		{
-			name: "enterprise plan",
-			tier: PlanEnterprise,
+			name: "large tier",
+			tier: QuotaTierLarge,
 			expected: &OrgQuotas{
-				MaxModules:             1000,
-				MaxVersionsPerModule:   10000,
+				MaxModules:             200,
+				MaxVersionsPerModule:   2000,
 				MaxStorageBytes:        100 * 1024 * 1024 * 1024,
 				MaxCompileJobsPerMonth: 100000,
 				APIRateLimitPerHour:    100000,
+			},
+		},
+		{
+			name: "unlimited tier",
+			tier: QuotaTierUnlimited,
+			expected: &OrgQuotas{
+				MaxModules:             999999,
+				MaxVersionsPerModule:   999999,
+				MaxStorageBytes:        999999 * 1024 * 1024 * 1024,
+				MaxCompileJobsPerMonth: 999999999,
+				APIRateLimitPerHour:    999999999,
 			},
 		},
 	}
@@ -129,11 +140,11 @@ func TestOrgStatuses(t *testing.T) {
 	assert.Equal(t, OrgStatus("deleted"), OrgStatusDeleted)
 }
 
-func TestPlanTiers(t *testing.T) {
-	assert.Equal(t, PlanTier("free"), PlanFree)
-	assert.Equal(t, PlanTier("pro"), PlanPro)
-	assert.Equal(t, PlanTier("enterprise"), PlanEnterprise)
-	assert.Equal(t, PlanTier("custom"), PlanCustom)
+func TestQuotaTiers(t *testing.T) {
+	assert.Equal(t, QuotaTier("small"), QuotaTierSmall)
+	assert.Equal(t, QuotaTier("medium"), QuotaTierMedium)
+	assert.Equal(t, QuotaTier("large"), QuotaTierLarge)
+	assert.Equal(t, QuotaTier("unlimited"), QuotaTierUnlimited)
 }
 
 func TestOrgInvitationExpiry(t *testing.T) {

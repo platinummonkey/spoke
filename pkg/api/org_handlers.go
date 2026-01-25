@@ -71,7 +71,7 @@ func (h *OrgHandlers) CreateOrganization(w http.ResponseWriter, r *http.Request)
 		DisplayName: req.DisplayName,
 		Description: req.Description,
 		OwnerID:     &authCtx.User.ID,
-		PlanTier:    req.PlanTier,
+		QuotaTier:   req.QuotaTier,
 		Settings:    req.Settings,
 	}
 

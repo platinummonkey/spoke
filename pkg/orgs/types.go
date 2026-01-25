@@ -6,14 +6,14 @@ import (
 	"github.com/platinummonkey/spoke/pkg/auth"
 )
 
-// PlanTier represents subscription plan tiers
-type PlanTier string
+// QuotaTier represents resource quota tiers (free, no billing)
+type QuotaTier string
 
 const (
-	PlanFree       PlanTier = "free"
-	PlanPro        PlanTier = "pro"
-	PlanEnterprise PlanTier = "enterprise"
-	PlanCustom     PlanTier = "custom"
+	QuotaTierSmall      QuotaTier = "small"      // 10 modules, 100 versions, 5GB, 5000 compile jobs, 5000 API req/hour
+	QuotaTierMedium     QuotaTier = "medium"     // 50 modules, 500 versions, 25GB, 25000 compile jobs, 25000 API req/hour
+	QuotaTierLarge      QuotaTier = "large"      // 200 modules, 2000 versions, 100GB, 100000 compile jobs, 100000 API req/hour
+	QuotaTierUnlimited  QuotaTier = "unlimited"  // No limits (for self-hosted deployments)
 )
 
 // OrgStatus represents organization status
@@ -33,7 +33,7 @@ type Organization struct {
 	DisplayName string             `json:"display_name"`
 	Description string             `json:"description,omitempty"`
 	OwnerID     *int64             `json:"owner_id,omitempty"`
-	PlanTier    PlanTier           `json:"plan_tier"`
+	QuotaTier   QuotaTier          `json:"quota_tier"`
 	Status      OrgStatus          `json:"status"`
 	IsActive    bool               `json:"is_active"`
 	Settings    map[string]any     `json:"settings,omitempty"`
@@ -41,17 +41,18 @@ type Organization struct {
 	UpdatedAt   time.Time          `json:"updated_at"`
 }
 
-// OrgQuotas represents resource quotas for an organization
+// OrgQuotas represents resource quotas for an organization (free, no billing)
 type OrgQuotas struct {
-	ID                       int64     `json:"id"`
-	OrgID                    int64     `json:"org_id"`
-	MaxModules               int       `json:"max_modules"`
-	MaxVersionsPerModule     int       `json:"max_versions_per_module"`
-	MaxStorageBytes          int64     `json:"max_storage_bytes"`
-	MaxCompileJobsPerMonth   int       `json:"max_compile_jobs_per_month"`
-	APIRateLimitPerHour      int       `json:"api_rate_limit_per_hour"`
-	CreatedAt                time.Time `json:"created_at"`
-	UpdatedAt                time.Time `json:"updated_at"`
+	ID                       int64          `json:"id"`
+	OrgID                    int64          `json:"org_id"`
+	MaxModules               int            `json:"max_modules"`
+	MaxVersionsPerModule     int            `json:"max_versions_per_module"`
+	MaxStorageBytes          int64          `json:"max_storage_bytes"`
+	MaxCompileJobsPerMonth   int            `json:"max_compile_jobs_per_month"`
+	APIRateLimitPerHour      int            `json:"api_rate_limit_per_hour"`
+	CustomSettings           map[string]any `json:"custom_settings,omitempty"`
+	CreatedAt                time.Time      `json:"created_at"`
+	UpdatedAt                time.Time      `json:"updated_at"`
 }
 
 // OrgUsage represents current usage for an organization
@@ -103,7 +104,7 @@ type CreateOrgRequest struct {
 	Name        string         `json:"name"`
 	DisplayName string         `json:"display_name"`
 	Description string         `json:"description,omitempty"`
-	PlanTier    PlanTier       `json:"plan_tier,omitempty"`
+	QuotaTier   QuotaTier      `json:"quota_tier,omitempty"`
 	Settings    map[string]any `json:"settings,omitempty"`
 }
 
@@ -176,7 +177,7 @@ type Service interface {
 	// Quota management
 	GetQuotas(orgID int64) (*OrgQuotas, error)
 	UpdateQuotas(orgID int64, quotas *OrgQuotas) error
-	GetDefaultQuotas(planTier PlanTier) *OrgQuotas
+	GetDefaultQuotas(quotaTier QuotaTier) *OrgQuotas
 
 	// Usage tracking
 	GetUsage(orgID int64) (*OrgUsage, error)

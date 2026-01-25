@@ -28,8 +28,8 @@ func (s *PostgresService) CreateOrganization(org *Organization) error {
 	}
 
 	// Set defaults
-	if org.PlanTier == "" {
-		org.PlanTier = PlanFree
+	if org.QuotaTier == "" {
+		org.QuotaTier = QuotaTierSmall
 	}
 	if org.Status == "" {
 		org.Status = OrgStatusActive
@@ -42,19 +42,19 @@ func (s *PostgresService) CreateOrganization(org *Organization) error {
 	}
 
 	query := `
-		INSERT INTO organizations (name, slug, display_name, description, owner_id, plan_tier, status, is_active, settings)
+		INSERT INTO organizations (name, slug, display_name, description, owner_id, quota_tier, status, is_active, settings)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, created_at, updated_at
 	`
 	err = s.db.QueryRow(query, org.Name, org.Slug, org.DisplayName, org.Description,
-		org.OwnerID, org.PlanTier, org.Status, org.IsActive, settingsJSON).
+		org.OwnerID, org.QuotaTier, org.Status, org.IsActive, settingsJSON).
 		Scan(&org.ID, &org.CreatedAt, &org.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create organization: %w", err)
 	}
 
 	// Create default quotas
-	quotas := s.GetDefaultQuotas(org.PlanTier)
+	quotas := s.GetDefaultQuotas(org.QuotaTier)
 	quotas.OrgID = org.ID
 	if err := s.createQuotas(quotas); err != nil {
 		return fmt.Errorf("failed to create quotas: %w", err)
@@ -71,7 +71,7 @@ func (s *PostgresService) CreateOrganization(org *Organization) error {
 // GetOrganization retrieves an organization by ID
 func (s *PostgresService) GetOrganization(id int64) (*Organization, error) {
 	query := `
-		SELECT id, name, slug, display_name, description, owner_id, plan_tier, status,
+		SELECT id, name, slug, display_name, description, owner_id, quota_tier, status,
 		       is_active, settings, created_at, updated_at
 		FROM organizations
 		WHERE id = $1
@@ -80,7 +80,7 @@ func (s *PostgresService) GetOrganization(id int64) (*Organization, error) {
 	var settingsJSON []byte
 	err := s.db.QueryRow(query, id).Scan(
 		&org.ID, &org.Name, &org.Slug, &org.DisplayName, &org.Description,
-		&org.OwnerID, &org.PlanTier, &org.Status, &org.IsActive, &settingsJSON,
+		&org.OwnerID, &org.QuotaTier, &org.Status, &org.IsActive, &settingsJSON,
 		&org.CreatedAt, &org.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -100,7 +100,7 @@ func (s *PostgresService) GetOrganization(id int64) (*Organization, error) {
 // GetOrganizationBySlug retrieves an organization by slug
 func (s *PostgresService) GetOrganizationBySlug(slug string) (*Organization, error) {
 	query := `
-		SELECT id, name, slug, display_name, description, owner_id, plan_tier, status,
+		SELECT id, name, slug, display_name, description, owner_id, quota_tier, status,
 		       is_active, settings, created_at, updated_at
 		FROM organizations
 		WHERE slug = $1
@@ -109,7 +109,7 @@ func (s *PostgresService) GetOrganizationBySlug(slug string) (*Organization, err
 	var settingsJSON []byte
 	err := s.db.QueryRow(query, slug).Scan(
 		&org.ID, &org.Name, &org.Slug, &org.DisplayName, &org.Description,
-		&org.OwnerID, &org.PlanTier, &org.Status, &org.IsActive, &settingsJSON,
+		&org.OwnerID, &org.QuotaTier, &org.Status, &org.IsActive, &settingsJSON,
 		&org.CreatedAt, &org.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -130,7 +130,7 @@ func (s *PostgresService) GetOrganizationBySlug(slug string) (*Organization, err
 func (s *PostgresService) ListOrganizations(userID int64) ([]*Organization, error) {
 	query := `
 		SELECT DISTINCT o.id, o.name, o.slug, o.display_name, o.description, o.owner_id,
-		       o.plan_tier, o.status, o.is_active, o.settings, o.created_at, o.updated_at
+		       o.quota_tier, o.status, o.is_active, o.settings, o.created_at, o.updated_at
 		FROM organizations o
 		JOIN organization_members om ON o.id = om.organization_id
 		WHERE om.user_id = $1 AND o.is_active = true
@@ -148,7 +148,7 @@ func (s *PostgresService) ListOrganizations(userID int64) ([]*Organization, erro
 		var settingsJSON []byte
 		if err := rows.Scan(
 			&org.ID, &org.Name, &org.Slug, &org.DisplayName, &org.Description,
-			&org.OwnerID, &org.PlanTier, &org.Status, &org.IsActive, &settingsJSON,
+			&org.OwnerID, &org.QuotaTier, &org.Status, &org.IsActive, &settingsJSON,
 			&org.CreatedAt, &org.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan organization: %w", err)
@@ -234,21 +234,28 @@ func (s *PostgresService) DeleteOrganization(id int64) error {
 func (s *PostgresService) GetQuotas(orgID int64) (*OrgQuotas, error) {
 	query := `
 		SELECT id, org_id, max_modules, max_versions_per_module, max_storage_bytes,
-		       max_compile_jobs_per_month, api_rate_limit_per_hour, created_at, updated_at
+		       max_compile_jobs_per_month, api_rate_limit_per_hour, custom_settings, created_at, updated_at
 		FROM org_quotas
 		WHERE org_id = $1
 	`
 	quotas := &OrgQuotas{}
+	var customSettingsJSON []byte
 	err := s.db.QueryRow(query, orgID).Scan(
 		&quotas.ID, &quotas.OrgID, &quotas.MaxModules, &quotas.MaxVersionsPerModule,
 		&quotas.MaxStorageBytes, &quotas.MaxCompileJobsPerMonth, &quotas.APIRateLimitPerHour,
-		&quotas.CreatedAt, &quotas.UpdatedAt,
+		&customSettingsJSON, &quotas.CreatedAt, &quotas.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("quotas not found")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get quotas: %w", err)
+	}
+
+	if len(customSettingsJSON) > 0 {
+		if err := json.Unmarshal(customSettingsJSON, &quotas.CustomSettings); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal custom settings: %w", err)
+		}
 	}
 
 	return quotas, nil
@@ -279,54 +286,68 @@ func (s *PostgresService) UpdateQuotas(orgID int64, quotas *OrgQuotas) error {
 	return nil
 }
 
-// GetDefaultQuotas returns default quotas for a plan tier
-func (s *PostgresService) GetDefaultQuotas(planTier PlanTier) *OrgQuotas {
-	switch planTier {
-	case PlanFree:
+// GetDefaultQuotas returns default quotas for a quota tier (free, no billing)
+func (s *PostgresService) GetDefaultQuotas(quotaTier QuotaTier) *OrgQuotas {
+	switch quotaTier {
+	case QuotaTierSmall:
 		return &OrgQuotas{
-			MaxModules:             5,
-			MaxVersionsPerModule:   50,
-			MaxStorageBytes:        1 * 1024 * 1024 * 1024, // 1GB
-			MaxCompileJobsPerMonth: 100,
-			APIRateLimitPerHour:    1000,
+			MaxModules:             10,
+			MaxVersionsPerModule:   100,
+			MaxStorageBytes:        5 * 1024 * 1024 * 1024, // 5GB
+			MaxCompileJobsPerMonth: 5000,
+			APIRateLimitPerHour:    5000,
 		}
-	case PlanPro:
+	case QuotaTierMedium:
 		return &OrgQuotas{
 			MaxModules:             50,
 			MaxVersionsPerModule:   500,
-			MaxStorageBytes:        10 * 1024 * 1024 * 1024, // 10GB
-			MaxCompileJobsPerMonth: 1000,
-			APIRateLimitPerHour:    10000,
+			MaxStorageBytes:        25 * 1024 * 1024 * 1024, // 25GB
+			MaxCompileJobsPerMonth: 25000,
+			APIRateLimitPerHour:    25000,
 		}
-	case PlanEnterprise:
+	case QuotaTierLarge:
 		return &OrgQuotas{
-			MaxModules:             1000,
-			MaxVersionsPerModule:   10000,
+			MaxModules:             200,
+			MaxVersionsPerModule:   2000,
 			MaxStorageBytes:        100 * 1024 * 1024 * 1024, // 100GB
 			MaxCompileJobsPerMonth: 100000,
 			APIRateLimitPerHour:    100000,
 		}
-	default:
+	case QuotaTierUnlimited:
 		return &OrgQuotas{
-			MaxModules:             5,
-			MaxVersionsPerModule:   50,
-			MaxStorageBytes:        1 * 1024 * 1024 * 1024,
-			MaxCompileJobsPerMonth: 100,
-			APIRateLimitPerHour:    1000,
+			MaxModules:             999999,
+			MaxVersionsPerModule:   999999,
+			MaxStorageBytes:        999999 * 1024 * 1024 * 1024, // Effectively unlimited
+			MaxCompileJobsPerMonth: 999999999,
+			APIRateLimitPerHour:    999999999,
+		}
+	default:
+		// Default to small tier
+		return &OrgQuotas{
+			MaxModules:             10,
+			MaxVersionsPerModule:   100,
+			MaxStorageBytes:        5 * 1024 * 1024 * 1024,
+			MaxCompileJobsPerMonth: 5000,
+			APIRateLimitPerHour:    5000,
 		}
 	}
 }
 
 // createQuotas creates quotas for an organization
 func (s *PostgresService) createQuotas(quotas *OrgQuotas) error {
+	customSettingsJSON, err := json.Marshal(quotas.CustomSettings)
+	if err != nil {
+		return fmt.Errorf("failed to marshal custom settings: %w", err)
+	}
+
 	query := `
 		INSERT INTO org_quotas (org_id, max_modules, max_versions_per_module, max_storage_bytes,
-		                        max_compile_jobs_per_month, api_rate_limit_per_hour)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		                        max_compile_jobs_per_month, api_rate_limit_per_hour, custom_settings)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at, updated_at
 	`
 	return s.db.QueryRow(query, quotas.OrgID, quotas.MaxModules, quotas.MaxVersionsPerModule,
-		quotas.MaxStorageBytes, quotas.MaxCompileJobsPerMonth, quotas.APIRateLimitPerHour).
+		quotas.MaxStorageBytes, quotas.MaxCompileJobsPerMonth, quotas.APIRateLimitPerHour, customSettingsJSON).
 		Scan(&quotas.ID, &quotas.CreatedAt, &quotas.UpdatedAt)
 }
 

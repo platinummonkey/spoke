@@ -1,16 +1,18 @@
-# Multi-Tenancy and Billing
+# Multi-Tenancy (NO BILLING)
 
-This document describes the multi-tenancy and billing features for Spoke, enabling SaaS offering.
+**Spoke is entirely free and open-source with no billing integration.**
+
+This document describes the multi-tenancy features for Spoke, enabling organization-based schema management.
 
 ## Overview
 
 Spoke's multi-tenancy system provides:
 
 - **Organization Isolation**: Separate namespaces and data isolation per organization
-- **Resource Quotas**: Enforced limits on modules, versions, storage, compile jobs, and API requests
-- **Usage Tracking**: Real-time tracking of resource consumption
-- **Billing Integration**: Stripe integration for subscription management and payment processing
+- **Resource Quotas**: Configurable limits on modules, versions, storage, compile jobs, and API requests
+- **Usage Tracking**: Real-time tracking of resource consumption (for monitoring, not billing)
 - **Team Management**: User invitations, role-based access control, and member management
+- **Public Modules**: Share modules across organizations
 
 ## Architecture
 
@@ -31,63 +33,52 @@ Spoke's multi-tenancy system provides:
 - Monthly periods for billing calculations
 - Tracks: module count, version count, storage bytes, compile jobs, API requests
 
-#### Subscriptions
-- Stripe customer and subscription IDs
-- Plan tier and status tracking
-- Trial and cancellation management
-
 #### Invitations
 - Email-based user invitations
 - Token-based acceptance flow
 - Expiration and role assignment
 
-#### Payment Methods
-- Stripe payment method IDs
-- Card and bank account support
-- Default payment method management
+## Quota Tiers (Free, No Billing)
 
-#### Invoices
-- Usage-based billing records
-- Stripe invoice integration
-- Payment status tracking
+All tiers are **completely free**. Choose the tier that matches your deployment needs.
 
-## Plan Tiers
+### Small (Default)
+- **Modules**: 10
+- **Versions per Module**: 100
+- **Storage**: 5GB
+- **Compile Jobs**: 5,000/month
+- **API Rate Limit**: 5,000 req/hour
 
-### Free Tier
-- **Price**: $0/month
-- **Modules**: 5
-- **Versions per Module**: 50
-- **Storage**: 1GB
-- **Compile Jobs**: 100/month
-- **API Rate Limit**: 1,000 req/hour
+*Ideal for small teams and side projects*
 
-### Pro Tier
-- **Price**: $49/month
+### Medium
 - **Modules**: 50
 - **Versions per Module**: 500
-- **Storage**: 10GB
-- **Compile Jobs**: 1,000/month
-- **API Rate Limit**: 10,000 req/hour
-- **Overage Pricing**:
-  - Storage: $5/GB over quota
-  - Compile Jobs: $0.05/job over quota
-  - API Requests: $0.10/1000 requests over quota
+- **Storage**: 25GB
+- **Compile Jobs**: 25,000/month
+- **API Rate Limit**: 25,000 req/hour
 
-### Enterprise Tier
-- **Price**: $499/month
-- **Modules**: 1,000
-- **Versions per Module**: 10,000
+*Ideal for growing teams and startups*
+
+### Large
+- **Modules**: 200
+- **Versions per Module**: 2,000
 - **Storage**: 100GB
 - **Compile Jobs**: 100,000/month
 - **API Rate Limit**: 100,000 req/hour
-- **Overage Pricing**:
-  - Storage: $3/GB over quota
-  - Compile Jobs: $0.03/job over quota
-  - API Requests: $0.05/1000 requests over quota
 
-### Custom Tier
-- Custom quotas negotiated per customer
-- Contact sales for pricing
+*Ideal for large teams and companies*
+
+### Unlimited
+- **Modules**: No limit
+- **Versions per Module**: No limit
+- **Storage**: No limit
+- **Compile Jobs**: No limit
+- **API Rate Limit**: No limit
+
+*Ideal for self-hosted deployments with dedicated infrastructure*
+
+**Note**: All tiers are configurable. Administrators can adjust quotas for any organization based on deployment capacity.
 
 ## API Endpoints
 
@@ -128,37 +119,23 @@ DELETE /orgs/{id}/invitations/{id}   - Revoke invitation
 POST   /invitations/{token}/accept   - Accept invitation
 ```
 
-### Subscriptions
+## Module Access
+
+### Organization-Scoped Modules (Private)
 
 ```
-POST   /orgs/{id}/subscription       - Create subscription
-GET    /orgs/{id}/subscription       - Get subscription
-PUT    /orgs/{id}/subscription       - Update subscription
-POST   /orgs/{id}/subscription/cancel    - Cancel subscription
-POST   /orgs/{id}/subscription/reactivate - Reactivate subscription
+POST   /orgs/{id}/modules            - Create module
+GET    /orgs/{id}/modules            - List organization modules
+GET    /orgs/{id}/modules/{name}     - Get module
+PUT    /orgs/{id}/modules/{name}     - Update module (toggle public)
+DELETE /orgs/{id}/modules/{name}     - Delete module
 ```
 
-### Invoices
+### Public Module Access
 
 ```
-GET    /orgs/{id}/invoices           - List invoices
-GET    /invoices/{id}                - Get invoice
-POST   /orgs/{id}/invoices/generate  - Generate invoice
-```
-
-### Payment Methods
-
-```
-POST   /orgs/{id}/payment-methods    - Add payment method
-GET    /orgs/{id}/payment-methods    - List payment methods
-PUT    /orgs/{id}/payment-methods/{id}/default - Set default
-DELETE /orgs/{id}/payment-methods/{id}         - Remove method
-```
-
-### Webhooks
-
-```
-POST   /billing/webhook              - Stripe webhook handler
+GET    /modules/{org_slug}/{name}    - Access public module from any org
+GET    /modules/{org_slug}/{name}/versions/{version} - Get public version
 ```
 
 ## Usage Examples
@@ -173,7 +150,7 @@ curl -X POST https://spoke.example.com/orgs \
     "name": "acme-corp",
     "display_name": "Acme Corporation",
     "description": "Acme Corp protobuf schemas",
-    "plan_tier": "pro"
+    "quota_tier": "medium"
   }'
 ```
 
@@ -211,17 +188,22 @@ Response:
 }
 ```
 
-### Creating a Subscription
+### Creating a Public Module
 
 ```bash
-curl -X POST https://spoke.example.com/orgs/1/subscription \
+# Create a module
+curl -X POST https://spoke.example.com/orgs/1/modules \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "plan": "pro",
-    "payment_method_id": "pm_1234567890",
-    "trial_period_days": 14
+    "name": "common-types",
+    "description": "Shared common types",
+    "is_public": true
   }'
+
+# Other organizations can now access it
+curl https://spoke.example.com/modules/acme-corp/common-types/versions/v1.0.0 \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ## Quota Enforcement
@@ -239,13 +221,14 @@ Quotas are enforced at the middleware level:
 When a quota is exceeded, the API returns:
 
 ```http
-HTTP/1.1 403 Forbidden
+HTTP/1.1 429 Too Many Requests
 Content-Type: application/json
 
 {
-  "error": "quota exceeded for modules",
-  "current": 5,
-  "limit": 5
+  "error": "quota_exceeded",
+  "resource": "modules",
+  "current": 11,
+  "limit": 10
 }
 ```
 
@@ -256,90 +239,40 @@ HTTP/1.1 429 Too Many Requests
 Content-Type: application/json
 
 {
-  "error": "API rate limit exceeded"
+  "error": "quota_exceeded",
+  "resource": "api_requests",
+  "current": 5001,
+  "limit": 5000
 }
 ```
 
-## Stripe Integration
+### Adjusting Quotas
 
-### Setup
-
-1. Create a Stripe account at https://stripe.com
-2. Get your API keys from the Stripe Dashboard
-3. Configure webhook endpoint: `https://spoke.example.com/billing/webhook`
-4. Set webhook secret in environment variables
-
-### Environment Variables
+Administrators can adjust quotas for any organization:
 
 ```bash
-STRIPE_API_KEY=sk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-```
-
-### Webhook Events
-
-The system handles the following Stripe webhook events:
-
-- `customer.subscription.created` - New subscription
-- `customer.subscription.updated` - Subscription changes
-- `customer.subscription.deleted` - Subscription canceled
-- `invoice.paid` - Payment successful
-- `invoice.payment_failed` - Payment failed
-
-### Test Mode
-
-For development, use Stripe test mode:
-
-1. Use test API keys (starting with `sk_test_`)
-2. Use test payment methods:
-   - Success: `pm_card_visa` or card number `4242 4242 4242 4242`
-   - Decline: `pm_card_chargeDecline` or card number `4000 0000 0000 0002`
-
-## Usage-Based Billing
-
-Billing is calculated monthly based on:
-
-1. **Base subscription price** for the plan tier
-2. **Overage charges** for resources exceeding quotas:
-   - Storage: Charged per GB over quota
-   - Compile Jobs: Charged per job over quota
-   - API Requests: Charged per 1000 requests over quota
-
-### Example Calculation (Pro Plan)
-
-```
-Base Price:           $49.00
-Storage Overage:      $25.00  (5GB over 10GB quota at $5/GB)
-Compile Job Overage:  $10.00  (200 jobs over 1000 at $0.05/job)
-API Request Overage:   $1.00  (10k requests over quota at $0.10/1000)
-------------------------
-Total:                $85.00
-```
-
-### Invoice Generation
-
-Invoices are automatically generated at the end of each billing period:
-
-1. System calculates usage and overages
-2. Creates invoice in database
-3. Submits invoice to Stripe
-4. Stripe charges the default payment method
-5. Webhook confirms payment
-
-Manual invoice generation:
-
-```bash
-curl -X POST https://spoke.example.com/orgs/1/invoices/generate \
-  -H "Authorization: Bearer $TOKEN"
+curl -X PUT https://spoke.example.com/orgs/1/quotas \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "max_modules": 100,
+    "max_versions_per_module": 1000,
+    "max_storage_bytes": 107374182400,
+    "max_compile_jobs_per_month": 50000,
+    "api_rate_limit_per_hour": 10000,
+    "custom_settings": {
+      "note": "Increased for production use"
+    }
+  }'
 ```
 
 ## Security Considerations
 
 1. **Data Isolation**: All queries filter by `org_id` to prevent cross-org access
 2. **RBAC Integration**: Role-based access control for org members
-3. **Invitation Tokens**: Cryptographically random 32-byte tokens
-4. **Webhook Verification**: Stripe signature verification on webhooks
-5. **Payment Data**: Never stored directly, only Stripe IDs
+3. **Invitation Tokens**: Cryptographically random 32-byte tokens with 7-day expiry
+4. **Public Module Control**: Only owners can modify public modules
+5. **Audit Logging**: All organization operations are logged
 
 ## Database Migrations
 
@@ -357,25 +290,19 @@ psql $DATABASE_URL < migrations/005_create_multitenancy_schema.down.sql
 
 ```
 pkg/
-├── orgs/                   - Organization management
+├── orgs/                   - Organization management (NO BILLING)
 │   ├── types.go           - Data types and interfaces
 │   ├── service.go         - Core CRUD operations
 │   ├── members.go         - Member and invitation management
 │   ├── quotas.go          - Quota enforcement and usage tracking
 │   └── service_test.go    - Unit tests
 │
-├── billing/               - Billing and subscriptions
-│   ├── types.go          - Billing data types
-│   ├── service.go        - Subscription and invoice management
-│   ├── stripe.go         - Stripe API integration
-│   └── types_test.go     - Unit tests
-│
 ├── api/                   - HTTP handlers
-│   ├── org_handlers.go   - Organization API endpoints
-│   └── billing_handlers.go - Billing API endpoints
+│   └── org_handlers.go   - Organization API endpoints
 │
 └── middleware/            - HTTP middleware
-    └── quota.go          - Quota enforcement middleware
+    ├── org.go            - Organization context middleware
+    └── org_test.go       - Middleware tests
 ```
 
 ## Testing
@@ -384,7 +311,7 @@ Run tests:
 
 ```bash
 go test ./pkg/orgs/...
-go test ./pkg/billing/...
+go test ./pkg/middleware/...
 ```
 
 Integration tests require a test database:
@@ -398,11 +325,11 @@ go test -tags=integration ./...
 
 - [ ] Custom domain support for organizations
 - [ ] Advanced usage analytics dashboard
-- [ ] Automated quota increase requests
-- [ ] Enterprise SSO integration per organization
+- [ ] Automated quota adjustment based on usage patterns
+- [ ] Per-organization SSO integration
 - [ ] Multi-region support
-- [ ] Reseller/partner accounts
-- [ ] Usage alerts and notifications
-- [ ] Budget caps and spending limits
-- [ ] Annual billing discounts
-- [ ] Volume discounts for large enterprises
+- [ ] Organization transfer/migration tools
+- [ ] Usage alerts and notifications (quota warnings)
+- [ ] Module dependency visualization per organization
+- [ ] Organization-level webhooks
+- [ ] Module marketplace for public schemas
