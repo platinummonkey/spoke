@@ -34,6 +34,9 @@ type CompileRequest struct {
 	// Dependencies (already resolved)
 	Dependencies  []codegen.Dependency
 
+	// Language (for single language compilation)
+	Language      string
+
 	// Compilation options
 	IncludeGRPC   bool
 	Options       map[string]string

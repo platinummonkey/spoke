@@ -3,6 +3,7 @@ package api
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -15,6 +16,8 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/platinummonkey/spoke/pkg/codegen"
+	"github.com/platinummonkey/spoke/pkg/codegen/orchestrator"
 )
 
 // Server represents our API server
@@ -25,6 +28,7 @@ type Server struct {
 	authHandlers        *AuthHandlers
 	compatHandlers      *CompatibilityHandlers
 	validationHandlers  *ValidationHandlers
+	orchestrator        orchestrator.Orchestrator // Code generation orchestrator (v2)
 }
 
 // NewServer creates a new API server
@@ -42,8 +46,134 @@ func NewServer(storage Storage, db *sql.DB) *Server {
 		s.validationHandlers = NewValidationHandlers(storage)
 	}
 
+	// Initialize code generation orchestrator (v2)
+	// Note: Errors are non-fatal - falls back to v1 compilation if orchestrator fails
+	if orch, err := orchestrator.NewOrchestrator(nil); err == nil {
+		s.orchestrator = orch
+		// Register package generators
+		s.registerPackageGenerators()
+	}
+
 	s.setupRoutes()
 	return s
+}
+
+// registerPackageGenerators registers package generators with the orchestrator
+func (s *Server) registerPackageGenerators() {
+	if s.orchestrator == nil {
+		return
+	}
+
+	// Access the internal orchestrator to get the package registry
+	// Note: This is a bit of a hack - ideally orchestrator would expose a method
+	// For now, we'll register generators when creating the orchestrator itself
+	// This method is a placeholder for future enhancement
+
+	// TODO: Add method to orchestrator to register generators externally
+	// For now, generators are registered internally in the orchestrator
+}
+
+// getCodeGenVersion returns the code generation version to use based on environment variable
+func (s *Server) getCodeGenVersion() string {
+	version := os.Getenv("SPOKE_CODEGEN_VERSION")
+	if version == "" {
+		return "v2" // Default to v2 (new orchestrator)
+	}
+	return version
+}
+
+// compileWithOrchestrator compiles a version using the v2 orchestrator
+func (s *Server) compileWithOrchestrator(version *Version, language Language) (CompilationInfo, error) {
+	if s.orchestrator == nil {
+		return CompilationInfo{}, fmt.Errorf("orchestrator not available")
+	}
+
+	// Convert Version to proto files
+	protoFiles := make([]codegen.ProtoFile, 0, len(version.Files))
+	for _, file := range version.Files {
+		protoFiles = append(protoFiles, codegen.ProtoFile{
+			Path:    file.Path,
+			Content: []byte(file.Content),
+		})
+	}
+
+	// Convert dependencies
+	dependencies := make([]codegen.Dependency, 0, len(version.Dependencies))
+	for _, dep := range version.Dependencies {
+		parts := strings.Split(dep, "@")
+		if len(parts) != 2 {
+			continue
+		}
+		depModule := parts[0]
+		depVersion := parts[1]
+
+		// Fetch dependency proto files
+		depVer, err := s.storage.GetVersion(depModule, depVersion)
+		if err != nil {
+			continue // Skip invalid dependencies
+		}
+
+		depProtoFiles := make([]codegen.ProtoFile, 0, len(depVer.Files))
+		for _, file := range depVer.Files {
+			depProtoFiles = append(depProtoFiles, codegen.ProtoFile{
+				Path:    file.Path,
+				Content: []byte(file.Content),
+			})
+		}
+
+		dependencies = append(dependencies, codegen.Dependency{
+			ModuleName: depModule,
+			Version:    depVersion,
+			ProtoFiles: depProtoFiles,
+		})
+	}
+
+	// Create compilation request
+	req := &orchestrator.CompileRequest{
+		ModuleName:   version.ModuleName,
+		Version:      version.Version,
+		VersionID:    0, // Not tracked in current system
+		ProtoFiles:   protoFiles,
+		Dependencies: dependencies,
+		Language:     string(language),
+		IncludeGRPC:  false, // TODO: Make this configurable
+		Options:      make(map[string]string),
+		StorageDir:   "", // Will be set by orchestrator
+		S3Bucket:     "", // TODO: Configure from server settings
+	}
+
+	// Compile using orchestrator
+	ctx := context.Background()
+	result, err := s.orchestrator.CompileSingle(ctx, req)
+	if err != nil {
+		return CompilationInfo{}, fmt.Errorf("orchestrator compilation failed: %w", err)
+	}
+
+	// Convert result to CompilationInfo
+	files := make([]File, 0, len(result.GeneratedFiles)+len(result.PackageFiles))
+
+	// Add generated files
+	for _, gf := range result.GeneratedFiles {
+		files = append(files, File{
+			Path:    gf.Path,
+			Content: string(gf.Content),
+		})
+	}
+
+	// Add package manager files
+	for _, pf := range result.PackageFiles {
+		files = append(files, File{
+			Path:    pf.Path,
+			Content: string(pf.Content),
+		})
+	}
+
+	return CompilationInfo{
+		Language:    language,
+		PackageName: version.ModuleName,
+		Version:     version.Version,
+		Files:       files,
+	}, nil
 }
 
 // setupRoutes configures all the API routes
@@ -288,7 +418,44 @@ func (s *Server) downloadCompiled(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// compileGo compiles a version into Go code
+// compileForLanguage routes compilation to v1 or v2 based on feature flag
+func (s *Server) compileForLanguage(version *Version, language Language) (CompilationInfo, error) {
+	codeGenVersion := s.getCodeGenVersion()
+
+	// Route to appropriate implementation
+	switch codeGenVersion {
+	case "v1":
+		// Use legacy direct protoc compilation
+		return s.compileV1(version, language)
+	case "v2":
+		// Use new orchestrator (default)
+		if s.orchestrator != nil {
+			return s.compileWithOrchestrator(version, language)
+		}
+		// Fallback to v1 if orchestrator unavailable
+		return s.compileV1(version, language)
+	default:
+		// Default to v2
+		if s.orchestrator != nil {
+			return s.compileWithOrchestrator(version, language)
+		}
+		return s.compileV1(version, language)
+	}
+}
+
+// compileV1 routes to legacy compilation methods
+func (s *Server) compileV1(version *Version, language Language) (CompilationInfo, error) {
+	switch language {
+	case LanguageGo:
+		return s.compileGo(version)
+	case LanguagePython:
+		return s.compilePython(version)
+	default:
+		return CompilationInfo{}, fmt.Errorf("unsupported language for v1: %s", language)
+	}
+}
+
+// compileGo compiles a version into Go code (legacy v1 implementation)
 func (s *Server) compileGo(version *Version) (CompilationInfo, error) {
 	// Create a temporary directory for compilation
 	tmpDir, err := os.MkdirTemp("", "spoke-go-compile-*")
@@ -429,7 +596,7 @@ require (
 	}, nil
 }
 
-// compilePython compiles a version into Python code
+// compilePython compiles a version into Python code (legacy v1 implementation)
 func (s *Server) compilePython(version *Version) (CompilationInfo, error) {
 	// Create a temporary directory for compilation
 	tmpDir, err := os.MkdirTemp("", "spoke-python-compile-*")
