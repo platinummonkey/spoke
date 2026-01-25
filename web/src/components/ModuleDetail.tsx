@@ -40,6 +40,7 @@ import { SchemaDiff } from './SchemaDiff';
 import { MigrationGuide } from './MigrationGuide';
 import { LoadingSkeleton } from './LoadingSkeleton';
 import DependencyGraph from './DependencyGraph';
+import { ImpactAnalysis } from './ImpactAnalysis';
 
 // UsageExamples component removed - now using CodeExamples component
 
@@ -349,6 +350,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
           <Tab>Types</Tab>
           <Tab>API Explorer</Tab>
           <Tab>Dependencies</Tab>
+          <Tab>Impact</Tab>
           <Tab>Usage Examples</Tab>
           <Tab>Migration</Tab>
         </TabList>
@@ -492,6 +494,15 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
                   // Navigate to the clicked module
                   window.location.href = `/modules/${module}?version=${version}`;
                 }}
+              />
+            )}
+          </TabPanel>
+
+          <TabPanel>
+            {selectedVersionData && (
+              <ImpactAnalysis
+                moduleName={module.name}
+                version={selectedVersionData.version}
               />
             )}
           </TabPanel>

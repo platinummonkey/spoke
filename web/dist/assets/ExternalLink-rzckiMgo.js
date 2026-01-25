@@ -1,0 +1,1 @@
+import{K as a,j as t}from"./index-s0R2GcZA.js";const o=a({displayName:"ExternalLinkIcon",path:t.jsxs("g",{fill:"none",stroke:"currentColor",strokeLinecap:"round",strokeWidth:"2",children:[t.jsx("path",{d:"M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"}),t.jsx("path",{d:"M15 3h6v6"}),t.jsx("path",{d:"M10 14L21 3"})]})});export{o as E};
