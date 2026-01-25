@@ -29,6 +29,10 @@ func (h *DependencyHandlers) RegisterRoutes(router *mux.Router) {
 	router.HandleFunc("/modules/{name}/versions/{version}/lockfile", h.getLockfile).Methods("GET")
 	router.HandleFunc("/modules/{name}/versions/{version}/lockfile/validate", h.validateLockfile).Methods("POST")
 	router.HandleFunc("/modules/{name}/versions/{version}/graph", h.getDependencyGraph).Methods("GET")
+
+	// Register v2 graph visualization endpoints (Cytoscape.js format)
+	vizHandlers := NewGraphVisualizationHandlers(h.resolver)
+	vizHandlers.RegisterRoutes(router)
 }
 
 // getDependencies handles GET /modules/{name}/versions/{version}/dependencies

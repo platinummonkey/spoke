@@ -39,6 +39,7 @@ import { CodeExamples } from './CodeExamples';
 import { SchemaDiff } from './SchemaDiff';
 import { MigrationGuide } from './MigrationGuide';
 import { LoadingSkeleton } from './LoadingSkeleton';
+import DependencyGraph from './DependencyGraph';
 
 // UsageExamples component removed - now using CodeExamples component
 
@@ -347,6 +348,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
           <Tab>Overview</Tab>
           <Tab>Types</Tab>
           <Tab>API Explorer</Tab>
+          <Tab>Dependencies</Tab>
           <Tab>Usage Examples</Tab>
           <Tab>Migration</Tab>
         </TabList>
@@ -475,6 +477,21 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
                 files={selectedVersionData.files as unknown as ProtoFile[]}
                 moduleName={module.name}
                 version={selectedVersionData.version}
+              />
+            )}
+          </TabPanel>
+
+          <TabPanel>
+            {selectedVersionData && (
+              <DependencyGraph
+                moduleName={module.name}
+                version={selectedVersionData.version}
+                transitive={true}
+                direction="both"
+                onNodeClick={(module, version) => {
+                  // Navigate to the clicked module
+                  window.location.href = `/modules/${module}?version=${version}`;
+                }}
               />
             )}
           </TabPanel>

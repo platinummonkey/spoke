@@ -16,6 +16,9 @@
         "@types/prismjs": "^1.26.5",
         "@types/protobufjs": "^6.0.0",
         "axios": "^1.12.0",
+        "cytoscape": "^3.28.1",
+        "cytoscape-cola": "^2.5.1",
+        "cytoscape-dagre": "^2.5.0",
         "framer-motion": "^11.0.3",
         "lunr": "^2.3.9",
         "prismjs": "^1.30.0",
@@ -25,6 +28,7 @@
         "react-router-dom": "^6.30.3"
     },
     "devDependencies": {
+        "@types/cytoscape": "^3.21.0",
         "@types/lunr": "^2.3.7",
         "@types/react": "^18.2.43",
         "@types/react-dom": "^18.2.17",
