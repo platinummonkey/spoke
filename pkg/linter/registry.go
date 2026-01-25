@@ -26,10 +26,9 @@ func NewRuleRegistry() *RuleRegistry {
 		rules: make(map[string]Rule),
 	}
 
-	// TODO: Register built-in rules
-	// registry.Register(rules.NewMessageNamingRule())
-	// registry.Register(rules.NewFieldNamingRule())
-	// etc.
+	// Note: Rules should be registered explicitly using registry.Register()
+	// or by calling rules.RegisterDefaultRules(registry)
+	// See pkg/linter/rules/register.go
 
 	return registry
 }
