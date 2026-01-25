@@ -2,6 +2,7 @@ package webhooks
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -28,6 +29,9 @@ func (h *WebhookHandlers) RegisterRoutes(router *mux.Router) {
 	router.HandleFunc("/webhooks/{id}", h.deleteWebhook).Methods("DELETE")
 	router.HandleFunc("/webhooks/{id}/activate", h.activateWebhook).Methods("POST")
 	router.HandleFunc("/webhooks/{id}/deactivate", h.deactivateWebhook).Methods("POST")
+	router.HandleFunc("/webhooks/{id}/test", h.testWebhook).Methods("POST")
+	router.HandleFunc("/webhooks/{id}/deliveries", h.getDeliveryLogs).Methods("GET")
+	router.HandleFunc("/webhooks/{id}/stats", h.getDeliveryStats).Methods("GET")
 }
 
 // createWebhook handles POST /webhooks
@@ -126,4 +130,77 @@ func (h *WebhookHandlers) deactivateWebhook(w http.ResponseWriter, r *http.Reque
 
 	webhook, _ := h.manager.GetWebhook(id)
 	json.NewEncoder(w).Encode(webhook)
+}
+
+// testWebhook handles POST /webhooks/{id}/test
+func (h *WebhookHandlers) testWebhook(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	_, err := h.manager.GetWebhook(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	// Create a test event
+	testEvent := &Event{
+		Type: "webhook.test",
+		Data: map[string]interface{}{
+			"message": "This is a test webhook delivery from Spoke Schema Registry",
+			"webhook_id": id,
+		},
+	}
+
+	// Send the test event
+	err = h.manager.Dispatch(r.Context(), testEvent)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Test webhook sent successfully",
+		"event_id": testEvent.ID,
+	})
+}
+
+// getDeliveryLogs handles GET /webhooks/{id}/deliveries
+func (h *WebhookHandlers) getDeliveryLogs(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	_, err := h.manager.GetWebhook(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	// Get limit from query params (default: 50)
+	limit := 50
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		fmt.Sscanf(limitStr, "%d", &limit)
+	}
+
+	logs := h.manager.GetDeliveryLogs(id, limit)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"webhook_id": id,
+		"deliveries": logs,
+		"count":      len(logs),
+	})
+}
+
+// getDeliveryStats handles GET /webhooks/{id}/stats
+func (h *WebhookHandlers) getDeliveryStats(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	_, err := h.manager.GetWebhook(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	stats := h.manager.GetDeliveryStats(id)
+	json.NewEncoder(w).Encode(stats)
 }

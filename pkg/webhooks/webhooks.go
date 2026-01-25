@@ -50,18 +50,50 @@ type Webhook struct {
 
 // WebhookManager manages webhooks
 type WebhookManager struct {
-	webhooks map[string]*Webhook
-	client   *http.Client
+	webhooks      map[string]*Webhook
+	client        *http.Client
+	deliveryStore *DeliveryLogStore
+	retryWorker   *RetryWorker
+	rateLimiter   *RateLimiter
 }
 
 // NewWebhookManager creates a new webhook manager
 func NewWebhookManager() *WebhookManager {
-	return &WebhookManager{
-		webhooks: make(map[string]*Webhook),
+	deliveryStore := NewDeliveryLogStore(1000)
+	retryPolicy := NewRetryPolicy(DefaultRetryConfig())
+
+	manager := &WebhookManager{
+		webhooks:      make(map[string]*Webhook),
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
+		deliveryStore: deliveryStore,
+		rateLimiter:   NewRateLimiter(100, time.Minute), // 100 requests per minute per webhook
 	}
+
+	manager.retryWorker = NewRetryWorker(manager, deliveryStore, retryPolicy)
+
+	return manager
+}
+
+// StartRetryWorker starts the retry worker
+func (wm *WebhookManager) StartRetryWorker(ctx context.Context) {
+	wm.retryWorker.Start(ctx, 30*time.Second) // Check for retries every 30 seconds
+}
+
+// StopRetryWorker stops the retry worker
+func (wm *WebhookManager) StopRetryWorker() {
+	wm.retryWorker.Stop()
+}
+
+// GetDeliveryLogs retrieves delivery logs for a webhook
+func (wm *WebhookManager) GetDeliveryLogs(webhookID string, limit int) []*DeliveryLog {
+	return wm.deliveryStore.GetByWebhook(webhookID, limit)
+}
+
+// GetDeliveryStats retrieves delivery statistics for a webhook
+func (wm *WebhookManager) GetDeliveryStats(webhookID string) DeliveryStats {
+	return wm.deliveryStore.GetStats(webhookID)
 }
 
 // RegisterWebhook registers a new webhook
@@ -135,15 +167,64 @@ func (wm *WebhookManager) Dispatch(ctx context.Context, event *Event) error {
 			continue
 		}
 
+		// Create delivery log
+		deliveryLog := &DeliveryLog{
+			ID:        generateID(),
+			WebhookID: webhook.ID,
+			EventID:   event.ID,
+			EventType: event.Type,
+			URL:       webhook.URL,
+			Status:    DeliveryStatusPending,
+			Attempts:  0,
+			CreatedAt: time.Now(),
+		}
+		wm.deliveryStore.Add(deliveryLog)
+
 		// Send webhook asynchronously
-		go wm.sendWebhook(ctx, webhook, event)
+		go wm.sendWebhookWithDeliveryLog(ctx, webhook, event, deliveryLog)
 	}
 
 	return nil
 }
 
+// sendWebhookWithDeliveryLog sends an event to a specific webhook with delivery logging
+func (wm *WebhookManager) sendWebhookWithDeliveryLog(ctx context.Context, webhook *Webhook, event *Event, deliveryLog *DeliveryLog) {
+	deliveryLog.Attempts++
+	startTime := time.Now()
+
+	err := wm.sendWebhook(ctx, webhook, event, deliveryLog)
+	duration := time.Since(startTime)
+	deliveryLog.Duration = duration
+
+	if err != nil {
+		// Check if we should retry
+		retryPolicy := NewRetryPolicy(DefaultRetryConfig())
+		if retryPolicy.ShouldRetry(deliveryLog.Attempts, err) {
+			deliveryLog.Status = DeliveryStatusRetrying
+			nextRetry := retryPolicy.NextRetryTime(deliveryLog.Attempts)
+			deliveryLog.NextRetryAt = &nextRetry
+			deliveryLog.ErrorMessage = err.Error()
+		} else {
+			deliveryLog.Status = DeliveryStatusFailed
+			deliveryLog.ErrorMessage = err.Error()
+			now := time.Now()
+			deliveryLog.CompletedAt = &now
+		}
+	} else {
+		deliveryLog.Status = DeliveryStatusSuccess
+		now := time.Now()
+		deliveryLog.CompletedAt = &now
+	}
+
+	wm.deliveryStore.Update(deliveryLog)
+}
+
 // sendWebhook sends an event to a specific webhook
-func (wm *WebhookManager) sendWebhook(ctx context.Context, webhook *Webhook, event *Event) error {
+func (wm *WebhookManager) sendWebhook(ctx context.Context, webhook *Webhook, event *Event, deliveryLog *DeliveryLog) error {
+	// Check rate limit
+	if !wm.rateLimiter.Allow(webhook.ID) {
+		return fmt.Errorf("rate limit exceeded for webhook %s", webhook.ID)
+	}
 	payload, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("failed to marshal event: %w", err)
@@ -165,17 +246,37 @@ func (wm *WebhookManager) sendWebhook(ctx context.Context, webhook *Webhook, eve
 		req.Header.Set("X-Spoke-Signature", signature)
 	}
 
+	// Record request headers if delivery log provided
+	if deliveryLog != nil {
+		deliveryLog.RequestHeaders = make(map[string]string)
+		for key, values := range req.Header {
+			if len(values) > 0 {
+				deliveryLog.RequestHeaders[key] = values[0]
+			}
+		}
+	}
+
 	resp, err := wm.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send webhook: %w", err)
 	}
 	defer resp.Body.Close()
 
+	// Record status code
+	if deliveryLog != nil {
+		deliveryLog.StatusCode = resp.StatusCode
+	}
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("webhook returned non-2xx status: %d", resp.StatusCode)
 	}
 
 	return nil
+}
+
+// sendWebhookWithLog is used by retry worker
+func (wm *WebhookManager) sendWebhookWithLog(ctx context.Context, webhook *Webhook, event *Event, deliveryLog *DeliveryLog) error {
+	return wm.sendWebhook(ctx, webhook, event, deliveryLog)
 }
 
 // VerifySignature verifies the webhook signature
