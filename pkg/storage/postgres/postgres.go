@@ -8,10 +8,16 @@ import (
 	"time"
 
 	_ "github.com/lib/pq" // PostgreSQL driver
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/platinummonkey/spoke/pkg/api"
 	"github.com/platinummonkey/spoke/pkg/storage"
 )
+
+var tracer = otel.Tracer("spoke/storage/postgres")
 
 // PostgresStorage implements StorageV2 using PostgreSQL + S3 + Redis
 type PostgresStorage struct {
@@ -107,6 +113,16 @@ func (s *PostgresStorage) GetFile(moduleName, version, path string) (*api.File, 
 // Context-aware implementations
 
 func (s *PostgresStorage) CreateModuleContext(ctx context.Context, module *api.Module) error {
+	ctx, span := tracer.Start(ctx, "CreateModule",
+		trace.WithAttributes(
+			attribute.String("db.system", "postgresql"),
+			attribute.String("db.operation", "INSERT"),
+			attribute.String("db.table", "modules"),
+			attribute.String("module.name", module.Name),
+		),
+	)
+	defer span.End()
+
 	query := `
 		INSERT INTO modules (name, description, metadata)
 		VALUES ($1, $2, $3)
@@ -120,6 +136,8 @@ func (s *PostgresStorage) CreateModuleContext(ctx context.Context, module *api.M
 	).Scan(&module.CreatedAt, &module.UpdatedAt)
 
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to create module")
 		return fmt.Errorf("failed to create module: %w", err)
 	}
 
@@ -128,16 +146,30 @@ func (s *PostgresStorage) CreateModuleContext(ctx context.Context, module *api.M
 		s.redisClient.InvalidateModule(ctx, module.Name)
 	}
 
+	span.SetStatus(codes.Ok, "module created successfully")
 	return nil
 }
 
 func (s *PostgresStorage) GetModuleContext(ctx context.Context, name string) (*api.Module, error) {
+	ctx, span := tracer.Start(ctx, "GetModule",
+		trace.WithAttributes(
+			attribute.String("db.system", "postgresql"),
+			attribute.String("db.operation", "SELECT"),
+			attribute.String("db.table", "modules"),
+			attribute.String("module.name", name),
+		),
+	)
+	defer span.End()
+
 	// Check cache first
 	if s.redisClient != nil {
 		if module, err := s.redisClient.GetModule(ctx, name); err == nil && module != nil {
+			span.SetAttributes(attribute.Bool("cache.hit", true))
+			span.SetStatus(codes.Ok, "module retrieved from cache")
 			return module, nil
 		}
 	}
+	span.SetAttributes(attribute.Bool("cache.hit", false))
 
 	query := `
 		SELECT name, description, created_at, updated_at
@@ -154,8 +186,11 @@ func (s *PostgresStorage) GetModuleContext(ctx context.Context, name string) (*a
 	)
 
 	if err == sql.ErrNoRows {
+		span.SetStatus(codes.Error, "module not found")
 		return nil, fmt.Errorf("module not found: %s", name)
 	} else if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to get module")
 		return nil, fmt.Errorf("failed to get module: %w", err)
 	}
 
@@ -164,6 +199,7 @@ func (s *PostgresStorage) GetModuleContext(ctx context.Context, name string) (*a
 		s.redisClient.SetModule(ctx, &module)
 	}
 
+	span.SetStatus(codes.Ok, "module retrieved from database")
 	return &module, nil
 }
 
@@ -210,7 +246,20 @@ func (s *PostgresStorage) ListModulesPaginated(ctx context.Context, limit, offse
 // Placeholder implementations for remaining methods
 
 func (s *PostgresStorage) CreateVersionContext(ctx context.Context, version *api.Version) error {
+	ctx, span := tracer.Start(ctx, "CreateVersion",
+		trace.WithAttributes(
+			attribute.String("db.system", "postgresql"),
+			attribute.String("db.operation", "INSERT"),
+			attribute.String("db.table", "versions"),
+			attribute.String("module.name", version.ModuleName),
+			attribute.String("version", version.Version),
+			attribute.Int("file.count", len(version.Files)),
+		),
+	)
+	defer span.End()
+
 	if s.s3Client == nil {
+		span.SetStatus(codes.Error, "s3 client not initialized")
 		return fmt.Errorf("s3 client not initialized")
 	}
 
@@ -218,14 +267,19 @@ func (s *PostgresStorage) CreateVersionContext(ctx context.Context, version *api
 	var moduleID int64
 	err := s.db.QueryRowContext(ctx, "SELECT id FROM modules WHERE name = $1", version.ModuleName).Scan(&moduleID)
 	if err == sql.ErrNoRows {
+		span.SetStatus(codes.Error, "module not found")
 		return fmt.Errorf("module not found: %s", version.ModuleName)
 	} else if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to get module")
 		return fmt.Errorf("failed to get module: %w", err)
 	}
 
 	// Start transaction
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to start transaction")
 		return fmt.Errorf("failed to start transaction: %w", err)
 	}
 	defer tx.Rollback()
@@ -261,6 +315,8 @@ func (s *PostgresStorage) CreateVersionContext(ctx context.Context, version *api
 	).Scan(&versionID)
 
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to insert version")
 		return fmt.Errorf("failed to insert version: %w", err)
 	}
 
@@ -275,6 +331,8 @@ func (s *PostgresStorage) CreateVersionContext(ctx context.Context, version *api
 		contentBytes := []byte(file.Content)
 		hash, err := s.s3Client.PutObjectWithHash(ctx, contentBytes, "application/x-protobuf")
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to upload file to s3")
 			return fmt.Errorf("failed to upload file %s to s3: %w", file.Path, err)
 		}
 
@@ -292,12 +350,16 @@ func (s *PostgresStorage) CreateVersionContext(ctx context.Context, version *api
 		)
 
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to insert file metadata")
 			return fmt.Errorf("failed to insert file metadata for %s: %w", file.Path, err)
 		}
 	}
 
 	// Commit transaction
 	if err := tx.Commit(); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to commit transaction")
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
@@ -306,20 +368,36 @@ func (s *PostgresStorage) CreateVersionContext(ctx context.Context, version *api
 		s.redisClient.InvalidateVersion(ctx, version.ModuleName, version.Version)
 	}
 
+	span.SetStatus(codes.Ok, "version created successfully")
 	return nil
 }
 
 func (s *PostgresStorage) GetVersionContext(ctx context.Context, moduleName, version string) (*api.Version, error) {
+	ctx, span := tracer.Start(ctx, "GetVersion",
+		trace.WithAttributes(
+			attribute.String("db.system", "postgresql"),
+			attribute.String("db.operation", "SELECT"),
+			attribute.String("db.table", "versions"),
+			attribute.String("module.name", moduleName),
+			attribute.String("version", version),
+		),
+	)
+	defer span.End()
+
 	if s.s3Client == nil {
+		span.SetStatus(codes.Error, "s3 client not initialized")
 		return nil, fmt.Errorf("s3 client not initialized")
 	}
 
 	// Check cache first
 	if s.redisClient != nil {
 		if cachedVersion, err := s.redisClient.GetVersion(ctx, moduleName, version); err == nil && cachedVersion != nil {
+			span.SetAttributes(attribute.Bool("cache.hit", true))
+			span.SetStatus(codes.Ok, "version retrieved from cache")
 			return cachedVersion, nil
 		}
 	}
+	span.SetAttributes(attribute.Bool("cache.hit", false))
 
 	// Get version metadata
 	query := `
@@ -343,8 +421,11 @@ func (s *PostgresStorage) GetVersionContext(ctx context.Context, moduleName, ver
 	)
 
 	if err == sql.ErrNoRows {
+		span.SetStatus(codes.Error, "version not found")
 		return nil, fmt.Errorf("version not found: %s@%s", moduleName, version)
 	} else if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to get version")
 		return nil, fmt.Errorf("failed to get version: %w", err)
 	}
 
@@ -362,6 +443,8 @@ func (s *PostgresStorage) GetVersionContext(ctx context.Context, moduleName, ver
 
 	rows, err := s.db.QueryContext(ctx, fileQuery, versionID)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to query files")
 		return nil, fmt.Errorf("failed to query files: %w", err)
 	}
 	defer rows.Close()
@@ -370,18 +453,24 @@ func (s *PostgresStorage) GetVersionContext(ctx context.Context, moduleName, ver
 	for rows.Next() {
 		var filePath, contentHash, objectKey string
 		if err := rows.Scan(&filePath, &contentHash, &objectKey); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to scan file metadata")
 			return nil, fmt.Errorf("failed to scan file metadata: %w", err)
 		}
 
 		// Download file content from S3
 		reader, err := s.s3Client.GetObject(ctx, objectKey)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to download file from s3")
 			return nil, fmt.Errorf("failed to download file %s from s3: %w", filePath, err)
 		}
 
 		contentBytes, err := io.ReadAll(reader)
 		reader.Close()
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to read file content")
 			return nil, fmt.Errorf("failed to read file %s content: %w", filePath, err)
 		}
 
@@ -392,6 +481,8 @@ func (s *PostgresStorage) GetVersionContext(ctx context.Context, moduleName, ver
 	}
 
 	if err := rows.Err(); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "error iterating files")
 		return nil, fmt.Errorf("error iterating files: %w", err)
 	}
 
@@ -408,6 +499,8 @@ func (s *PostgresStorage) GetVersionContext(ctx context.Context, moduleName, ver
 		s.redisClient.SetVersion(ctx, result)
 	}
 
+	span.SetAttributes(attribute.Int("file.count", len(files)))
+	span.SetStatus(codes.Ok, "version retrieved from database")
 	return result, nil
 }
 

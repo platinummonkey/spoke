@@ -12,8 +12,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/platinummonkey/spoke/pkg/storage"
 )
+
+var s3Tracer = tracer // Reuse tracer from postgres.go
 
 // S3Client handles object storage operations
 type S3Client struct {
@@ -75,11 +81,25 @@ func NewS3Client(cfg storage.Config) (*S3Client, error) {
 
 // PutObject uploads content to S3
 func (c *S3Client) PutObject(ctx context.Context, key string, content io.Reader, contentType string) error {
+	ctx, span := s3Tracer.Start(ctx, "S3.PutObject",
+		trace.WithAttributes(
+			attribute.String("s3.operation", "PutObject"),
+			attribute.String("s3.bucket", c.bucket),
+			attribute.String("s3.key", key),
+			attribute.String("content.type", contentType),
+		),
+	)
+	defer span.End()
+
 	// Read content to calculate hash and size
 	data, err := io.ReadAll(content)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to read content")
 		return fmt.Errorf("failed to read content: %w", err)
 	}
+
+	span.SetAttributes(attribute.Int("content.size", len(data)))
 
 	// Calculate SHA256 checksum
 	hash := sha256.Sum256(data)
@@ -97,23 +117,41 @@ func (c *S3Client) PutObject(ctx context.Context, key string, content io.Reader,
 	})
 
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to upload to s3")
 		return fmt.Errorf("failed to upload to s3: %w", err)
 	}
 
+	span.SetStatus(codes.Ok, "object uploaded successfully")
 	return nil
 }
 
 // GetObject retrieves content from S3
 func (c *S3Client) GetObject(ctx context.Context, key string) (io.ReadCloser, error) {
+	ctx, span := s3Tracer.Start(ctx, "S3.GetObject",
+		trace.WithAttributes(
+			attribute.String("s3.operation", "GetObject"),
+			attribute.String("s3.bucket", c.bucket),
+			attribute.String("s3.key", key),
+		),
+	)
+	defer span.End()
+
 	result, err := c.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(c.bucket),
 		Key:    aws.String(key),
 	})
 
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to get object from s3")
 		return nil, fmt.Errorf("failed to get object from s3: %w", err)
 	}
 
+	if result.ContentLength != nil {
+		span.SetAttributes(attribute.Int64("content.size", *result.ContentLength))
+	}
+	span.SetStatus(codes.Ok, "object retrieved successfully")
 	return result.Body, nil
 }
 
@@ -164,26 +202,46 @@ func (c *S3Client) HealthCheck(ctx context.Context) error {
 
 // PutObjectWithHash uploads content with a given hash as key
 func (c *S3Client) PutObjectWithHash(ctx context.Context, content []byte, contentType string) (string, error) {
+	ctx, span := s3Tracer.Start(ctx, "S3.PutObjectWithHash",
+		trace.WithAttributes(
+			attribute.String("s3.operation", "PutObjectWithHash"),
+			attribute.String("s3.bucket", c.bucket),
+			attribute.Int("content.size", len(content)),
+			attribute.String("content.type", contentType),
+		),
+	)
+	defer span.End()
+
 	// Calculate SHA256 hash
 	hash := sha256.Sum256(content)
 	hashStr := hex.EncodeToString(hash[:])
+	span.SetAttributes(attribute.String("content.hash", hashStr))
 
 	// Use content-addressable storage: sha256/ab/cd123...
 	key := fmt.Sprintf("proto-files/sha256/%s/%s", hashStr[:2], hashStr[2:])
+	span.SetAttributes(attribute.String("s3.key", key))
 
 	// Check if already exists (deduplication)
 	exists, err := c.ObjectExists(ctx, key)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to check object existence")
 		return "", err
 	}
 
 	if !exists {
+		span.SetAttributes(attribute.Bool("deduplication.hit", false))
 		// Upload to S3
 		if err := c.PutObject(ctx, key, bytes.NewReader(content), contentType); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to upload object")
 			return "", err
 		}
+	} else {
+		span.SetAttributes(attribute.Bool("deduplication.hit", true))
 	}
 
+	span.SetStatus(codes.Ok, "object uploaded with hash")
 	return hashStr, nil
 }
 
