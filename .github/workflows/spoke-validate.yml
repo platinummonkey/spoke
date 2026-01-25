@@ -1,0 +1,79 @@
+name: Spoke Schema Validation
+
+on:
+  pull_request:
+    paths:
+      - 'proto/**/*.proto'
+      - 'schemas/**/*.proto'
+  push:
+    paths:
+      - 'proto/**/*.proto'
+      - 'schemas/**/*.proto'
+
+jobs:
+  validate:
+    name: Validate Proto Schemas
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Spoke CLI
+        run: |
+          curl -sSL https://github.com/platinummonkey/spoke/releases/latest/download/spoke-cli-linux-amd64 -o /usr/local/bin/spoke
+          chmod +x /usr/local/bin/spoke
+          spoke --version
+
+      - name: Validate schemas
+        run: |
+          # Find all proto files
+          find proto schemas -name "*.proto" 2>/dev/null || true | while read file; do
+            echo "Validating $file"
+            spoke validate "$file" --strict
+          done
+
+      - name: Check for breaking changes
+        if: github.event_name == 'pull_request'
+        run: |
+          # Get base branch
+          git fetch origin ${{ github.base_ref }}
+
+          # Find changed proto files
+          git diff --name-only origin/${{ github.base_ref }}...HEAD | grep '\.proto$' || exit 0
+
+          # Check each changed file for breaking changes
+          git diff --name-only origin/${{ github.base_ref }}...HEAD | grep '\.proto$' | while read file; do
+            if [ -f "$file" ]; then
+              echo "Checking $file for breaking changes"
+
+              # Get old version
+              git show origin/${{ github.base_ref }}:$file > /tmp/old.proto
+
+              # Compare
+              spoke check-compatibility \
+                --old /tmp/old.proto \
+                --new "$file" \
+                --mode BACKWARD \
+                --verbose
+            fi
+          done
+
+      - name: Lint schemas
+        run: |
+          find proto schemas -name "*.proto" 2>/dev/null || true | while read file; do
+            echo "Linting $file"
+            spoke lint "$file" --config .spoke-lint.yml || true
+          done
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request' && failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.name,
+              body: '⚠️ Schema validation failed. Please check the workflow logs for details.'
+            })

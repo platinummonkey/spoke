@@ -1,0 +1,115 @@
+name: 'Spoke Schema Validation'
+description: 'Validate protobuf schemas with Spoke'
+author: 'Spoke Schema Registry'
+
+branding:
+  icon: 'check-circle'
+  color: 'blue'
+
+inputs:
+  spoke-version:
+    description: 'Version of Spoke CLI to use'
+    required: false
+    default: 'latest'
+  schema-dir:
+    description: 'Directory containing proto files'
+    required: false
+    default: 'proto'
+  mode:
+    description: 'Compatibility mode (BACKWARD, FORWARD, FULL, etc.)'
+    required: false
+    default: 'BACKWARD'
+  strict:
+    description: 'Enable strict validation'
+    required: false
+    default: 'true'
+  lint:
+    description: 'Run linter on schemas'
+    required: false
+    default: 'true'
+
+outputs:
+  valid:
+    description: 'Whether schemas are valid'
+    value: ${{ steps.validate.outputs.valid }}
+  compatible:
+    description: 'Whether schemas are compatible with previous version'
+    value: ${{ steps.compat.outputs.compatible }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Spoke CLI
+      shell: bash
+      run: |
+        if [ "${{ inputs.spoke-version }}" = "latest" ]; then
+          curl -sSL https://github.com/platinummonkey/spoke/releases/latest/download/spoke-cli-linux-amd64 -o /usr/local/bin/spoke
+        else
+          curl -sSL https://github.com/platinummonkey/spoke/releases/download/${{ inputs.spoke-version }}/spoke-cli-linux-amd64 -o /usr/local/bin/spoke
+        fi
+        chmod +x /usr/local/bin/spoke
+        spoke --version
+
+    - name: Validate schemas
+      id: validate
+      shell: bash
+      run: |
+        VALID=true
+
+        find ${{ inputs.schema-dir }} -name "*.proto" 2>/dev/null | while read file; do
+          echo "::group::Validating $file"
+
+          if [ "${{ inputs.strict }}" = "true" ]; then
+            if ! spoke validate "$file" --strict; then
+              VALID=false
+              echo "::error file=$file::Schema validation failed"
+            fi
+          else
+            if ! spoke validate "$file"; then
+              VALID=false
+              echo "::error file=$file::Schema validation failed"
+            fi
+          fi
+
+          echo "::endgroup::"
+        done
+
+        echo "valid=$VALID" >> $GITHUB_OUTPUT
+
+    - name: Check compatibility
+      id: compat
+      if: github.event_name == 'pull_request'
+      shell: bash
+      run: |
+        COMPATIBLE=true
+        git fetch origin ${{ github.base_ref }}
+
+        git diff --name-only origin/${{ github.base_ref }}...HEAD | grep '\.proto$' | while read file; do
+          if [ -f "$file" ]; then
+            echo "::group::Checking compatibility for $file"
+
+            git show origin/${{ github.base_ref }}:$file > /tmp/old.proto
+
+            if ! spoke check-compatibility \
+                --old /tmp/old.proto \
+                --new "$file" \
+                --mode ${{ inputs.mode }}; then
+              COMPATIBLE=false
+              echo "::error file=$file::Breaking change detected"
+            fi
+
+            echo "::endgroup::"
+          fi
+        done
+
+        echo "compatible=$COMPATIBLE" >> $GITHUB_OUTPUT
+
+    - name: Lint schemas
+      if: inputs.lint == 'true'
+      shell: bash
+      run: |
+        find ${{ inputs.schema-dir }} -name "*.proto" 2>/dev/null | while read file; do
+          echo "::group::Linting $file"
+          spoke lint "$file" --config .spoke-lint.yml || true
+          echo "::endgroup::"
+        done
