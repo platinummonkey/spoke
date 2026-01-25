@@ -1,6 +1,14 @@
 package api
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+// Common errors
+var (
+	ErrNotFound = errors.New("not found")
+)
 
 // Module represents a protobuf module with its metadata
 type Module struct {
