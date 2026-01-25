@@ -97,9 +97,39 @@ type CacheKey struct {
 
 // String returns the cache key as a string
 func (k *CacheKey) String() string {
-	optionsHash := ""
-	// TODO: Generate stable hash from options map
-	return k.ModuleName + ":" + k.Version + ":" + k.Language + ":" + k.PluginVersion + ":" + k.ProtoHash + ":" + optionsHash
+	// Import cache package for proper key generation
+	// For now, use simple concatenation
+	// Full implementation in cache.FormatCacheKey()
+	parts := []string{
+		k.ModuleName,
+		k.Version,
+		k.Language,
+		k.PluginVersion,
+		k.ProtoHash,
+	}
+
+	// Add options hash if present (simple approach)
+	if len(k.Options) > 0 {
+		// Simple hash for options - full implementation in cache package
+		optStr := ""
+		for key, val := range k.Options {
+			optStr += key + "=" + val + ";"
+		}
+		parts = append(parts, optStr[:min(16, len(optStr))])
+	}
+
+	result := parts[0]
+	for i := 1; i < len(parts); i++ {
+		result += ":" + parts[i]
+	}
+	return result
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // CompilationMetrics tracks compilation performance

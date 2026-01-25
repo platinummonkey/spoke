@@ -60,6 +60,12 @@ type Config struct {
 	StorageDir         string
 	S3Bucket           string
 	S3Prefix           string
+	S3Region           string
+
+	// Cache configuration
+	RedisAddr          string // Redis address for L2 cache
+	RedisPassword      string
+	RedisDB            int
 
 	// Timeouts
 	CompilationTimeout int // Seconds (default: 300)

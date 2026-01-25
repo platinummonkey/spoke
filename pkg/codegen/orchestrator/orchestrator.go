@@ -8,6 +8,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/platinummonkey/spoke/pkg/codegen"
+	"github.com/platinummonkey/spoke/pkg/codegen/artifacts"
+	"github.com/platinummonkey/spoke/pkg/codegen/cache"
 	"github.com/platinummonkey/spoke/pkg/codegen/docker"
 	"github.com/platinummonkey/spoke/pkg/codegen/languages"
 	"github.com/platinummonkey/spoke/pkg/codegen/packages"
@@ -19,6 +21,8 @@ type DefaultOrchestrator struct {
 	languageRegistry *languages.Registry
 	dockerRunner     docker.Runner
 	packageRegistry  *packages.Registry
+	cache            cache.Cache
+	artifactsManager artifacts.Manager
 	jobs             map[string]*codegen.CompilationJob
 	jobsMu           sync.RWMutex
 }
@@ -44,11 +48,51 @@ func NewOrchestrator(config *Config) (*DefaultOrchestrator, error) {
 	// Generators will be registered as we implement them
 	// For now, the registry is empty but ready to accept registrations
 
+	// Initialize cache (optional)
+	var cacheInstance cache.Cache
+	if config.EnableCache {
+		cacheConfig := &cache.Config{
+			EnableL1:    true,
+			L1MaxSize:   10 * 1024 * 1024, // 10MB
+			L1TTL:       5 * time.Minute,
+			EnableL2:    config.RedisAddr != "",
+			L2Addr:      config.RedisAddr,
+			L2Password:  config.RedisPassword,
+			L2DB:        config.RedisDB,
+			L2TTL:       24 * time.Hour,
+			L2KeyPrefix: "spoke:compiled:",
+		}
+		cacheInstance, err = cache.NewCache(cacheConfig)
+		if err != nil {
+			// Log error but continue without cache
+			fmt.Printf("Warning: failed to initialize cache: %v\n", err)
+		}
+	}
+
+	// Initialize artifacts manager (optional)
+	var artifactsManagerInstance artifacts.Manager
+	if config.S3Bucket != "" {
+		artifactsConfig := &artifacts.Config{
+			S3Bucket:          config.S3Bucket,
+			S3Prefix:          config.S3Prefix,
+			S3Region:          config.S3Region,
+			CompressionFormat: "tar.gz",
+			EnableChecksum:    true,
+		}
+		artifactsManagerInstance, err = artifacts.NewS3Manager(artifactsConfig)
+		if err != nil {
+			// Log error but continue without S3
+			fmt.Printf("Warning: failed to initialize artifacts manager: %v\n", err)
+		}
+	}
+
 	return &DefaultOrchestrator{
 		config:           config,
 		languageRegistry: langRegistry,
 		dockerRunner:     dockerRunner,
 		packageRegistry:  pkgRegistry,
+		cache:            cacheInstance,
+		artifactsManager: artifactsManagerInstance,
 		jobs:             make(map[string]*codegen.CompilationJob),
 	}, nil
 }
@@ -76,7 +120,27 @@ func (o *DefaultOrchestrator) CompileSingle(ctx context.Context, req *CompileReq
 		Success:  false,
 	}
 
-	// TODO: Check cache (Phase 5)
+	// Check cache if enabled
+	if o.cache != nil && o.config.EnableCache {
+		cacheKey := cache.GenerateCacheKey(
+			req.ModuleName,
+			req.Version,
+			req.Language,
+			langSpec.PluginVersion,
+			req.ProtoFiles,
+			req.Dependencies,
+			req.Options,
+		)
+
+		cachedResult, err := o.cache.Get(ctx, cacheKey)
+		if err == nil && cachedResult != nil {
+			// Cache hit!
+			cachedResult.CacheHit = true
+			cachedResult.Duration = time.Since(startTime)
+			return cachedResult, nil
+		}
+		// Cache miss - continue with compilation
+	}
 
 	// Build Docker execution request
 	dockerReq := &docker.ExecutionRequest{
@@ -109,10 +173,50 @@ func (o *DefaultOrchestrator) CompileSingle(ctx context.Context, req *CompileReq
 		}
 	}
 
-	// TODO: Upload to S3 (Phase 5)
-	// TODO: Store in cache (Phase 5)
-
 	result.Success = true
+
+	// Upload to S3 if configured
+	if o.artifactsManager != nil {
+		storeReq := &artifacts.StoreRequest{
+			ModuleName:        req.ModuleName,
+			Version:           req.Version,
+			Language:          req.Language,
+			Files:             result.GeneratedFiles,
+			Metadata:          make(map[string]string),
+			CompressionFormat: "tar.gz",
+		}
+		storeReq.Metadata["plugin_version"] = langSpec.PluginVersion
+		storeReq.Metadata["include_grpc"] = fmt.Sprintf("%v", req.IncludeGRPC)
+
+		storeResult, err := o.artifactsManager.Store(ctx, storeReq)
+		if err != nil {
+			// Log error but don't fail the compilation
+			fmt.Printf("Warning: failed to upload artifacts to S3: %v\n", err)
+		} else {
+			result.S3Key = storeResult.S3Key
+			result.S3Bucket = storeResult.S3Bucket
+			result.ArtifactHash = storeResult.Hash
+		}
+	}
+
+	// Store in cache if enabled
+	if o.cache != nil && o.config.EnableCache {
+		cacheKey := cache.GenerateCacheKey(
+			req.ModuleName,
+			req.Version,
+			req.Language,
+			langSpec.PluginVersion,
+			req.ProtoFiles,
+			req.Dependencies,
+			req.Options,
+		)
+
+		if err := o.cache.Set(ctx, cacheKey, result, 24*time.Hour); err != nil {
+			// Log error but don't fail the compilation
+			fmt.Printf("Warning: failed to store result in cache: %v\n", err)
+		}
+	}
+
 	return result, nil
 }
 
@@ -232,9 +336,30 @@ func (o *DefaultOrchestrator) GetStatus(ctx context.Context, jobID string) (*cod
 
 // Close releases resources
 func (o *DefaultOrchestrator) Close() error {
+	var errs []error
+
 	if o.dockerRunner != nil {
-		return o.dockerRunner.Close()
+		if err := o.dockerRunner.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("docker runner: %w", err))
+		}
 	}
+
+	if o.cache != nil {
+		if err := o.cache.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("cache: %w", err))
+		}
+	}
+
+	if o.artifactsManager != nil {
+		if err := o.artifactsManager.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("artifacts manager: %w", err))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("close errors: %v", errs)
+	}
+
 	return nil
 }
 
