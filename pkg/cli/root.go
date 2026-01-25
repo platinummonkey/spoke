@@ -31,6 +31,7 @@ func NewRootCommand() *Command {
 	root.Subcommands["pull"] = newPullCommand()
 	root.Subcommands["compile"] = newCompileCommand()
 	root.Subcommands["validate"] = newValidateCommand()
+	root.Subcommands["check-compatibility"] = newCheckCompatibilityCommand()
 
 	return root
 }

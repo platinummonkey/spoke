@@ -148,20 +148,47 @@ This document tracks the implementation status of 5 parallel tasks that form the
   - string ↔ bytes
   - Proper error levels based on compatibility mode
 
+### ✅ Completed (Testing & CLI)
+- **✅ Test Fixtures** (`pkg/compatibility/testdata/`)
+  - user_v1.proto: Base version with messages, enums, services
+  - user_v2_compatible.proto: Backward-compatible changes
+  - user_v2_breaking.proto: Breaking changes for testing
+
+- **✅ Unit Tests** (`pkg/compatibility/*_test.go`)
+  - Schema builder tests (15+ test cases)
+  - Field type parsing tests (11 types)
+  - Comparator tests (10+ scenarios)
+  - Field removal/addition tests
+  - Type change compatibility tests (wire-compatible vs incompatible)
+  - Enum value tests
+  - Service/RPC tests
+  - Summary generation tests
+  - All tests passing (100% pass rate)
+
+- **✅ CLI Command** (`pkg/cli/check_compatibility.go`)
+  - `spoke check-compatibility` command
+  - Flags: --old, --new, --mode, --verbose, --format
+  - Supports all compatibility modes
+  - Colored terminal output (red/yellow/green)
+  - Shows violation details with suggestions
+  - Exit code indicates compatibility status
+  - Tested with real proto files
+
 ### 🚧 In Progress / TODO
 - ✅ Implement `BuildFromAST` fully - DONE
 - ✅ Implement message comparison logic - DONE
 - ✅ Implement enum comparison logic - DONE
 - ✅ Implement service comparison logic - DONE
 - ✅ Add type compatibility matrix - DONE
+- ✅ Create test fixtures - DONE
+- ✅ Write comprehensive unit tests - DONE
+- ✅ Add CLI command - DONE
 - Implement import comparison
 - Add reserved field validation
 - Add map field specific rules
-- Create test fixtures (proto files for testing)
-- Write comprehensive unit tests
-- Add CLI command `spoke check-compatibility`
+- JSON output format for CLI
 - Add API endpoint `/check-compatibility`
-- Integration with version storage
+- Integration with version storage (auto-check on push)
 
 ### 📋 Next Steps
 1. Complete SchemaGraphBuilder AST traversal

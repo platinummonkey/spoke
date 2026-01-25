@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package test.user.v1;
+
+// User message representing a user profile
+message User {
+  string id = 1;
+  string name = 2;
+  string email = 3;
+  int32 age = 4;
+  UserType type = 5;
+  Address address = 6;
+  string phone = 7;  // Added field (backward compatible)
+  bool verified = 8; // Added field (backward compatible)
+}
+
+// Address for a user
+message Address {
+  string street = 1;
+  string city = 2;
+  string state = 3;
+  string zip = 4;
+  string country = 5; // Added field (backward compatible)
+}
+
+// Type of user account
+enum UserType {
+  USER_TYPE_UNSPECIFIED = 0;
+  USER_TYPE_REGULAR = 1;
+  USER_TYPE_ADMIN = 2;
+  USER_TYPE_PREMIUM = 3; // Added enum value (backward compatible)
+}
+
+// User service
+service UserService {
+  rpc GetUser(GetUserRequest) returns (User);
+  rpc CreateUser(CreateUserRequest) returns (User);
+  rpc UpdateUser(UpdateUserRequest) returns (User); // Added RPC (backward compatible)
+}
+
+message GetUserRequest {
+  string id = 1;
+}
+
+message CreateUserRequest {
+  string name = 1;
+  string email = 2;
+}
+
+message UpdateUserRequest {
+  string id = 1;
+  string name = 2;
+  string email = 3;
+}
