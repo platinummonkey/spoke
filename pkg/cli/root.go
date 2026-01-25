@@ -32,6 +32,7 @@ func NewRootCommand() *Command {
 	root.Subcommands["compile"] = newCompileCommand()
 	root.Subcommands["validate"] = newValidateCommand()
 	root.Subcommands["check-compatibility"] = newCheckCompatibilityCommand()
+	root.Subcommands["lint"] = newLintCommand()
 
 	return root
 }
