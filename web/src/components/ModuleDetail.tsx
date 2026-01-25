@@ -30,109 +30,15 @@ import {
   Input,
   InputGroup,
   InputLeftElement,
-  Code,
-  useClipboard,
-  IconButton,
-  Tooltip,
 } from '@chakra-ui/react';
-import { ChevronRightIcon, ChevronDownIcon, SearchIcon, CopyIcon } from '@chakra-ui/icons';
+import { ChevronRightIcon, ChevronDownIcon, SearchIcon } from '@chakra-ui/icons';
 import { Link as RouterLink } from 'react-router-dom';
 import { Module, ProtoFile } from '../types';
 import { ProtoTypes } from './ProtoTypes';
 import { ApiExplorer } from './ApiExplorer';
+import { CodeExamples } from './CodeExamples';
 
-// Usage Examples component
-interface UsageExamplesProps {
-  moduleName: string;
-  version: string;
-}
-
-const UsageExamples: React.FC<UsageExamplesProps> = ({ moduleName, version }) => {
-  const [language, setLanguage] = useState<'go' | 'python'>('go');
-  const goExample = `package main
-
-import (
-  "fmt"
-  "context"
-  
-  "${moduleName}" // Import the generated module
-)
-
-func main() {
-  // Create a new client
-  client := ${moduleName}.NewClient()
-  
-  // Use the client to interact with services
-  ctx := context.Background()
-  
-  // Example service call
-  resp, err := client.ExampleMethod(ctx, &${moduleName}.ExampleRequest{
-    Field1: "value1",
-    Field2: 42,
-  })
-  if err != nil {
-    fmt.Printf("Error calling service: %v\\n", err)
-    return
-  }
-  
-  fmt.Printf("Response: %+v\\n", resp)
-}`;
-
-  const pythonExample = `import ${moduleName.replace(/-/g, '_')}
-
-# Create a client
-client = ${moduleName.replace(/-/g, '_')}.Client()
-
-# Example service call
-try:
-    response = client.example_method(
-        ${moduleName.replace(/-/g, '_')}.ExampleRequest(
-            field1="value1",
-            field2=42
-        )
-    )
-    print(f"Response: {response}")
-except Exception as e:
-    print(f"Error calling service: {e}")`;
-
-  const { hasCopied: goHasCopied, onCopy: onCopyGo } = useClipboard(goExample);
-  const { hasCopied: pyHasCopied, onCopy: onCopyPython } = useClipboard(pythonExample);
-
-  return (
-    <Box>
-      <Flex mb={4}>
-        <Select value={language} onChange={(e) => setLanguage(e.target.value as 'go' | 'python')} width="200px">
-          <option value="go">Go</option>
-          <option value="python">Python</option>
-        </Select>
-        <Tooltip label={language === 'go' ? (goHasCopied ? 'Copied!' : 'Copy') : (pyHasCopied ? 'Copied!' : 'Copy')}>
-          <IconButton
-            aria-label="Copy code"
-            icon={<CopyIcon />}
-            ml={2}
-            onClick={language === 'go' ? onCopyGo : onCopyPython}
-          />
-        </Tooltip>
-      </Flex>
-      <Box 
-        p={4} 
-        bg="gray.50" 
-        borderRadius="md" 
-        fontFamily="monospace" 
-        overflowX="auto"
-        borderWidth={1}
-      >
-        <Code display="block" whiteSpace="pre" p={4} overflowX="auto">
-          {language === 'go' ? goExample : pythonExample}
-        </Code>
-      </Box>
-      <Text mt={4} fontSize="sm" color="gray.600">
-        This is an example of how to use the {moduleName} module (version {version}) in {language === 'go' ? 'Go' : 'Python'}.
-        You may need to adjust the imports and method calls based on the actual services and messages in this module.
-      </Text>
-    </Box>
-  );
-};
+// UsageExamples component removed - now using CodeExamples component
 
 interface ModuleDetailProps {
   module: Module | null;
@@ -421,7 +327,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
 
           <TabPanel>
             {selectedVersionData && (
-              <UsageExamples
+              <CodeExamples
                 moduleName={module.name}
                 version={selectedVersionData.version}
               />
