@@ -9,7 +9,7 @@ All compiler images follow a consistent pattern:
 1. **Base Image** (`base/`): Contains protoc compiler only
 2. **Language Images**: Extend base or standalone, include language-specific plugins
 
-## Available Images
+## Available Images (15 Languages)
 
 ### Base
 - **Image**: `spoke/compiler-base:25.1`
@@ -22,14 +22,74 @@ All compiler images follow a consistent pattern:
 - **Generates**: `.pb.go` and `_grpc.pb.go` files
 
 ### Python
-- **Image**: `spoke/compiler-python:4.25.1`
-- **Contains**: protoc + protobuf 4.25.1 + grpcio-tools 1.60.0
+- **Image**: `spoke/compiler-python:4.24.0`
+- **Contains**: protoc + protobuf 4.24.0 + grpcio-tools 1.59.0
 - **Generates**: `_pb2.py` and `_pb2_grpc.py` files
 
 ### Java
-- **Image**: `spoke/compiler-java:3.25.1`
-- **Contains**: protoc + protoc-gen-grpc-java 1.60.0
+- **Image**: `spoke/compiler-java:3.21.0`
+- **Contains**: protoc + protoc-gen-grpc-java 1.59.0
 - **Generates**: `.java` files
+
+### C++
+- **Image**: `spoke/compiler-cpp:3.21.0`
+- **Contains**: protoc + g++ + grpc_cpp_plugin
+- **Generates**: `.pb.h` and `.pb.cc` files
+
+### C#
+- **Image**: `spoke/compiler-csharp:3.21.0`
+- **Contains**: protoc + .NET SDK + Grpc.Tools
+- **Generates**: `.cs` files
+
+### Rust
+- **Image**: `spoke/compiler-rust:3.2.0`
+- **Contains**: protoc + Rust + prost + tonic
+- **Generates**: `.rs` files
+
+### TypeScript
+- **Image**: `spoke/compiler-typescript:5.0.1`
+- **Contains**: protoc + Node.js + ts-proto
+- **Generates**: `.ts` files
+
+### JavaScript
+- **Image**: `spoke/compiler-javascript:3.21.0`
+- **Contains**: protoc + Node.js + protobufjs
+- **Generates**: `_pb.js` files
+
+### Dart
+- **Image**: `spoke/compiler-dart:3.1.0`
+- **Contains**: protoc + Dart SDK + protoc-gen-dart
+- **Generates**: `.pb.dart` files
+
+### Swift
+- **Image**: `spoke/compiler-swift:1.25.0`
+- **Contains**: protoc + Swift + swift-protobuf + grpc-swift
+- **Generates**: `.pb.swift` and `.grpc.swift` files
+
+### Kotlin
+- **Image**: `spoke/compiler-kotlin:3.21.0`
+- **Contains**: protoc + Kotlin + protoc-gen-kotlin
+- **Generates**: `.kt` files
+
+### Objective-C
+- **Image**: `spoke/compiler-objc:3.21.0`
+- **Contains**: protoc + Clang + grpc_objective_c_plugin
+- **Generates**: `.pbobjc.h` and `.pbobjc.m` files
+
+### Ruby
+- **Image**: `spoke/compiler-ruby:3.21.0`
+- **Contains**: protoc + Ruby + grpc-tools gem
+- **Generates**: `_pb.rb` files
+
+### PHP
+- **Image**: `spoke/compiler-php:3.21.0`
+- **Contains**: protoc + PHP + grpc extension
+- **Generates**: `.php` files
+
+### Scala
+- **Image**: `spoke/compiler-scala:0.11.13`
+- **Contains**: protoc + Scala + sbt + ScalaPB
+- **Generates**: `.scala` files
 
 ## Building Images
 
