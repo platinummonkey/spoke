@@ -559,6 +559,16 @@ func (s *PostgresStorage) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
+// GetDB returns the database connection for health checks
+func (s *PostgresStorage) GetDB() *sql.DB {
+	return s.db
+}
+
+// GetRedis returns the Redis client (may be nil if not configured)
+func (s *PostgresStorage) GetRedis() *RedisClient {
+	return s.redisClient
+}
+
 // Close closes all connections
 func (s *PostgresStorage) Close() error {
 	if s.db != nil {

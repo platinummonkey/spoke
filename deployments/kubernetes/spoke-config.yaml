@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spoke-config
+  namespace: spoke
+data:
+  # Server configuration
+  SPOKE_HOST: "0.0.0.0"
+  SPOKE_PORT: "8080"
+  SPOKE_HEALTH_PORT: "9090"
+  SPOKE_READ_TIMEOUT: "15s"
+  SPOKE_WRITE_TIMEOUT: "15s"
+  SPOKE_IDLE_TIMEOUT: "60s"
+  SPOKE_SHUTDOWN_TIMEOUT: "30s"
+
+  # Storage configuration
+  SPOKE_STORAGE_TYPE: "postgres"
+  SPOKE_POSTGRES_MAX_CONNS: "20"
+  SPOKE_POSTGRES_MIN_CONNS: "2"
+  SPOKE_POSTGRES_TIMEOUT: "10s"
+
+  # S3 configuration
+  SPOKE_S3_ENDPOINT: "s3.amazonaws.com"
+  SPOKE_S3_REGION: "us-east-1"
+  SPOKE_S3_BUCKET: "spoke-storage"
+  SPOKE_S3_USE_PATH_STYLE: "false"
+  SPOKE_S3_FORCE_PATH_STYLE: "false"
+
+  # Redis configuration
+  SPOKE_REDIS_DB: "0"
+  SPOKE_REDIS_MAX_RETRIES: "3"
+  SPOKE_REDIS_POOL_SIZE: "10"
+
+  # Cache configuration
+  SPOKE_CACHE_ENABLED: "true"
+  SPOKE_L1_CACHE_SIZE: "10485760"  # 10MB
+
+  # Observability configuration
+  SPOKE_LOG_LEVEL: "info"
+  SPOKE_METRICS_ENABLED: "true"
+  SPOKE_OTEL_ENABLED: "false"
+  SPOKE_OTEL_ENDPOINT: "otel-collector:4317"
+  SPOKE_OTEL_SERVICE_NAME: "spoke-registry"
+  SPOKE_OTEL_SERVICE_VERSION: "1.0.0"
+  SPOKE_OTEL_INSECURE: "true"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: spoke-secrets
+  namespace: spoke
+type: Opaque
+stringData:
+  # PostgreSQL credentials
+  SPOKE_POSTGRES_URL: "postgresql://spoke:CHANGEME@postgres:5432/spoke?sslmode=require"
+
+  # PostgreSQL read replicas (comma-separated)
+  SPOKE_POSTGRES_REPLICA_URLS: "postgresql://spoke:CHANGEME@postgres-replica-1:5432/spoke?sslmode=require,postgresql://spoke:CHANGEME@postgres-replica-2:5432/spoke?sslmode=require"
+
+  # Redis credentials
+  SPOKE_REDIS_URL: "redis://redis-master:6379/0"
+  SPOKE_REDIS_PASSWORD: "CHANGEME"
+
+  # S3 credentials
+  SPOKE_S3_ACCESS_KEY: "CHANGEME"
+  SPOKE_S3_SECRET_KEY: "CHANGEME"

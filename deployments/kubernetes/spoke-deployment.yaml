@@ -1,0 +1,233 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spoke-server
+  namespace: spoke
+  labels:
+    app: spoke
+    component: server
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0  # Zero-downtime deployments
+  selector:
+    matchLabels:
+      app: spoke
+      component: server
+  template:
+    metadata:
+      labels:
+        app: spoke
+        component: server
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Anti-affinity: prefer to run pods on different nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - spoke
+                - key: component
+                  operator: In
+                  values:
+                  - server
+              topologyKey: kubernetes.io/hostname
+
+      # Service account for accessing secrets
+      serviceAccountName: spoke
+
+      # Init containers (optional: wait for dependencies)
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z postgres 5432; do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL is ready"
+
+      - name: wait-for-redis
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z redis-master 6379; do
+            echo "Waiting for Redis..."
+            sleep 2
+          done
+          echo "Redis is ready"
+
+      containers:
+      - name: spoke
+        image: spoke-registry:1.0.0  # Replace with your image
+        imagePullPolicy: IfNotPresent
+
+        # Environment variables from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: spoke-config
+        - secretRef:
+            name: spoke-secrets
+
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        - name: health
+          containerPort: 9090
+          protocol: TCP
+
+        # Resource limits and requests
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+
+        # Liveness probe: is the container alive?
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: health
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+
+        # Readiness probe: is the container ready to accept traffic?
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: health
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+
+        # Startup probe: give the container time to start
+        startupProbe:
+          httpGet:
+            path: /health/live
+            port: health
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 12  # 60 seconds max startup time
+
+        # Lifecycle hooks
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - sh
+              - -c
+              - |
+                # Sleep to allow load balancer to remove pod from rotation
+                sleep 15
+
+        # Security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+
+        # Volume mounts
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /var/cache/spoke
+
+      # Volumes
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir:
+          sizeLimit: 1Gi
+
+      # Termination grace period
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spoke
+  namespace: spoke
+  labels:
+    app: spoke
+    component: server
+spec:
+  type: ClusterIP
+  selector:
+    app: spoke
+    component: server
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+    protocol: TCP
+  - name: health
+    port: 9090
+    targetPort: health
+    protocol: TCP
+  sessionAffinity: None
+
+---
+# Headless service for direct pod access (e.g., metrics scraping)
+apiVersion: v1
+kind: Service
+metadata:
+  name: spoke-headless
+  namespace: spoke
+  labels:
+    app: spoke
+    component: server
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: spoke
+    component: server
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+    protocol: TCP
+  - name: health
+    port: 9090
+    targetPort: health
+    protocol: TCP
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spoke
+  namespace: spoke

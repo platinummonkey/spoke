@@ -1,0 +1,50 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: spoke-hpa
+  namespace: spoke
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: spoke-server
+
+  minReplicas: 3
+  maxReplicas: 10
+
+  metrics:
+  # CPU-based scaling
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+  # Memory-based scaling
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+      - type: Percent
+        value: 100  # Double the number of pods
+        periodSeconds: 30
+      - type: Pods
+        value: 2    # Add max 2 pods at a time
+        periodSeconds: 30
+      selectPolicy: Max  # Use the policy that adds more pods
+
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Wait 5 minutes before scaling down
+      policies:
+      - type: Percent
+        value: 50   # Remove max 50% of pods
+        periodSeconds: 60
+      selectPolicy: Min  # Use the policy that removes fewer pods
