@@ -7,8 +7,8 @@ import (
 func TestGetDefaultLanguages(t *testing.T) {
 	langs := GetDefaultLanguages()
 
-	if len(langs) != 3 {
-		t.Errorf("expected 3 default languages, got %d", len(langs))
+	if len(langs) != 15 {
+		t.Errorf("expected 15 default languages, got %d", len(langs))
 	}
 
 	// Check that all default languages are valid
@@ -24,7 +24,13 @@ func TestGetDefaultLanguages(t *testing.T) {
 		ids[lang.ID] = true
 	}
 
-	expectedIDs := []string{LanguageGo, LanguagePython, LanguageJava}
+	expectedIDs := []string{
+		LanguageGo, LanguagePython, LanguageJava,
+		LanguageCPP, LanguageCSharp, LanguageRust,
+		LanguageTypeScript, LanguageJavaScript, LanguageDart,
+		LanguageSwift, LanguageKotlin, LanguageObjectiveC,
+		LanguageRuby, LanguagePHP, LanguageScala,
+	}
 	for _, id := range expectedIDs {
 		if !ids[id] {
 			t.Errorf("expected default language %s not found", id)
