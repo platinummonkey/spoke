@@ -41,6 +41,7 @@ import { MigrationGuide } from './MigrationGuide';
 import { LoadingSkeleton } from './LoadingSkeleton';
 import DependencyGraph from './DependencyGraph';
 import { ImpactAnalysis } from './ImpactAnalysis';
+import { ModuleAnalytics } from './analytics/ModuleAnalytics';
 
 // UsageExamples component removed - now using CodeExamples component
 
@@ -353,6 +354,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
           <Tab>Impact</Tab>
           <Tab>Usage Examples</Tab>
           <Tab>Migration</Tab>
+          <Tab>Analytics</Tab>
         </TabList>
 
         <TabPanels>
@@ -522,6 +524,15 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
               versions={versions}
               currentVersion={selectedVersion}
             />
+          </TabPanel>
+
+          <TabPanel>
+            {selectedVersionData && (
+              <ModuleAnalytics
+                moduleName={module.name}
+                version={selectedVersionData.version}
+              />
+            )}
           </TabPanel>
         </TabPanels>
       </Tabs>

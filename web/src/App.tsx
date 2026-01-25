@@ -1,7 +1,7 @@
 import React, { Suspense } from 'react';
 import { ChakraProvider, Container, Box, Heading, HStack, Spinner, Center, Button } from '@chakra-ui/react';
 import { BrowserRouter as Router, Routes, Route, useParams, Link as RouterLink } from 'react-router-dom';
-import { StarIcon } from '@chakra-ui/icons';
+import { StarIcon, InfoIcon } from '@chakra-ui/icons';
 import { EnhancedSearchBar } from './components/EnhancedSearchBar';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useModules, useModule } from './hooks/useModules';
@@ -10,6 +10,7 @@ import { useModules, useModule } from './hooks/useModules';
 const ModuleList = React.lazy(() => import('./components/ModuleList').then(m => ({ default: m.ModuleList })));
 const ModuleDetail = React.lazy(() => import('./components/ModuleDetail').then(m => ({ default: m.ModuleDetail })));
 const UserFeatures = React.lazy(() => import('./components/UserFeatures').then(m => ({ default: m.UserFeatures })));
+const AnalyticsDashboard = React.lazy(() => import('./components/analytics/AnalyticsDashboard').then(m => ({ default: m.AnalyticsDashboard })));
 
 const ModuleListPage = () => {
   const { modules, loading, error, retry } = useModules();
@@ -51,6 +52,16 @@ function App() {
                 >
                   My Library
                 </Button>
+                <Button
+                  as={RouterLink}
+                  to="/analytics"
+                  leftIcon={<InfoIcon />}
+                  size="sm"
+                  variant="ghost"
+                  colorScheme="blue"
+                >
+                  Analytics
+                </Button>
                 <Box width="400px">
                   <EnhancedSearchBar />
                 </Box>
@@ -70,6 +81,7 @@ function App() {
               <Routes>
                 <Route path="/" element={<ModuleListPage />} />
                 <Route path="/library" element={<UserFeatures />} />
+                <Route path="/analytics" element={<AnalyticsDashboard />} />
                 <Route path="/modules/:moduleName" element={<ModuleDetailPage />} />
                 <Route path="/modules/:moduleName/versions/:version" element={<ModuleDetailPage />} />
               </Routes>
