@@ -1,23 +1,23 @@
 package rules
 
-// Registry interface for registering rules
-type Registry interface {
-	Register(rule Rule)
-}
+import "github.com/platinummonkey/spoke/pkg/linter"
 
-// RegisterDefaultRules registers all built-in lint rules
-func RegisterDefaultRules(registry Registry) {
-	// Naming rules
-	registry.Register(NewMessageNamingRule())
-	registry.Register(NewFieldNamingRule())
-	registry.Register(NewServiceNamingRule())
-	registry.Register(NewEnumNamingRule())
-	registry.Register(NewEnumValueNamingRule())
+// DefaultRules returns all built-in lint rules
+// Caller should register these with their registry
+func DefaultRules() []linter.Rule {
+	return []linter.Rule{
+		// Naming rules
+		NewMessageNamingRule(),
+		NewFieldNamingRule(),
+		NewServiceNamingRule(),
+		NewEnumNamingRule(),
+		NewEnumValueNamingRule(),
 
-	// TODO: Add more built-in rules:
-	// - Package naming
-	// - Comment requirements
-	// - Documentation coverage
-	// - Deprecation tracking
-	// - Structure rules
+		// TODO: Add more built-in rules:
+		// - Package naming
+		// - Comment requirements
+		// - Documentation coverage
+		// - Deprecation tracking
+		// - Structure rules
+	}
 }

@@ -22,6 +22,11 @@ func NewLintEngine(config *Config) *LintEngine {
 	}
 }
 
+// Registry returns the rule registry for registering custom rules
+func (e *LintEngine) Registry() *RuleRegistry {
+	return e.registry
+}
+
 // Lint runs all enabled rules against a proto file
 func (e *LintEngine) Lint(filePath string, ast *protobuf.RootNode) LintResult {
 	result := LintResult{
