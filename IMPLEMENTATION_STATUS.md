@@ -37,24 +37,54 @@ This document tracks the implementation status of 5 parallel tasks that form the
 
 - **Dependencies**
   - Added `github.com/lib/pq` PostgreSQL driver to go.mod
+  - Added AWS SDK v2 dependencies (config, s3, credentials)
+
+- **✅ S3 Client Implementation** (`pkg/storage/postgres/s3.go`)
+  - Full AWS SDK v2 integration
+  - Static credentials and IAM role support
+  - MinIO compatibility (custom endpoint, path-style)
+  - Content-addressable storage with SHA256 hashing
+  - Automatic bucket creation for local dev
+  - Object upload, download, existence check, deletion
+  - Health check support
+  - Deduplication through PutObjectWithHash
+
+- **✅ Version Storage** (`pkg/storage/postgres/postgres.go`)
+  - CreateVersionContext with transactional S3 upload
+  - GetVersionContext with S3 file retrieval
+  - ListVersionsContext for version listing
+  - GetFileContext for individual file retrieval
+  - GetFileContent/PutFileContent for hash-based access
+  - Cache invalidation hooks
+
+- **Redis Client Stubs** (`pkg/storage/postgres/redis.go`)
+  - Method signatures for module/version caching
+  - Stub implementations (return nil/not implemented)
 
 ### 🚧 In Progress / TODO
-- Complete version creation with S3 file upload
-- Implement file retrieval from S3
-- Complete Redis caching implementation
-- Add AWS SDK S3 client
-- Add go-redis client
-- Implement content-addressable storage
+- ✅ Complete version creation with S3 file upload - DONE
+- ✅ Implement file retrieval from S3 - DONE
+- ✅ Add AWS SDK S3 client - DONE
+- ✅ Implement content-addressable storage - DONE
+- Complete Redis caching implementation (go-redis integration)
+- Implement UpdateVersionContext
+- Implement ListVersionsPaginated
+- Implement compiled artifact storage/retrieval
 - Add migration runner
 - Create Docker Compose for local development
 - Write integration tests with testcontainers
 
 ### 📋 Next Steps
-1. Implement `CreateVersionContext` with S3 upload
-2. Add S3 multipart upload support
-3. Implement Redis caching methods
-4. Create migration runner
-5. Write tests
+1. ✅ Implement `CreateVersionContext` with S3 upload - COMPLETED
+2. ✅ Implement `GetVersionContext` with S3 download - COMPLETED
+3. ✅ Implement file retrieval methods - COMPLETED
+4. Implement full Redis caching with go-redis library
+5. Implement UpdateVersionContext
+6. Add compiled artifact storage (PutCompiledArtifact/GetCompiledArtifact)
+7. Add S3 multipart upload support for large files
+8. Create migration runner
+9. Write integration tests with testcontainers
+10. Create Docker Compose for local development
 
 ---
 

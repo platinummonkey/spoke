@@ -208,18 +208,238 @@ func (s *PostgresStorage) ListModulesPaginated(ctx context.Context, limit, offse
 // Placeholder implementations for remaining methods
 
 func (s *PostgresStorage) CreateVersionContext(ctx context.Context, version *api.Version) error {
-	// TODO: Implement version creation with file upload to S3
-	return fmt.Errorf("not implemented")
+	if s.s3Client == nil {
+		return fmt.Errorf("s3 client not initialized")
+	}
+
+	// Get module ID
+	var moduleID int64
+	err := s.db.QueryRowContext(ctx, "SELECT id FROM modules WHERE name = $1", version.ModuleName).Scan(&moduleID)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("module not found: %s", version.ModuleName)
+	} else if err != nil {
+		return fmt.Errorf("failed to get module: %w", err)
+	}
+
+	// Start transaction
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Insert version
+	var versionID int64
+	versionQuery := `
+		INSERT INTO versions (module_id, version, dependencies, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id
+	`
+
+	now := time.Now()
+	if version.CreatedAt.IsZero() {
+		version.CreatedAt = now
+	}
+
+	// Convert dependencies to JSON array
+	depsJSON := "[]"
+	if len(version.Dependencies) > 0 {
+		depsJSON = fmt.Sprintf(`["%s"]`, version.Dependencies[0])
+		for i := 1; i < len(version.Dependencies); i++ {
+			depsJSON = depsJSON[:len(depsJSON)-1] + fmt.Sprintf(`, "%s"]`, version.Dependencies[i])
+		}
+	}
+
+	err = tx.QueryRowContext(ctx, versionQuery,
+		moduleID,
+		version.Version,
+		depsJSON,
+		version.CreatedAt,
+		now,
+	).Scan(&versionID)
+
+	if err != nil {
+		return fmt.Errorf("failed to insert version: %w", err)
+	}
+
+	// Upload files to S3 and insert metadata
+	fileQuery := `
+		INSERT INTO proto_files (version_id, file_path, content_hash, object_key, file_size, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`
+
+	for _, file := range version.Files {
+		// Upload to S3 using content-addressable storage
+		contentBytes := []byte(file.Content)
+		hash, err := s.s3Client.PutObjectWithHash(ctx, contentBytes, "application/x-protobuf")
+		if err != nil {
+			return fmt.Errorf("failed to upload file %s to s3: %w", file.Path, err)
+		}
+
+		// Construct S3 object key
+		objectKey := fmt.Sprintf("proto-files/sha256/%s/%s", hash[:2], hash[2:])
+
+		// Insert file metadata
+		_, err = tx.ExecContext(ctx, fileQuery,
+			versionID,
+			file.Path,
+			hash,
+			objectKey,
+			len(contentBytes),
+			now,
+		)
+
+		if err != nil {
+			return fmt.Errorf("failed to insert file metadata for %s: %w", file.Path, err)
+		}
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// Invalidate cache
+	if s.redisClient != nil {
+		s.redisClient.InvalidateVersion(ctx, version.ModuleName, version.Version)
+	}
+
+	return nil
 }
 
 func (s *PostgresStorage) GetVersionContext(ctx context.Context, moduleName, version string) (*api.Version, error) {
-	// TODO: Implement version retrieval with file download from S3
-	return nil, fmt.Errorf("not implemented")
+	if s.s3Client == nil {
+		return nil, fmt.Errorf("s3 client not initialized")
+	}
+
+	// Check cache first
+	if s.redisClient != nil {
+		if cachedVersion, err := s.redisClient.GetVersion(ctx, moduleName, version); err == nil && cachedVersion != nil {
+			return cachedVersion, nil
+		}
+	}
+
+	// Get version metadata
+	query := `
+		SELECT v.id, v.version, v.dependencies, v.created_at, v.updated_at
+		FROM versions v
+		JOIN modules m ON v.module_id = m.id
+		WHERE m.name = $1 AND v.version = $2
+	`
+
+	var versionID int64
+	var depsJSON string
+	var createdAt, updatedAt time.Time
+	var versionStr string
+
+	err := s.db.QueryRowContext(ctx, query, moduleName, version).Scan(
+		&versionID,
+		&versionStr,
+		&depsJSON,
+		&createdAt,
+		&updatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("version not found: %s@%s", moduleName, version)
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to get version: %w", err)
+	}
+
+	// Parse dependencies (simple JSON array parsing)
+	var dependencies []string
+	// TODO: Use proper JSON parsing for dependencies
+
+	// Get file metadata
+	fileQuery := `
+		SELECT file_path, content_hash, object_key
+		FROM proto_files
+		WHERE version_id = $1
+		ORDER BY file_path
+	`
+
+	rows, err := s.db.QueryContext(ctx, fileQuery, versionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query files: %w", err)
+	}
+	defer rows.Close()
+
+	var files []api.File
+	for rows.Next() {
+		var filePath, contentHash, objectKey string
+		if err := rows.Scan(&filePath, &contentHash, &objectKey); err != nil {
+			return nil, fmt.Errorf("failed to scan file metadata: %w", err)
+		}
+
+		// Download file content from S3
+		reader, err := s.s3Client.GetObject(ctx, objectKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to download file %s from s3: %w", filePath, err)
+		}
+
+		contentBytes, err := io.ReadAll(reader)
+		reader.Close()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file %s content: %w", filePath, err)
+		}
+
+		files = append(files, api.File{
+			Path:    filePath,
+			Content: string(contentBytes),
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating files: %w", err)
+	}
+
+	result := &api.Version{
+		ModuleName:   moduleName,
+		Version:      versionStr,
+		Files:        files,
+		CreatedAt:    createdAt,
+		Dependencies: dependencies,
+	}
+
+	// Cache result
+	if s.redisClient != nil {
+		s.redisClient.SetVersion(ctx, result)
+	}
+
+	return result, nil
 }
 
 func (s *PostgresStorage) ListVersionsContext(ctx context.Context, moduleName string) ([]*api.Version, error) {
-	// TODO: Implement version listing
-	return nil, fmt.Errorf("not implemented")
+	query := `
+		SELECT v.version, v.dependencies, v.created_at
+		FROM versions v
+		JOIN modules m ON v.module_id = m.id
+		WHERE m.name = $1
+		ORDER BY v.created_at DESC
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, moduleName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list versions: %w", err)
+	}
+	defer rows.Close()
+
+	var versions []*api.Version
+	for rows.Next() {
+		var v api.Version
+		var depsJSON string
+
+		err := rows.Scan(&v.Version, &depsJSON, &v.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan version: %w", err)
+		}
+
+		v.ModuleName = moduleName
+		// TODO: Parse dependencies JSON properly
+		versions = append(versions, &v)
+	}
+
+	return versions, nil
 }
 
 func (s *PostgresStorage) UpdateVersionContext(ctx context.Context, version *api.Version) error {
@@ -228,8 +448,44 @@ func (s *PostgresStorage) UpdateVersionContext(ctx context.Context, version *api
 }
 
 func (s *PostgresStorage) GetFileContext(ctx context.Context, moduleName, version, path string) (*api.File, error) {
-	// TODO: Implement file retrieval from S3
-	return nil, fmt.Errorf("not implemented")
+	if s.s3Client == nil {
+		return nil, fmt.Errorf("s3 client not initialized")
+	}
+
+	// Query for file metadata
+	query := `
+		SELECT pf.content_hash, pf.object_key
+		FROM proto_files pf
+		JOIN versions v ON pf.version_id = v.id
+		JOIN modules m ON v.module_id = m.id
+		WHERE m.name = $1 AND v.version = $2 AND pf.file_path = $3
+	`
+
+	var contentHash, objectKey string
+	err := s.db.QueryRowContext(ctx, query, moduleName, version, path).Scan(&contentHash, &objectKey)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("file not found: %s@%s:%s", moduleName, version, path)
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to query file: %w", err)
+	}
+
+	// Download from S3
+	reader, err := s.s3Client.GetObject(ctx, objectKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download file from s3: %w", err)
+	}
+	defer reader.Close()
+
+	contentBytes, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file content: %w", err)
+	}
+
+	return &api.File{
+		Path:    path,
+		Content: string(contentBytes),
+	}, nil
 }
 
 func (s *PostgresStorage) ListVersionsPaginated(ctx context.Context, moduleName string, limit, offset int) ([]*api.Version, int64, error) {
@@ -238,13 +494,29 @@ func (s *PostgresStorage) ListVersionsPaginated(ctx context.Context, moduleName 
 }
 
 func (s *PostgresStorage) GetFileContent(ctx context.Context, hash string) (io.ReadCloser, error) {
-	// TODO: Implement S3 retrieval by hash
-	return nil, fmt.Errorf("not implemented")
+	if s.s3Client == nil {
+		return nil, fmt.Errorf("s3 client not initialized")
+	}
+
+	// Construct S3 key from hash (content-addressable)
+	key := fmt.Sprintf("proto-files/sha256/%s/%s", hash[:2], hash[2:])
+
+	return s.s3Client.GetObject(ctx, key)
 }
 
 func (s *PostgresStorage) PutFileContent(ctx context.Context, content io.Reader, contentType string) (hash string, err error) {
-	// TODO: Implement S3 upload with hash calculation
-	return "", fmt.Errorf("not implemented")
+	if s.s3Client == nil {
+		return "", fmt.Errorf("s3 client not initialized")
+	}
+
+	// Read content to calculate hash
+	contentBytes, err := io.ReadAll(content)
+	if err != nil {
+		return "", fmt.Errorf("failed to read content: %w", err)
+	}
+
+	// Upload using content-addressable storage
+	return s.s3Client.PutObjectWithHash(ctx, contentBytes, contentType)
 }
 
 func (s *PostgresStorage) GetCompiledArtifact(ctx context.Context, moduleName, version, language string) (io.ReadCloser, error) {

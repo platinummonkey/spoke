@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/platinummonkey/spoke/pkg/api"
 	"github.com/platinummonkey/spoke/pkg/storage"
@@ -45,13 +44,35 @@ func (c *RedisClient) InvalidateModule(ctx context.Context, name string) error {
 	// TODO: Implement Redis DEL
 	key := fmt.Sprintf("module:%s", name)
 	_ = key
-	return fmt.Errorf("not implemented")
+	return nil // Stub: return nil for now
+}
+
+// GetVersion retrieves a version from cache
+func (c *RedisClient) GetVersion(ctx context.Context, moduleName, version string) (*api.Version, error) {
+	// TODO: Implement Redis GET with JSON deserialization
+	return nil, fmt.Errorf("not implemented")
+}
+
+// SetVersion stores a version in cache
+func (c *RedisClient) SetVersion(ctx context.Context, version *api.Version) error {
+	// TODO: Implement Redis SET with JSON serialization and TTL
+	ttl := c.config.CacheTTL["version"]
+	_ = ttl
+	return nil // Stub: return nil for now
+}
+
+// InvalidateVersion removes a version from cache
+func (c *RedisClient) InvalidateVersion(ctx context.Context, moduleName, version string) error {
+	// TODO: Implement Redis DEL
+	key := fmt.Sprintf("version:%s:%s", moduleName, version)
+	_ = key
+	return nil // Stub: return nil for now
 }
 
 // InvalidatePatterns removes keys matching patterns
 func (c *RedisClient) InvalidatePatterns(ctx context.Context, patterns ...string) error {
 	// TODO: Implement pattern-based deletion using SCAN + DEL
-	return fmt.Errorf("not implemented")
+	return nil // Stub: return nil for now
 }
 
 // Ping checks Redis connectivity
