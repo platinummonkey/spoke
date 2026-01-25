@@ -1,0 +1,94 @@
+linters-settings:
+  govet:
+    enable-all: true
+    disable:
+      - shadow
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  staticcheck:
+    checks: ["all"]
+  gosimple:
+    checks: ["all"]
+  unused:
+    check-exported: false
+  ineffassign:
+    check-generated: false
+  gocyclo:
+    min-complexity: 15
+  dupl:
+    threshold: 100
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+  misspell:
+    locale: US
+  lll:
+    line-length: 140
+  gofmt:
+    simplify: true
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - dupImport
+      - ifElseChain
+      - octalLiteral
+      - whyNoLint
+  funlen:
+    lines: 100
+    statements: 50
+  godox:
+    keywords:
+      - FIXME
+      - BUG
+
+linters:
+  disable-all: true
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - gosimple
+    - unused
+    - ineffassign
+    - typecheck
+    - gofmt
+    - goimports
+    - misspell
+    - gocritic
+    - gocyclo
+    - dupl
+    - goconst
+    - lll
+    - funlen
+    - godox
+
+issues:
+  exclude-use-default: false
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - funlen
+        - dupl
+        - goconst
+    - path: cmd/
+      linters:
+        - gocyclo
+    - text: "weak cryptographic primitive"
+      linters:
+        - gosec
+
+run:
+  timeout: 5m
+  tests: true
+  build-tags:
+    - integration
+
+output:
+  sort-results: true
