@@ -37,8 +37,134 @@ import { Module, ProtoFile } from '../types';
 import { ProtoTypes } from './ProtoTypes';
 import { ApiExplorer } from './ApiExplorer';
 import { CodeExamples } from './CodeExamples';
+import { SchemaDiff } from './SchemaDiff';
+import { MigrationGuide } from './MigrationGuide';
 
 // UsageExamples component removed - now using CodeExamples component
+
+// MigrationTab component for comparing versions
+interface MigrationTabProps {
+  module: Module;
+  versions: string[];
+  currentVersion?: string | null;
+}
+
+const MigrationTab: React.FC<MigrationTabProps> = ({ module, versions }) => {
+  const [fromVersion, setFromVersion] = useState<string>('');
+  const [toVersion, setToVersion] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<number>(0);
+
+  // Initialize version selectors
+  useEffect(() => {
+    if (versions.length >= 2) {
+      // Default: compare second-newest to newest
+      setToVersion(versions[0]);
+      setFromVersion(versions[1]);
+    } else if (versions.length === 1) {
+      setToVersion(versions[0]);
+      setFromVersion(versions[0]);
+    }
+  }, [versions]);
+
+  if (versions.length < 2) {
+    return (
+      <Alert status="info">
+        <AlertIcon />
+        <AlertTitle>Multiple Versions Required</AlertTitle>
+        <AlertDescription>
+          Migration comparison requires at least two versions. This module currently has {versions.length} version(s).
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  return (
+    <VStack align="stretch" spacing={6}>
+      {/* Version Selectors */}
+      <Box p={4} bg="gray.50" borderRadius="md" borderWidth={1}>
+        <Heading size="sm" mb={4}>
+          Compare Versions
+        </Heading>
+        <Flex gap={4} align="center" wrap="wrap">
+          <Box flex={1} minW="200px">
+            <Text fontSize="sm" mb={2} fontWeight="medium">
+              From Version:
+            </Text>
+            <Select
+              value={fromVersion}
+              onChange={(e) => setFromVersion(e.target.value)}
+              bg="white"
+            >
+              {versions.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </Select>
+          </Box>
+
+          <Box alignSelf="flex-end" pb={2}>
+            <Text fontSize="2xl" color="gray.400">
+              →
+            </Text>
+          </Box>
+
+          <Box flex={1} minW="200px">
+            <Text fontSize="sm" mb={2} fontWeight="medium">
+              To Version:
+            </Text>
+            <Select
+              value={toVersion}
+              onChange={(e) => setToVersion(e.target.value)}
+              bg="white"
+            >
+              {versions.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </Select>
+          </Box>
+        </Flex>
+
+        {fromVersion === toVersion && (
+          <Alert status="warning" mt={4} size="sm">
+            <AlertIcon />
+            <Text fontSize="sm">
+              Please select two different versions to compare.
+            </Text>
+          </Alert>
+        )}
+      </Box>
+
+      {/* Sub-tabs for Schema Diff and Migration Guide */}
+      <Tabs index={activeTab} onChange={setActiveTab}>
+        <TabList>
+          <Tab>Schema Diff</Tab>
+          <Tab>Migration Guide</Tab>
+        </TabList>
+
+        <TabPanels>
+          <TabPanel>
+            <SchemaDiff
+              moduleName={module.name}
+              fromVersion={fromVersion}
+              toVersion={toVersion}
+            />
+          </TabPanel>
+
+          <TabPanel>
+            <MigrationGuide
+              moduleName={module.name}
+              fromVersion={fromVersion}
+              toVersion={toVersion}
+            />
+          </TabPanel>
+        </TabPanels>
+      </Tabs>
+    </VStack>
+  );
+};
 
 interface ModuleDetailProps {
   module: Module | null;
@@ -196,6 +322,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
           <Tab>Types</Tab>
           <Tab>API Explorer</Tab>
           <Tab>Usage Examples</Tab>
+          <Tab>Migration</Tab>
         </TabList>
 
         <TabPanels>
@@ -332,6 +459,14 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
                 version={selectedVersionData.version}
               />
             )}
+          </TabPanel>
+
+          <TabPanel>
+            <MigrationTab
+              module={module}
+              versions={versions}
+              currentVersion={selectedVersion}
+            />
           </TabPanel>
         </TabPanels>
       </Tabs>
