@@ -299,6 +299,149 @@ Returns a tar.gz archive containing:
 
 **Content-Type:** `application/gzip`
 
+### Documentation Features
+
+#### Get Code Examples
+
+Returns auto-generated code examples for a specific module version and language.
+
+```http
+GET /api/v1/modules/{name}/versions/{version}/examples/{language}
+```
+
+**Parameters:**
+- `name` (path): Module name
+- `version` (path): Module version
+- `language` (path): Language ID (e.g., `go`, `python`, `rust`)
+
+**Response:** `200 OK`
+
+Returns language-specific code example as plain text showing how to use the module's services and methods.
+
+**Content-Type:** `text/plain`
+
+**Example Response (Go):**
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+
+    pb "github.com/company/user-service"
+    "google.golang.org/grpc"
+    "google.golang.org/grpc/credentials/insecure"
+)
+
+func main() {
+    // Connect to gRPC server
+    conn, err := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+    if err != nil {
+        log.Fatalf("Failed to connect: %v", err)
+    }
+    defer conn.Close()
+
+    // Create client
+    client := pb.NewUserServiceClient(conn)
+    ctx := context.Background()
+
+    // Call CreateUser
+    resp, err := client.CreateUser(ctx, &pb.CreateUserRequest{
+        Email: "user@example.com",
+        Name: "John Doe",
+    })
+    if err != nil {
+        log.Printf("Error calling CreateUser: %v", err)
+    } else {
+        log.Printf("CreateUser response: %+v", resp)
+    }
+}
+```
+
+**Errors:**
+- `404 Not Found`: Module, version, or language not found
+- `500 Internal Server Error`: Example generation failed
+
+**Supported Languages:**
+- go, python, java, cpp, csharp, rust, typescript, javascript
+- dart, swift, kotlin, objc, ruby, php, scala
+
+#### Compare Schema Versions
+
+Compares two versions of a module to detect schema changes and breaking changes.
+
+```http
+POST /api/v1/modules/{name}/diff
+```
+
+**Parameters:**
+- `name` (path): Module name
+
+**Request Body:**
+
+```json
+{
+  "from_version": "v1.0.0",
+  "to_version": "v1.1.0"
+}
+```
+
+**Response:** `200 OK`
+
+```json
+{
+  "changes": [
+    {
+      "type": "field_removed",
+      "severity": "breaking",
+      "location": "user.proto:message User:field phone_number",
+      "old_value": "string phone_number = 3",
+      "new_value": null,
+      "description": "Field 'phone_number' was removed from message 'User'",
+      "migration_tip": "Update all code that references User.phone_number. Consider using ContactInfo message instead."
+    },
+    {
+      "type": "field_added",
+      "severity": "non_breaking",
+      "location": "user.proto:message User:field contact_info",
+      "old_value": null,
+      "new_value": "ContactInfo contact_info = 4",
+      "description": "Field 'contact_info' was added to message 'User'",
+      "migration_tip": "New field is optional and backward compatible."
+    }
+  ]
+}
+```
+
+**Change Types:**
+- `field_added`: New field added to message
+- `field_removed`: Field removed from message
+- `field_renamed`: Field name changed
+- `type_changed`: Field type changed
+- `field_number_changed`: Field number changed
+- `message_added`: New message type added
+- `message_removed`: Message type removed
+- `enum_added`: New enum type added
+- `enum_removed`: Enum type removed
+- `enum_value_added`: New enum value added
+- `enum_value_removed`: Enum value removed
+- `service_added`: New service added
+- `service_removed`: Service removed
+- `method_added`: New service method added
+- `method_removed`: Service method removed
+- `import_added`: New import added
+
+**Severity Levels:**
+- `breaking`: Change breaks backward compatibility
+- `non_breaking`: Change is backward compatible
+- `warning`: Potential compatibility issue
+
+**Errors:**
+- `400 Bad Request`: Invalid request (missing versions)
+- `404 Not Found`: Module or version not found
+- `500 Internal Server Error`: Diff comparison failed
+
 ## Error Responses
 
 All error responses follow this format:

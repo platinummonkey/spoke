@@ -284,6 +284,135 @@ GET /api/v1/modules/user-service/versions/v1.0.0/compile/user-service-v1.0.0-go
 }
 ```
 
+## Auto-Generated Code Examples
+
+Spoke automatically generates language-specific code examples showing how to use your protobuf definitions. These examples are dynamically generated based on your service definitions and provide instant, working code snippets.
+
+### Viewing Examples in the Web UI
+
+Navigate to any module version in the Spoke web interface and click the "Usage Examples" tab. Select your target language from the dropdown to see auto-generated examples.
+
+**Features:**
+- Examples for all 15 supported languages
+- Shows gRPC client setup and connection
+- Demonstrates calling each service method
+- Includes realistic sample field values
+- Copy-to-clipboard functionality
+- Syntax highlighting
+
+### API Endpoint
+
+You can programmatically retrieve examples via the REST API:
+
+```bash
+GET /api/v1/modules/{name}/versions/{version}/examples/{language}
+```
+
+**Example:**
+```bash
+curl http://localhost:8080/api/v1/modules/user-service/versions/v1.0.0/examples/go
+```
+
+**Response (Go example):**
+```go
+package main
+
+import (
+    "context"
+    "log"
+
+    pb "github.com/company/user-service"
+    "google.golang.org/grpc"
+    "google.golang.org/grpc/credentials/insecure"
+)
+
+func main() {
+    // Connect to gRPC server
+    conn, err := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+    if err != nil {
+        log.Fatalf("Failed to connect: %v", err)
+    }
+    defer conn.Close()
+
+    // Create client
+    client := pb.NewUserServiceClient(conn)
+    ctx := context.Background()
+
+    // Call CreateUser
+    respCreateUser, err := client.CreateUser(ctx, &pb.CreateUserRequest{
+        Email: "user@example.com",
+        Name: "John Doe",
+    })
+    if err != nil {
+        log.Printf("Error calling CreateUser: %v", err)
+    } else {
+        log.Printf("CreateUser response: %+v", respCreateUser)
+    }
+
+    // Call GetUser
+    respGetUser, err := client.GetUser(ctx, &pb.GetUserRequest{
+        UserId: "123",
+    })
+    if err != nil {
+        log.Printf("Error calling GetUser: %v", err)
+    } else {
+        log.Printf("GetUser response: %+v", respGetUser)
+    }
+}
+```
+
+### Example Generation Templates
+
+Examples are generated using language-specific templates located in `pkg/docs/examples/templates/{language}/grpc-client.tmpl`. The template system:
+
+1. Parses protobuf service definitions
+2. Extracts message types and field definitions
+3. Generates realistic sample values based on field names and types
+4. Renders language-specific code using Go templates
+
+**Supported Languages:**
+- `go` - Go with google.golang.org/grpc
+- `python` - Python with grpcio
+- `java` - Java with gRPC-Java
+- `cpp` - C++ with gRPC C++
+- `csharp` - C# with Grpc.Net.Client
+- `rust` - Rust with tonic
+- `typescript` - TypeScript with @grpc/grpc-js
+- `javascript` - JavaScript with @grpc/grpc-js
+- `dart` - Dart with grpc
+- `swift` - Swift with gRPC-Swift
+- `kotlin` - Kotlin with gRPC-Kotlin
+- `objc` - Objective-C with gRPC-ObjC
+- `ruby` - Ruby with grpc
+- `php` - PHP with grpc
+- `scala` - Scala with ScalaPB
+
+### Sample Field Value Generation
+
+The template system intelligently generates sample values based on field names and types:
+
+| Field Name Pattern | Sample Value |
+|-------------------|--------------|
+| `*email*` | `"user@example.com"` |
+| `*name*` | `"Example Name"` |
+| `*id*`, `*user_id*` | `"123"` |
+| `*phone*` | `"+1-555-0123"` |
+| `*address*` | `"123 Main St"` |
+| `*description*` | `"Example description"` |
+| `*url*`, `*uri*` | `"https://example.com"` |
+| `*timestamp*`, `*created_at*` | Current timestamp |
+| `int32`, `int64` | `42` |
+| `bool` | `true` |
+| `enum` | First enum value |
+
+### Customizing Examples
+
+For advanced use cases, you can customize example generation by:
+
+1. **Adding Custom Templates**: Place custom templates in `pkg/docs/examples/templates/{language}/`
+2. **Extending Sample Values**: Modify `pkg/docs/examples/generator.go` to add custom field value logic
+3. **Language-Specific Options**: Add options to the template data structure
+
 ## Advanced Features
 
 ### Caching

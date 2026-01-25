@@ -26,6 +26,15 @@ Build Once. Connect Everywhere. The Hub of Schema-Driven Development.
 - RESTful HTTP API
 - Command-line interface
 
+### Documentation & Developer Experience
+- **Interactive API Explorer**: Browse services, methods, and message schemas with expandable UI
+- **Auto-Generated Code Examples**: Working code snippets for 15+ languages (Go, Python, Rust, TypeScript, Java, etc.)
+- **Schema Comparison Tool**: Visual diff showing breaking changes, additions, and modifications between versions
+- **Migration Guides**: Step-by-step upgrade instructions with code examples
+- **Full-Text Search**: Fast client-side search across modules, messages, services, fields, and enums (CMD+K)
+- **Request/Response Playground**: Build and validate JSON requests against proto schemas
+- **Multi-Language Support**: Generate examples for Go, Python, Java, C++, C#, Rust, TypeScript, JavaScript, Dart, Swift, Kotlin, Objective-C, Ruby, PHP, Scala
+
 ### High Availability Features
 - **Horizontal Scaling**: Stateless architecture supports unlimited replicas
 - **Database HA**: PostgreSQL with streaming replication and read replicas
