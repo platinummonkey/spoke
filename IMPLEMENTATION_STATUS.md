@@ -94,9 +94,19 @@ This document tracks the implementation status of 5 parallel tasks that form the
 - **Schema Graph Types** (`pkg/compatibility/schema.go`)
   - `SchemaGraph`: Enhanced representation of proto schemas
   - `Message`, `Field`, `Enum`, `Service` types with full metadata
-  - `FieldType` and `FieldLabel` enums
+  - `FieldType` and `FieldLabel` enums (including FieldTypeMap)
   - `SchemaGraphBuilder` for AST conversion
   - Integration with existing protobuf AST
+
+- **✅ AST Traversal** (`pkg/compatibility/schema.go`)
+  - Complete `BuildFromAST` implementation
+  - Extract messages with nested messages
+  - Extract enums (top-level and nested)
+  - Extract services with RPC methods
+  - Handle oneofs and field labels
+  - Parse field types (scalar, message, enum, map)
+  - Deprecated flag extraction from options
+  - Fully qualified name generation
 
 - **Comparator Framework** (`pkg/compatibility/comparator.go`)
   - `Comparator` for schema comparison
@@ -107,7 +117,7 @@ This document tracks the implementation status of 5 parallel tasks that form the
   - Package and import comparison (partial)
 
 ### 🚧 In Progress / TODO
-- Implement `BuildFromAST` fully (convert RootNode to SchemaGraph)
+- ✅ Implement `BuildFromAST` fully - DONE
 - Implement message comparison logic
 - Implement enum comparison logic
 - Implement service comparison logic
