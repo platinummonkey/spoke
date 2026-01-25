@@ -243,6 +243,11 @@ func (s *Server) setupRoutes() {
 		// Register user features routes (saved searches, bookmarks)
 		userFeaturesHandlers := NewUserFeaturesHandlers(s.db)
 		userFeaturesHandlers.RegisterRoutes(s.router)
+
+		// Register analytics routes (v2 API)
+		analyticsService := analytics.NewService(s.db)
+		analyticsHandlers := NewAnalyticsHandlers(analyticsService)
+		analyticsHandlers.RegisterRoutes(s.router)
 	}
 }
 

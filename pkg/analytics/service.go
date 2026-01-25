@@ -8,12 +8,16 @@ import (
 
 // Service provides analytics business logic
 type Service struct {
-	db *sql.DB
+	db           *sql.DB
+	healthScorer *HealthScorer
 }
 
 // NewService creates a new analytics service
 func NewService(db *sql.DB) *Service {
-	return &Service{db: db}
+	return &Service{
+		db:           db,
+		healthScorer: NewHealthScorer(db),
+	}
 }
 
 // OverviewResponse contains high-level KPIs
@@ -390,3 +394,25 @@ func (s *Service) GetTrendingModules(ctx context.Context, limit int) ([]Trending
 
 	return modules, nil
 }
+
+// GetModuleHealth retrieves health assessment for a module version
+func (s *Service) GetModuleHealth(ctx context.Context, moduleName string, version string) (*ModuleHealth, error) {
+	// If version is empty, use latest version
+	if version == "" {
+		query := `
+			SELECT v.version
+			FROM versions v
+			JOIN modules m ON v.module_id = m.id
+			WHERE m.name = $1
+			ORDER BY v.created_at DESC
+			LIMIT 1
+		`
+		err := s.db.QueryRowContext(ctx, query, moduleName).Scan(&version)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return s.healthScorer.CalculateHealth(ctx, moduleName, version)
+}
+
