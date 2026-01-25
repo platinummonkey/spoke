@@ -1,0 +1,24 @@
+# Hugo build output
+/public/
+/resources/_gen/
+
+# Theme (should be cloned, not committed)
+/themes/
+
+# Node.js dependencies (if using npm)
+node_modules/
+package-lock.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Hugo server files
+.hugo_build.lock
