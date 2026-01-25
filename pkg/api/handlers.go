@@ -3,6 +3,7 @@ package api
 import (
 	"archive/zip"
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -18,16 +19,29 @@ import (
 
 // Server represents our API server
 type Server struct {
-	storage Storage
-	router  *mux.Router
+	storage             Storage
+	router              *mux.Router
+	db                  *sql.DB
+	authHandlers        *AuthHandlers
+	compatHandlers      *CompatibilityHandlers
+	validationHandlers  *ValidationHandlers
 }
 
 // NewServer creates a new API server
-func NewServer(storage Storage) *Server {
+func NewServer(storage Storage, db *sql.DB) *Server {
 	s := &Server{
 		storage: storage,
 		router:  mux.NewRouter(),
+		db:      db,
 	}
+
+	// Initialize handlers if database is provided
+	if db != nil {
+		s.authHandlers = NewAuthHandlers(db)
+		s.compatHandlers = NewCompatibilityHandlers(storage)
+		s.validationHandlers = NewValidationHandlers(storage)
+	}
+
 	s.setupRoutes()
 	return s
 }
@@ -49,6 +63,21 @@ func (s *Server) setupRoutes() {
 
 	// Download compilation results
 	s.router.HandleFunc("/modules/{name}/versions/{version}/download/{language}", s.downloadCompiled).Methods("GET")
+
+	// Register authentication routes (if database is available)
+	if s.authHandlers != nil {
+		s.authHandlers.RegisterRoutes(s.router)
+	}
+
+	// Register compatibility routes
+	if s.compatHandlers != nil {
+		s.compatHandlers.RegisterRoutes(s.router)
+	}
+
+	// Register validation routes
+	if s.validationHandlers != nil {
+		s.validationHandlers.RegisterRoutes(s.router)
+	}
 }
 
 // ServeHTTP implements http.Handler

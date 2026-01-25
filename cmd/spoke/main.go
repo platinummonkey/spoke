@@ -30,8 +30,11 @@ func main() {
 	log.Printf("Storage initialized in %s", *storageDir)
 
 	// Create and start server
-	server := api.NewServer(store)
+	// TODO: Add database connection configuration via flags
+	// For now, pass nil for database - server will work without auth/compat/validation APIs
+	server := api.NewServer(store, nil)
 	log.Printf("Starting Spoke Schema Registry server on port %s...", *port)
+	log.Println("Note: Running without database - auth/compatibility/validation APIs disabled")
 	if err := http.ListenAndServe(":"+*port, server); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
