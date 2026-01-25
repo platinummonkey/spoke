@@ -69,8 +69,9 @@ func getGitInfo(dir string) (api.SourceInfo, error) {
 			// Found git repository
 			gitDir = filepath.Join(strings.TrimSpace(string(output)), ".git")
 		} else {
-			// Not a git repository
-			return info, fmt.Errorf("not a git repository: %v", err)
+			// Not a git repository - return default values
+			fmt.Printf("Warning: Failed to get git information: %v\n", err)
+			return info, nil
 		}
 	}
 

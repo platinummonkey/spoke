@@ -74,8 +74,8 @@ func ExtractImports(content string) ([]ProtoImport, error) {
 	if err != nil {
 		return nil, err
 	}
-	
-	var imports []ProtoImport
+
+	imports := make([]ProtoImport, 0)
 	for _, imp := range ast.Imports {
 		imports = append(imports, ProtoImport{
 			Path:   imp.Path,
