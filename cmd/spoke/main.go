@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/platinummonkey/spoke/pkg/api"
+	"github.com/platinummonkey/spoke/pkg/docs"
 	"github.com/platinummonkey/spoke/pkg/storage"
 )
 
@@ -33,6 +34,12 @@ func main() {
 	// TODO: Add database connection configuration via flags
 	// For now, pass nil for database - server will work without auth/compat/validation APIs
 	server := api.NewServer(store, nil)
+
+	// Register documentation handlers
+	docsHandlers := docs.NewDocsHandlers(store)
+	server.RegisterRoutes(docsHandlers)
+	log.Println("Documentation routes registered")
+
 	log.Printf("Starting Spoke Schema Registry server on port %s...", *port)
 	log.Println("Note: Running without database - auth/compatibility/validation APIs disabled")
 	if err := http.ListenAndServe(":"+*port, server); err != nil {

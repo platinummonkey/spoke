@@ -85,6 +85,16 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.router.ServeHTTP(w, r)
 }
 
+// RouteRegistrar is an interface for types that can register routes
+type RouteRegistrar interface {
+	RegisterRoutes(router *mux.Router)
+}
+
+// RegisterRoutes registers routes from a RouteRegistrar
+func (s *Server) RegisterRoutes(registrar RouteRegistrar) {
+	registrar.RegisterRoutes(s.router)
+}
+
 // createModule handles POST /modules
 func (s *Server) createModule(w http.ResponseWriter, r *http.Request) {
 	var module Module
