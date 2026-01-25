@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/gorilla/mux"
-	"github.com/platinummonkey/spoke/pkg/api"
 )
 
 // SearchHandlers provides HTTP handlers for search
@@ -15,7 +14,7 @@ type SearchHandlers struct {
 }
 
 // NewSearchHandlers creates new search handlers
-func NewSearchHandlers(storage api.Storage) *SearchHandlers {
+func NewSearchHandlers(storage StorageReader) *SearchHandlers {
 	return &SearchHandlers{
 		engine: NewSearchEngine(storage),
 	}

@@ -100,7 +100,9 @@ func main() {
 	server.RegisterRoutes(docsHandlers)
 	logger.Info("Documentation routes registered")
 
-	searchHandlers := search.NewSearchHandlers(store)
+	// Create search handlers with adapter to avoid import cycles
+	searchAdapter := api.NewSearchStorageAdapter(store)
+	searchHandlers := search.NewSearchHandlers(searchAdapter)
 	server.RegisterRoutes(searchHandlers)
 	logger.Info("Search routes registered")
 

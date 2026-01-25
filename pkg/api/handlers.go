@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -18,6 +19,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/platinummonkey/spoke/pkg/codegen"
 	"github.com/platinummonkey/spoke/pkg/codegen/orchestrator"
+	"github.com/platinummonkey/spoke/pkg/search"
 )
 
 // Server represents our API server
@@ -29,6 +31,7 @@ type Server struct {
 	compatHandlers      *CompatibilityHandlers
 	validationHandlers  *ValidationHandlers
 	orchestrator        orchestrator.Orchestrator // Code generation orchestrator (v2)
+	searchIndexer       *search.Indexer            // Search indexer for proto entities
 }
 
 // NewServer creates a new API server
@@ -44,6 +47,10 @@ func NewServer(storage Storage, db *sql.DB) *Server {
 		s.authHandlers = NewAuthHandlers(db)
 		s.compatHandlers = NewCompatibilityHandlers(storage)
 		s.validationHandlers = NewValidationHandlers(storage)
+
+		// Initialize search indexer
+		storageAdapter := NewSearchStorageAdapter(storage)
+		s.searchIndexer = search.NewIndexer(db, storageAdapter)
 	}
 
 	// Initialize code generation orchestrator (v2)
@@ -345,6 +352,17 @@ func (s *Server) createVersion(w http.ResponseWriter, r *http.Request) {
 	if err := s.storage.CreateVersion(&version); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	// Trigger search indexing asynchronously (don't block the response)
+	if s.searchIndexer != nil {
+		go func() {
+			ctx := context.Background()
+			if err := s.searchIndexer.IndexVersion(ctx, version.ModuleName, version.Version); err != nil {
+				log.Printf("Failed to index version %s/%s: %v", version.ModuleName, version.Version, err)
+				// Don't fail the request - indexing is non-critical
+			}
+		}()
 	}
 
 	w.WriteHeader(http.StatusCreated)

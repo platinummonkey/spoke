@@ -3,17 +3,16 @@ package search
 import (
 	"strings"
 
-	"github.com/platinummonkey/spoke/pkg/api"
 	"github.com/platinummonkey/spoke/pkg/api/protobuf"
 )
 
 // SearchEngine provides search capabilities across schemas
 type SearchEngine struct {
-	storage api.Storage
+	storage StorageReader
 }
 
 // NewSearchEngine creates a new search engine
-func NewSearchEngine(storage api.Storage) *SearchEngine {
+func NewSearchEngine(storage StorageReader) *SearchEngine {
 	return &SearchEngine{
 		storage: storage,
 	}
@@ -65,7 +64,7 @@ func (s *SearchEngine) Search(query SearchQuery) (*SearchResults, error) {
 
 	// Filter modules if specified
 	if query.Module != "" {
-		filtered := make([]*api.Module, 0)
+		filtered := make([]*Module, 0)
 		for _, mod := range modules {
 			if matchesPattern(mod.Name, query.Module) {
 				filtered = append(filtered, mod)
@@ -83,7 +82,7 @@ func (s *SearchEngine) Search(query SearchQuery) (*SearchResults, error) {
 		}
 
 		if query.Version != "" {
-			filtered := make([]*api.Version, 0)
+			filtered := make([]*Version, 0)
 			for _, ver := range versions {
 				if matchesPattern(ver.Version, query.Version) {
 					filtered = append(filtered, ver)
