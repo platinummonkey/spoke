@@ -61,6 +61,21 @@ This document tracks the implementation status of 5 parallel tasks that form the
   - Method signatures for module/version caching
   - Stub implementations (return nil/not implemented)
 
+- **✅ Unit Tests** (`pkg/storage/postgres/*_test.go`)
+  - Module operations validation (2 test cases)
+  - Version operations validation (3 test cases)
+  - Context operations (timeout, cancellation) (2 test cases)
+  - Cache key format validation (2 test cases)
+  - Error handling tests (2 test cases)
+  - Pagination logic tests (2 test cases)
+  - Connection pool configuration tests (2 test cases)
+  - S3 content-addressable storage tests (1 test case)
+  - S3 key format validation (2 test cases)
+  - SHA256 hash calculation tests (3 test cases)
+  - Deduplication logic tests (1 test case)
+  - Object key generation test (1 test case)
+  - 23 test cases total, all passing
+
 ### 🚧 In Progress / TODO
 - ✅ Complete version creation with S3 file upload - DONE
 - ✅ Implement file retrieval from S3 - DONE
