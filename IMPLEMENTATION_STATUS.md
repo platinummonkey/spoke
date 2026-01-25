@@ -116,22 +116,52 @@ This document tracks the implementation status of 5 parallel tasks that form the
   - `ViolationBuilder` for fluent violation construction
   - Package and import comparison (partial)
 
+### ✅ Completed (Continued)
+- **✅ Message Comparison** (`pkg/compatibility/comparator.go`)
+  - Detect removed/added messages
+  - Field-level comparison (removed, added, changed)
+  - Field type compatibility matrix (wire-compatible types)
+  - Field label changes (optional/required/repeated)
+  - Field name changes (source breaking)
+  - Oneof membership changes
+  - Nested message comparison (recursive)
+  - Required field addition detection
+
+- **✅ Enum Comparison** (`pkg/compatibility/comparator.go`)
+  - Detect removed/added enums
+  - Enum value removal detection
+  - Enum value number changes (wire breaking)
+  - Enum value additions (info only)
+
+- **✅ Service Comparison** (`pkg/compatibility/comparator.go`)
+  - Detect removed/added services
+  - RPC method removal detection
+  - Input/output type changes
+  - Client/server streaming changes
+  - Method-level comparison
+
+- **✅ Wire Compatibility Rules**
+  - int32 ↔ int64, uint32, uint64
+  - sint32 ↔ sint64
+  - fixed32 ↔ fixed64
+  - sfixed32 ↔ sfixed64
+  - string ↔ bytes
+  - Proper error levels based on compatibility mode
+
 ### 🚧 In Progress / TODO
 - ✅ Implement `BuildFromAST` fully - DONE
-- Implement message comparison logic
-- Implement enum comparison logic
-- Implement service comparison logic
-- Add 30+ compatibility rules:
-  - Field number changes
-  - Type compatibility matrix
-  - Enum value changes
-  - Reserved field tracking
-  - Oneof changes
-  - Map field changes
-- Create test fixtures
-- Write comprehensive tests
+- ✅ Implement message comparison logic - DONE
+- ✅ Implement enum comparison logic - DONE
+- ✅ Implement service comparison logic - DONE
+- ✅ Add type compatibility matrix - DONE
+- Implement import comparison
+- Add reserved field validation
+- Add map field specific rules
+- Create test fixtures (proto files for testing)
+- Write comprehensive unit tests
 - Add CLI command `spoke check-compatibility`
 - Add API endpoint `/check-compatibility`
+- Integration with version storage
 
 ### 📋 Next Steps
 1. Complete SchemaGraphBuilder AST traversal
