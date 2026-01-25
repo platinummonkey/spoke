@@ -44,10 +44,11 @@ type Config struct {
 	FilesystemRoot string
 
 	// PostgreSQL config
-	PostgresURL      string
-	PostgresMaxConns int
-	PostgresMinConns int
-	PostgresTimeout  time.Duration
+	PostgresURL         string
+	PostgresReplicaURLs string // Comma-separated list of replica URLs
+	PostgresMaxConns    int
+	PostgresMinConns    int
+	PostgresTimeout     time.Duration
 
 	// S3 config
 	S3Endpoint       string

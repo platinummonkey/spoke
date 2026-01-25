@@ -1,8 +1,8 @@
 bin
-./spoke
-./spoke-cli
-./sprocket
-./spoke-server
+spoke
+spoke-cli
+sprocket
+spoke-server
 .DS_Store
 
 # Hugo documentation

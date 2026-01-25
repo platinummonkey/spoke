@@ -98,6 +98,9 @@ func loadStorageConfig() storage.Config {
 	if pgURL := getEnv("SPOKE_POSTGRES_URL", ""); pgURL != "" {
 		cfg.PostgresURL = pgURL
 	}
+	if replicaURLs := getEnv("SPOKE_POSTGRES_REPLICA_URLS", ""); replicaURLs != "" {
+		cfg.PostgresReplicaURLs = replicaURLs
+	}
 	if maxConns := getEnvInt("SPOKE_POSTGRES_MAX_CONNS", 0); maxConns > 0 {
 		cfg.PostgresMaxConns = maxConns
 	}

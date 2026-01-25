@@ -15,7 +15,8 @@ import (
 
 // PostgresStorage implements StorageV2 using PostgreSQL + S3 + Redis
 type PostgresStorage struct {
-	db          *sql.DB
+	connManager *ConnectionManager
+	db          *sql.DB // Deprecated: use connManager.Primary() instead
 	s3Client    *S3Client
 	redisClient *RedisClient
 	config      storage.Config
@@ -23,24 +24,24 @@ type PostgresStorage struct {
 
 // NewPostgresStorage creates a new PostgreSQL-backed storage
 func NewPostgresStorage(config storage.Config) (*PostgresStorage, error) {
-	// Connect to PostgreSQL
-	db, err := sql.Open("postgres", config.PostgresURL)
+	// Initialize connection manager with primary and replicas
+	connConfig := ConnectionConfig{
+		PrimaryURL:  config.PostgresURL,
+		ReplicaURLs: ParseReplicaURLs(config.PostgresReplicaURLs),
+		MaxConns:    config.PostgresMaxConns,
+		MinConns:    config.PostgresMinConns,
+		Timeout:     config.PostgresTimeout,
+		MaxLifetime: 1 * time.Hour,
+		MaxIdleTime: 10 * time.Minute,
+	}
+
+	connManager, err := NewConnectionManager(connConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to postgres: %w", err)
+		return nil, fmt.Errorf("failed to create connection manager: %w", err)
 	}
 
-	// Configure connection pool
-	db.SetMaxOpenConns(config.PostgresMaxConns)
-	db.SetMaxIdleConns(config.PostgresMinConns)
-	db.SetConnMaxLifetime(1 * time.Hour)
-	db.SetConnMaxIdleTime(10 * time.Minute)
-
-	// Test connection
-	ctx, cancel := context.WithTimeout(context.Background(), config.PostgresTimeout)
-	defer cancel()
-	if err := db.PingContext(ctx); err != nil {
-		return nil, fmt.Errorf("failed to ping postgres: %w", err)
-	}
+	// Get primary connection for backward compatibility
+	db := connManager.Primary()
 
 	// TODO: Initialize S3 client
 	var s3Client *S3Client
@@ -61,6 +62,7 @@ func NewPostgresStorage(config storage.Config) (*PostgresStorage, error) {
 	}
 
 	return &PostgresStorage{
+		connManager: connManager,
 		db:          db,
 		s3Client:    s3Client,
 		redisClient: redisClient,
@@ -410,6 +412,7 @@ func (s *PostgresStorage) GetVersionContext(ctx context.Context, moduleName, ver
 }
 
 func (s *PostgresStorage) ListVersionsContext(ctx context.Context, moduleName string) ([]*api.Version, error) {
+	// Use replica for read-only query
 	query := `
 		SELECT v.version, v.dependencies, v.created_at
 		FROM versions v
@@ -418,7 +421,7 @@ func (s *PostgresStorage) ListVersionsContext(ctx context.Context, moduleName st
 		ORDER BY v.created_at DESC
 	`
 
-	rows, err := s.db.QueryContext(ctx, query, moduleName)
+	rows, err := s.replica().QueryContext(ctx, query, moduleName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list versions: %w", err)
 	}
@@ -559,7 +562,7 @@ func (s *PostgresStorage) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
-// GetDB returns the database connection for health checks
+// GetDB returns the primary database connection for health checks
 func (s *PostgresStorage) GetDB() *sql.DB {
 	return s.db
 }
@@ -567,6 +570,22 @@ func (s *PostgresStorage) GetDB() *sql.DB {
 // GetRedis returns the Redis client (may be nil if not configured)
 func (s *PostgresStorage) GetRedis() *RedisClient {
 	return s.redisClient
+}
+
+// GetConnectionManager returns the connection manager
+func (s *PostgresStorage) GetConnectionManager() *ConnectionManager {
+	return s.connManager
+}
+
+// primary returns the primary database connection (for writes)
+func (s *PostgresStorage) primary() *sql.DB {
+	return s.connManager.Primary()
+}
+
+// replica returns a read replica connection (for reads)
+// Falls back to primary if no replicas available
+func (s *PostgresStorage) replica() *sql.DB {
+	return s.connManager.Replica()
 }
 
 // Close closes all connections
