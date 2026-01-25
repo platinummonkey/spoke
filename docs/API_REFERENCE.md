@@ -574,6 +574,234 @@ do {
 console.log(`Status: ${job.status}, Duration: ${job.duration_ms}ms`);
 ```
 
+## Analytics (v2)
+
+Schema Analytics provides insights into usage patterns, performance metrics, and schema health.
+
+### Get Analytics Overview
+
+Returns high-level KPIs and summary statistics.
+
+```http
+GET /api/v2/analytics/overview
+```
+
+**Response:** `200 OK`
+
+```json
+{
+  "total_modules": 1523,
+  "total_versions": 8945,
+  "total_downloads_24h": 12453,
+  "total_downloads_7d": 78234,
+  "total_downloads_30d": 342567,
+  "active_users_24h": 145,
+  "active_users_7d": 567,
+  "top_language": "go",
+  "avg_compilation_ms": 1245.6,
+  "cache_hit_rate": 0.78
+}
+```
+
+**Fields:**
+- `total_modules` (int): Total number of modules in registry
+- `total_versions` (int): Total number of versions across all modules
+- `total_downloads_24h` (int): Downloads in last 24 hours
+- `total_downloads_7d` (int): Downloads in last 7 days
+- `total_downloads_30d` (int): Downloads in last 30 days
+- `active_users_24h` (int): Unique users in last 24 hours
+- `active_users_7d` (int): Unique users in last 7 days
+- `top_language` (string): Most compiled language
+- `avg_compilation_ms` (float): Average compilation time in milliseconds
+- `cache_hit_rate` (float): Compilation cache hit rate (0.0-1.0)
+
+### Get Popular Modules
+
+Returns most popular modules by download count.
+
+```http
+GET /api/v2/analytics/modules/popular?period={period}&limit={limit}
+```
+
+**Query Parameters:**
+- `period` (optional): Time period (`7d`, `30d`, `90d`). Default: `30d`
+- `limit` (optional): Maximum results to return. Default: `10`, Max: `100`
+
+**Response:** `200 OK`
+
+```json
+[
+  {
+    "module_name": "common-types",
+    "total_views": 5678,
+    "total_downloads": 3456,
+    "active_days": 30,
+    "avg_daily_downloads": 115.2
+  },
+  {
+    "module_name": "user-service",
+    "total_views": 1245,
+    "total_downloads": 892,
+    "active_days": 28,
+    "avg_daily_downloads": 31.9
+  }
+]
+```
+
+### Get Trending Modules
+
+Returns modules with highest growth rate.
+
+```http
+GET /api/v2/analytics/modules/trending?limit={limit}
+```
+
+**Query Parameters:**
+- `limit` (optional): Maximum results to return. Default: `10`, Max: `50`
+
+**Response:** `200 OK`
+
+```json
+[
+  {
+    "module_name": "auth-service",
+    "current_downloads": 80,
+    "previous_downloads": 50,
+    "growth_rate": 0.6
+  }
+]
+```
+
+**Fields:**
+- `current_downloads` (int): Downloads in current week
+- `previous_downloads` (int): Downloads in previous week
+- `growth_rate` (float): Percentage growth ((current-previous)/previous)
+
+### Get Module Statistics
+
+Returns detailed analytics for a specific module.
+
+```http
+GET /api/v2/analytics/modules/{name}/stats?period={period}
+```
+
+**Parameters:**
+- `name` (path): Module name
+- `period` (query, optional): Time period (`7d`, `30d`, `90d`). Default: `30d`
+
+**Response:** `200 OK`
+
+```json
+{
+  "module_name": "user-service",
+  "total_views": 1245,
+  "total_downloads": 892,
+  "unique_users": 67,
+  "downloads_by_day": [
+    {"date": "2026-01-01", "value": 34},
+    {"date": "2026-01-02", "value": 42}
+  ],
+  "downloads_by_language": {
+    "go": 523,
+    "python": 289,
+    "java": 80
+  },
+  "popular_versions": [
+    {"version": "v1.2.0", "downloads": 456},
+    {"version": "v1.1.0", "downloads": 234}
+  ],
+  "avg_compilation_time_ms": 1024,
+  "compilation_success_rate": 0.98,
+  "last_downloaded_at": "2026-01-25T10:30:00Z"
+}
+```
+
+### Get Module Health
+
+Returns schema health assessment with optimization recommendations.
+
+```http
+GET /api/v2/analytics/modules/{name}/health?version={version}
+```
+
+**Parameters:**
+- `name` (path): Module name
+- `version` (query, optional): Specific version. If omitted, uses latest version.
+
+**Response:** `200 OK`
+
+```json
+{
+  "module_name": "user-service",
+  "version": "v1.2.0",
+  "health_score": 81.2,
+  "complexity_score": 45.0,
+  "maintainability_index": 82.0,
+  "unused_fields": ["legacy_field", "old_setting"],
+  "deprecated_field_count": 1,
+  "breaking_changes_30d": 0,
+  "dependents_count": 8,
+  "recommendations": [
+    "Schema health is excellent! Keep following protobuf best practices.",
+    "Remove unused fields to simplify the schema and reduce maintenance burden."
+  ]
+}
+```
+
+**Health Score Ranges:**
+- **80-100**: Excellent - Well-designed, maintainable schema
+- **60-79**: Good - Minor improvements recommended
+- **40-59**: Fair - Several issues to address
+- **0-39**: Poor - Requires immediate attention
+
+**Health Factors:**
+1. **Complexity (25%)**: Entity count, fields per message, nesting depth
+2. **Maintainability (35%)**: Code quality, deprecations, breaking changes
+3. **Unused Fields (15%)**: Fields with no usage in 90 days
+4. **Deprecated Fields (10%)**: Fields marked deprecated
+5. **Breaking Changes (15%)**: Breaking changes in last 30 days
+
+### Get Compilation Performance
+
+Returns compilation performance metrics by language.
+
+```http
+GET /api/v2/analytics/performance/compilation?period={period}
+```
+
+**Query Parameters:**
+- `period` (optional): Time period (`7d`, `30d`, `90d`). Default: `7d`
+
+**Response:** `200 OK`
+
+```json
+{
+  "languages": [
+    {
+      "language": "go",
+      "compilation_count": 5623,
+      "compilation_success_count": 5545,
+      "compilation_failure_count": 78,
+      "success_rate": 0.986,
+      "avg_duration_ms": 1024,
+      "p50_duration_ms": 892,
+      "p95_duration_ms": 2134,
+      "p99_duration_ms": 3456,
+      "cache_hit_rate": 0.78
+    }
+  ]
+}
+```
+
+### Analytics Events
+
+Analytics automatically tracks:
+- **Download Events**: Module downloads with user, language, success/failure
+- **View Events**: Module page views with source (web, API, CLI)
+- **Compilation Events**: Compilation jobs with duration, success, cache hits
+
+Events are aggregated daily and stored for 12 months. Raw events are available for the last 90 days.
+
 ## Webhooks (Future)
 
 Future versions may support webhooks for compilation events:
