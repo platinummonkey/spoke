@@ -14,8 +14,6 @@ import (
 	"github.com/platinummonkey/spoke/pkg/billing"
 	"github.com/platinummonkey/spoke/pkg/middleware"
 	"github.com/platinummonkey/spoke/pkg/orgs"
-	"github.com/platinummonkey/spoke/pkg/storage"
-	"github.com/platinummonkey/spoke/pkg/storage/postgres"
 )
 
 // Example server with multi-tenancy and billing enabled
@@ -59,17 +57,6 @@ func main() {
 	}
 	log.Println("Connected to PostgreSQL")
 
-	// Initialize storage (using postgres storage)
-	config := storage.DefaultConfig()
-	config.Type = "postgres"
-	config.PostgresURL = *postgresURL
-
-	store, err := postgres.NewPostgresStorage(config)
-	if err != nil {
-		log.Fatalf("Failed to initialize storage: %v", err)
-	}
-	log.Println("Storage initialized")
-
 	// Initialize organization service
 	orgService := orgs.NewPostgresService(db)
 	log.Println("Organization service initialized")
@@ -83,9 +70,6 @@ func main() {
 
 	// Create router
 	router := mux.NewRouter()
-
-	// Create API server
-	server := api.NewServer(store, db)
 
 	// Register organization handlers
 	orgHandlers := api.NewOrgHandlers(orgService)
