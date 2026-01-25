@@ -21,6 +21,7 @@ var (
 	weeklySchedule     = flag.String("weekly-schedule", "10 0 * * 0", "Cron schedule for weekly aggregation (default: Sunday 00:10 UTC)")
 	monthlySchedule    = flag.String("monthly-schedule", "15 0 1 * *", "Cron schedule for monthly aggregation (default: 1st day 00:15 UTC)")
 	refreshSchedule    = flag.String("refresh-schedule", "0 * * * *", "Cron schedule for materialized view refresh (default: every hour)")
+	alertSchedule      = flag.String("alert-schedule", "0 */6 * * *", "Cron schedule for alert checks (default: every 6 hours)")
 	runOnce            = flag.Bool("run-once", false, "Run aggregation once and exit (for testing)")
 	aggregationDate    = flag.String("date", "", "Date to aggregate (YYYY-MM-DD format). If empty, aggregates yesterday. Only used with --run-once")
 )
@@ -41,6 +42,7 @@ func main() {
 	}
 
 	aggregator := analytics.NewAggregator(db)
+	alerter := analytics.NewAlerter(db)
 
 	// Run once mode (for testing or backfilling)
 	if *runOnce {
@@ -97,11 +99,25 @@ func main() {
 		log.Fatalf("Failed to schedule materialized view refresh: %v", err)
 	}
 
+	// Analytics alert checks (every 6 hours)
+	_, err = c.AddFunc(*alertSchedule, func() {
+		log.Println("Running analytics alert checks")
+
+		ctx := context.Background()
+		if err := alerter.CheckAllAlerts(ctx); err != nil {
+			log.Printf("Alert checks failed: %v", err)
+		}
+	})
+	if err != nil {
+		log.Fatalf("Failed to schedule alert checks: %v", err)
+	}
+
 	// Start the cron scheduler
 	c.Start()
 	log.Println("Spoke Analytics Aggregator started")
 	log.Printf("Daily aggregation schedule: %s", *dailySchedule)
 	log.Printf("Materialized view refresh schedule: %s", *refreshSchedule)
+	log.Printf("Alert check schedule: %s", *alertSchedule)
 
 	// Wait for termination signal
 	sigChan := make(chan os.Signal, 1)
