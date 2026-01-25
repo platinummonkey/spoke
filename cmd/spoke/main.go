@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/platinummonkey/spoke/pkg/api"
+	"github.com/platinummonkey/spoke/pkg/dependencies"
 	"github.com/platinummonkey/spoke/pkg/docs"
 	"github.com/platinummonkey/spoke/pkg/search"
 	"github.com/platinummonkey/spoke/pkg/storage"
@@ -45,6 +46,11 @@ func main() {
 	searchHandlers := search.NewSearchHandlers(store)
 	server.RegisterRoutes(searchHandlers)
 	log.Println("Search routes registered")
+
+	// Register dependency handlers
+	depHandlers := dependencies.NewDependencyHandlers(store)
+	server.RegisterRoutes(depHandlers)
+	log.Println("Dependency routes registered")
 
 	log.Printf("Starting Spoke Schema Registry server on port %s...", *port)
 	log.Println("Note: Running without database - auth/compatibility/validation APIs disabled")
