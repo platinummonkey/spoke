@@ -18,7 +18,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import { DownloadIcon, RepeatIcon } from '@chakra-ui/icons';
-import cytoscape, { Core, NodeSingular } from 'cytoscape';
+import cytoscape, { Core, NodeSingular, EventObject } from 'cytoscape';
 // @ts-ignore - No types available for these plugins
 import cola from 'cytoscape-cola';
 // @ts-ignore
@@ -209,7 +209,7 @@ const DependencyGraph: React.FC<DependencyGraphProps> = ({
     });
 
     // Add click handler for nodes
-    cy.on('tap', 'node', (evt) => {
+    cy.on('tap', 'node', (evt: EventObject) => {
       const node: NodeSingular = evt.target;
       const nodeData = node.data();
 
@@ -219,7 +219,7 @@ const DependencyGraph: React.FC<DependencyGraphProps> = ({
     });
 
     // Add hover effects
-    cy.on('mouseover', 'node', (evt) => {
+    cy.on('mouseover', 'node', (evt: EventObject) => {
       evt.target.style('cursor', 'pointer');
     });
 

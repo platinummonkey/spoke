@@ -1,7 +1,7 @@
 import React, { Suspense } from 'react';
 import { ChakraProvider, Container, Box, Heading, HStack, Spinner, Center } from '@chakra-ui/react';
 import { BrowserRouter as Router, Routes, Route, useParams, Link as RouterLink } from 'react-router-dom';
-import { SearchBar } from './components/SearchBar';
+import { EnhancedSearchBar } from './components/EnhancedSearchBar';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useModules, useModule } from './hooks/useModules';
 
@@ -39,7 +39,7 @@ function App() {
                 Spoke Registry
               </Heading>
               <Box width="400px">
-                <SearchBar />
+                <EnhancedSearchBar />
               </Box>
             </HStack>
           </Box>
