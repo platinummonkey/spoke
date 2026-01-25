@@ -229,6 +229,12 @@ func (s *Server) setupRoutes() {
 	if s.validationHandlers != nil {
 		s.validationHandlers.RegisterRoutes(s.router)
 	}
+
+	// Register enhanced search routes (v2 API)
+	if s.db != nil {
+		enhancedSearchHandlers := NewEnhancedSearchHandlers(s.db)
+		enhancedSearchHandlers.RegisterRoutes(s.router)
+	}
 }
 
 // ServeHTTP implements http.Handler
