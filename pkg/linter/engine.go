@@ -1,9 +1,6 @@
 package linter
 
 import (
-	"context"
-	"fmt"
-
 	"github.com/platinummonkey/spoke/pkg/api/protobuf"
 )
 
