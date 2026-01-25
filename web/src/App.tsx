@@ -1,9 +1,13 @@
-import { ChakraProvider, Container, Box, Heading, HStack } from '@chakra-ui/react';
+import React, { Suspense } from 'react';
+import { ChakraProvider, Container, Box, Heading, HStack, Spinner, Center } from '@chakra-ui/react';
 import { BrowserRouter as Router, Routes, Route, useParams, Link as RouterLink } from 'react-router-dom';
-import { ModuleList } from './components/ModuleList';
-import { ModuleDetail } from './components/ModuleDetail';
 import { SearchBar } from './components/SearchBar';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { useModules, useModule } from './hooks/useModules';
+
+// Lazy load components for code splitting
+const ModuleList = React.lazy(() => import('./components/ModuleList').then(m => ({ default: m.ModuleList })));
+const ModuleDetail = React.lazy(() => import('./components/ModuleDetail').then(m => ({ default: m.ModuleDetail })));
 
 const ModuleListPage = () => {
   const { modules, loading, error, retry } = useModules();
@@ -41,11 +45,21 @@ function App() {
           </Box>
 
           {/* Routes */}
-          <Routes>
-            <Route path="/" element={<ModuleListPage />} />
-            <Route path="/modules/:moduleName" element={<ModuleDetailPage />} />
-            <Route path="/modules/:moduleName/versions/:version" element={<ModuleDetailPage />} />
-          </Routes>
+          <ErrorBoundary>
+            <Suspense
+              fallback={
+                <Center minH="400px">
+                  <Spinner size="xl" color="blue.500" />
+                </Center>
+              }
+            >
+              <Routes>
+                <Route path="/" element={<ModuleListPage />} />
+                <Route path="/modules/:moduleName" element={<ModuleDetailPage />} />
+                <Route path="/modules/:moduleName/versions/:version" element={<ModuleDetailPage />} />
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
         </Container>
       </Router>
     </ChakraProvider>

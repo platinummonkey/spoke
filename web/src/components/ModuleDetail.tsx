@@ -10,7 +10,6 @@ import {
   AlertTitle,
   AlertDescription,
   Button,
-  Spinner,
   Tabs,
   TabList,
   TabPanels,
@@ -39,6 +38,7 @@ import { ApiExplorer } from './ApiExplorer';
 import { CodeExamples } from './CodeExamples';
 import { SchemaDiff } from './SchemaDiff';
 import { MigrationGuide } from './MigrationGuide';
+import { LoadingSkeleton } from './LoadingSkeleton';
 
 // UsageExamples component removed - now using CodeExamples component
 
@@ -192,21 +192,46 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
 
   if (loading) {
     return (
-      <Box textAlign="center" py={10}>
-        <Spinner size="xl" />
-      </Box>
+      <VStack align="stretch" spacing={6}>
+        <Breadcrumb spacing="8px" separator={<ChevronRightIcon color="gray.500" />}>
+          <BreadcrumbItem>
+            <BreadcrumbLink as={RouterLink} to="/">
+              Modules
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbItem isCurrentPage>
+            <BreadcrumbLink>Loading...</BreadcrumbLink>
+          </BreadcrumbItem>
+        </Breadcrumb>
+        <LoadingSkeleton type="module-detail" count={3} />
+      </VStack>
     );
   }
 
   if (error) {
     return (
-      <Alert status="error" mb={4}>
-        <AlertIcon />
-        <AlertTitle>Error loading module</AlertTitle>
-        <AlertDescription>{error.message}</AlertDescription>
-        <Button ml="auto" onClick={retry}>
-          Retry
-        </Button>
+      <Alert
+        status="error"
+        variant="subtle"
+        flexDirection="column"
+        alignItems="center"
+        justifyContent="center"
+        textAlign="center"
+        minH="300px"
+        borderRadius="md"
+      >
+        <AlertIcon boxSize="40px" mr={0} />
+        <AlertTitle mt={4} mb={1} fontSize="lg">
+          Error loading module
+        </AlertTitle>
+        <AlertDescription maxW="500px">
+          <Text mb={4}>
+            {error.message || 'An unexpected error occurred while loading the module details.'}
+          </Text>
+          <Button onClick={retry} colorScheme="blue" aria-label="Retry loading module">
+            Try Again
+          </Button>
+        </AlertDescription>
       </Alert>
     );
   }
@@ -290,6 +315,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
               size="sm"
               width="300px"
               textAlign="left"
+              aria-label={`Selected version: ${selectedVersion || 'None'}`}
             >
               {selectedVersion || 'Select version'}
             </MenuButton>
@@ -339,6 +365,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
                       placeholder="Search by version, repository, commit, or branch..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
+                      aria-label="Search module versions"
                     />
                   </InputGroup>
                 </Flex>
