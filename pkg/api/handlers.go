@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/platinummonkey/spoke/pkg/analytics"
 	"github.com/platinummonkey/spoke/pkg/codegen"
 	"github.com/platinummonkey/spoke/pkg/codegen/orchestrator"
 	"github.com/platinummonkey/spoke/pkg/search"
@@ -32,6 +33,7 @@ type Server struct {
 	validationHandlers  *ValidationHandlers
 	orchestrator        orchestrator.Orchestrator // Code generation orchestrator (v2)
 	searchIndexer       *search.Indexer            // Search indexer for proto entities
+	eventTracker        *analytics.EventTracker    // Analytics event tracker
 }
 
 // NewServer creates a new API server
@@ -51,6 +53,9 @@ func NewServer(storage Storage, db *sql.DB) *Server {
 		// Initialize search indexer
 		storageAdapter := NewSearchStorageAdapter(storage)
 		s.searchIndexer = search.NewIndexer(db, storageAdapter)
+
+		// Initialize analytics event tracker
+		s.eventTracker = analytics.NewEventTracker(db)
 	}
 
 	// Initialize code generation orchestrator (v2)
@@ -344,6 +349,33 @@ func (s *Server) getModule(w http.ResponseWriter, r *http.Request) {
 		Versions: versions,
 	}
 
+	// Track module view event asynchronously
+	if s.eventTracker != nil {
+		go func() {
+			source := "api"
+			if r.Header.Get("User-Agent") != "" && strings.Contains(r.Header.Get("User-Agent"), "Mozilla") {
+				source = "web"
+			}
+
+			event := analytics.ModuleViewEvent{
+				UserID:         analytics.ExtractUserID(r),
+				OrganizationID: analytics.ExtractOrganizationID(r),
+				ModuleName:     vars["name"],
+				Version:        "", // Viewing module list
+				Source:         source,
+				PageType:       "detail",
+				Referrer:       analytics.GetReferrer(r),
+				IPAddress:      analytics.GetClientIP(r),
+				UserAgent:      analytics.GetUserAgent(r),
+			}
+
+			ctx := context.Background()
+			if err := s.eventTracker.TrackModuleView(ctx, event); err != nil {
+				log.Printf("Failed to track module view event: %v", err)
+			}
+		}()
+	}
+
 	json.NewEncoder(w).Encode(moduleWithVersions)
 }
 
@@ -400,6 +432,33 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Track module version view event asynchronously
+	if s.eventTracker != nil {
+		go func() {
+			source := "api"
+			if r.Header.Get("User-Agent") != "" && strings.Contains(r.Header.Get("User-Agent"), "Mozilla") {
+				source = "web"
+			}
+
+			event := analytics.ModuleViewEvent{
+				UserID:         analytics.ExtractUserID(r),
+				OrganizationID: analytics.ExtractOrganizationID(r),
+				ModuleName:     vars["name"],
+				Version:        vars["version"],
+				Source:         source,
+				PageType:       "detail",
+				Referrer:       analytics.GetReferrer(r),
+				IPAddress:      analytics.GetClientIP(r),
+				UserAgent:      analytics.GetUserAgent(r),
+			}
+
+			ctx := context.Background()
+			if err := s.eventTracker.TrackModuleView(ctx, event); err != nil {
+				log.Printf("Failed to track module version view event: %v", err)
+			}
+		}()
+	}
+
 	json.NewEncoder(w).Encode(version)
 }
 
@@ -417,6 +476,7 @@ func (s *Server) getFile(w http.ResponseWriter, r *http.Request) {
 
 // downloadCompiled handles GET /modules/{name}/versions/{version}/download/{language}
 func (s *Server) downloadCompiled(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
 	vars := mux.Vars(r)
 	language := Language(vars["language"])
 
@@ -441,6 +501,12 @@ func (s *Server) downloadCompiled(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Calculate file size
+	var fileSize int64
+	for _, file := range compilationInfo.Files {
+		fileSize += int64(len(file.Content))
+	}
+
 	// Set appropriate headers based on language
 	switch language {
 	case LanguageGo:
@@ -452,11 +518,44 @@ func (s *Server) downloadCompiled(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Stream the compiled files
+	success := true
+	var downloadErr error
 	for _, file := range compilationInfo.Files {
 		if _, err := w.Write([]byte(file.Content)); err != nil {
+			success = false
+			downloadErr = err
 			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			break
 		}
+	}
+
+	// Track download event asynchronously (non-blocking)
+	if s.eventTracker != nil {
+		go func() {
+			event := analytics.DownloadEvent{
+				UserID:         analytics.ExtractUserID(r),
+				OrganizationID: analytics.ExtractOrganizationID(r),
+				ModuleName:     vars["name"],
+				Version:        vars["version"],
+				Language:       string(language),
+				FileSize:       fileSize,
+				Duration:       time.Since(startTime),
+				Success:        success,
+				IPAddress:      analytics.GetClientIP(r),
+				UserAgent:      analytics.GetUserAgent(r),
+				ClientSDK:      analytics.GetClientSDK(r),
+				ClientVersion:  analytics.GetClientVersion(r),
+				CacheHit:       false, // TODO: detect cache hit from response headers
+			}
+			if downloadErr != nil {
+				event.ErrorMessage = downloadErr.Error()
+			}
+
+			ctx := context.Background()
+			if err := s.eventTracker.TrackDownload(ctx, event); err != nil {
+				log.Printf("Failed to track download event: %v", err)
+			}
+		}()
 	}
 }
 
