@@ -234,6 +234,10 @@ func (s *Server) setupRoutes() {
 	if s.db != nil {
 		enhancedSearchHandlers := NewEnhancedSearchHandlers(s.db)
 		enhancedSearchHandlers.RegisterRoutes(s.router)
+
+		// Register user features routes (saved searches, bookmarks)
+		userFeaturesHandlers := NewUserFeaturesHandlers(s.db)
+		userFeaturesHandlers.RegisterRoutes(s.router)
 	}
 }
 
