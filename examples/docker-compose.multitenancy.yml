@@ -1,0 +1,130 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database for multi-tenancy
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: spoke
+      POSTGRES_PASSWORD: spoke
+      POSTGRES_DB: spoke
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../migrations:/docker-entrypoint-initdb.d/migrations
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spoke"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # MinIO for S3-compatible object storage
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Create MinIO bucket
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      /usr/bin/mc config host add myminio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb myminio/spoke-storage || true;
+      /usr/bin/mc anonymous set download myminio/spoke-storage;
+      exit 0;
+      "
+
+  # Stripe CLI for webhook testing
+  stripe:
+    image: stripe/stripe-cli:latest
+    command: listen --forward-to spoke:8080/billing/webhook
+    environment:
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-sk_test_dummy}
+    depends_on:
+      - spoke
+
+  # Spoke server with multi-tenancy
+  spoke:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgresql://spoke:spoke@postgres:5432/spoke?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: spoke-storage
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      S3_USE_PATH_STYLE: "true"
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-sk_test_dummy}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_dummy}
+      ENABLE_BILLING: "true"
+      ENABLE_USAGE_TRACKING: "true"
+      ENABLE_QUOTA_ENFORCEMENT: "true"
+      LOG_LEVEL: debug
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    command: /app/spoke-server --postgres-url=postgresql://spoke:spoke@postgres:5432/spoke?sslmode=disable
+
+  # Database migration runner
+  migrate:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://spoke:spoke@postgres:5432/spoke?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../migrations:/migrations
+    command: >
+      sh -c "
+      for f in /migrations/*.up.sql; do
+        echo 'Running migration: $$f';
+        psql $$DATABASE_URL < $$f;
+      done
+      "
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

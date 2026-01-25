@@ -121,10 +121,16 @@ type RateLimitBucket struct {
 
 // AuthContext holds authenticated user information
 type AuthContext struct {
-	User         *User
-	Organization *Organization
-	Token        *APIToken
-	Scopes       []Scope
+	User            *User
+	Organization    *Organization
+	Token           *APIToken
+	Scopes          []Scope
+	PermissionCheck PermissionChecker // For checking RBAC permissions
+}
+
+// PermissionChecker is an interface for checking permissions
+type PermissionChecker interface {
+	HasPermission(userID int64, resource, action string, scope string, resourceID *string, organizationID *int64) bool
 }
 
 // HasScope checks if the context has a specific scope
@@ -144,11 +150,13 @@ func (ac *AuthContext) HasScope(scope Scope) bool {
 // HasRole checks if user has a specific role in organization
 func (ac *AuthContext) HasRole(role Role) bool {
 	// TODO: Query organization_members table
+	// This is legacy - RBAC system should be used instead
 	return false
 }
 
 // HasPermission checks if user has permission on a module
 func (ac *AuthContext) HasPermission(moduleID int64, perm Permission) bool {
 	// TODO: Query module_permissions table
+	// This is legacy - RBAC system should be used instead
 	return false
 }
