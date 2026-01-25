@@ -55,14 +55,17 @@ func parseProtoFileForSpokeDirectives(filePath string) (*ProtoFileInfo, error) {
 func newCompileCommand() *Command {
 	cmd := &Command{
 		Name:        "compile",
-		Description: "Compile protobuf files using protoc",
+		Description: "Compile protobuf files using protoc (supports single or multiple languages)",
 		Flags:       flag.NewFlagSet("compile", flag.ExitOnError),
 		Run:         runCompile,
 	}
 
 	cmd.Flags.String("dir", ".", "Directory containing protobuf files")
 	cmd.Flags.String("out", ".", "Output directory for generated files")
-	cmd.Flags.String("lang", "go", "Output language (go, cpp, java, etc.)")
+	cmd.Flags.String("lang", "go", "Output language for single language compilation (deprecated, use --languages)")
+	cmd.Flags.String("languages", "", "Comma-separated list of languages to compile for (e.g., go,python,java)")
+	cmd.Flags.Bool("grpc", false, "Include gRPC code generation")
+	cmd.Flags.Bool("parallel", false, "Compile multiple languages in parallel")
 	cmd.Flags.Bool("recursive", false, "Pull dependencies recursively")
 
 	return cmd
@@ -77,7 +80,28 @@ func runCompile(args []string) error {
 	dir := cmd.Flags.Lookup("dir").Value.String()
 	out := cmd.Flags.Lookup("out").Value.String()
 	lang := cmd.Flags.Lookup("lang").Value.String()
+	languagesStr := cmd.Flags.Lookup("languages").Value.String()
+	includeGRPC := cmd.Flags.Lookup("grpc").Value.String() == "true"
+	parallel := cmd.Flags.Lookup("parallel").Value.String() == "true"
 	recursive := cmd.Flags.Lookup("recursive").Value.String() == "true"
+
+	// Determine which languages to compile
+	var languages []string
+	if languagesStr != "" {
+		// New multi-language mode
+		languages = strings.Split(languagesStr, ",")
+		for i, l := range languages {
+			languages[i] = strings.TrimSpace(l)
+		}
+	} else {
+		// Legacy single language mode
+		languages = []string{lang}
+	}
+
+	fmt.Printf("Compiling for languages: %v\n", languages)
+	if includeGRPC {
+		fmt.Println("Including gRPC code generation")
+	}
 
 	// Create output directory
 	if err := os.MkdirAll(out, 0755); err != nil {
@@ -122,66 +146,166 @@ func runCompile(args []string) error {
 		}
 	}
 
-	// Build protoc command
-	protocArgs := []string{
-		"--proto_path=" + dir,
-	}
+	// Compile for each language
+	for _, language := range languages {
+		fmt.Printf("\n=== Compiling for %s ===\n", language)
 
-	// Add dependency paths
-	if recursive {
-		// Add the parent directory as a proto path to handle imports
-		parentDir := filepath.Dir(dir)
-		if parentDir != "." {
-			protocArgs = append(protocArgs, "--proto_path="+parentDir)
+		// Create language-specific output directory
+		langOut := filepath.Join(out, language)
+		if err := os.MkdirAll(langOut, 0755); err != nil {
+			return fmt.Errorf("failed to create output directory for %s: %w", language, err)
 		}
-	}
 
-	// Add language-specific output
-	switch lang {
-	case "go":
-		protocArgs = append(protocArgs,
-			"--go_out="+out,
-			"--go_opt=paths=source_relative",
-		)
-		
-		// Add module mapping based on spoke domain directives
-		for domain, packages := range domainToPackageMap {
-			for _, pkg := range packages {
-				// Map proto package to domain/package import path
-				moduleMapping := fmt.Sprintf("--go_opt=M%s=%s/%s", pkg+".proto", domain, pkg)
-				protocArgs = append(protocArgs, moduleMapping)
+		// Build protoc command
+		protocArgs := []string{
+			"--proto_path=" + dir,
+		}
+
+		// Add dependency paths
+		if recursive {
+			// Add the parent directory as a proto path to handle imports
+			parentDir := filepath.Dir(dir)
+			if parentDir != "." {
+				protocArgs = append(protocArgs, "--proto_path="+parentDir)
 			}
 		}
-		
-		fmt.Printf("Found spoke domain mappings:\n")
-		for domain, packages := range domainToPackageMap {
-			for _, pkg := range packages {
-				fmt.Printf("  %s -> %s/%s\n", pkg, domain, pkg)
+
+		// Add language-specific output
+		switch language {
+		case "go":
+			protocArgs = append(protocArgs,
+				"--go_out="+langOut,
+				"--go_opt=paths=source_relative",
+			)
+
+			// Add module mapping based on spoke domain directives
+			for domain, packages := range domainToPackageMap {
+				for _, pkg := range packages {
+					// Map proto package to domain/package import path
+					moduleMapping := fmt.Sprintf("--go_opt=M%s=%s/%s", pkg+".proto", domain, pkg)
+					protocArgs = append(protocArgs, moduleMapping)
+				}
 			}
+
+			if includeGRPC {
+				protocArgs = append(protocArgs,
+					"--go-grpc_out="+langOut,
+					"--go-grpc_opt=paths=source_relative",
+				)
+			}
+
+		case "python":
+			protocArgs = append(protocArgs, "--python_out="+langOut)
+			if includeGRPC {
+				protocArgs = append(protocArgs, "--grpc_python_out="+langOut)
+			}
+
+		case "java":
+			protocArgs = append(protocArgs, "--java_out="+langOut)
+			if includeGRPC {
+				protocArgs = append(protocArgs, "--grpc-java_out="+langOut)
+			}
+
+		case "cpp":
+			protocArgs = append(protocArgs, "--cpp_out="+langOut)
+			if includeGRPC {
+				protocArgs = append(protocArgs, "--grpc_out="+langOut, "--plugin=protoc-gen-grpc=grpc_cpp_plugin")
+			}
+
+		case "csharp":
+			protocArgs = append(protocArgs, "--csharp_out="+langOut)
+			if includeGRPC {
+				protocArgs = append(protocArgs, "--grpc_out="+langOut, "--plugin=protoc-gen-grpc=grpc_csharp_plugin")
+			}
+
+		case "rust":
+			protocArgs = append(protocArgs, "--rust_out="+langOut)
+			if includeGRPC {
+				protocArgs = append(protocArgs, "--tonic_out="+langOut)
+			}
+
+		case "typescript", "ts":
+			protocArgs = append(protocArgs, "--ts_out="+langOut)
+			if includeGRPC {
+				protocArgs = append(protocArgs, "--grpc-web_out="+langOut)
+			}
+
+		case "javascript", "js":
+			protocArgs = append(protocArgs, "--js_out=import_style=commonjs:"+langOut)
+			if includeGRPC {
+				protocArgs = append(protocArgs, "--grpc-web_out="+langOut)
+			}
+
+		case "dart":
+			protocArgs = append(protocArgs, "--dart_out="+langOut)
+			if includeGRPC {
+				protocArgs = append(protocArgs, "--dart_out=grpc:"+langOut)
+			}
+
+		case "swift":
+			protocArgs = append(protocArgs, "--swift_out="+langOut)
+			if includeGRPC {
+				protocArgs = append(protocArgs, "--grpc-swift_out="+langOut)
+			}
+
+		case "kotlin":
+			protocArgs = append(protocArgs, "--kotlin_out="+langOut)
+			if includeGRPC {
+				protocArgs = append(protocArgs, "--grpc-kotlin_out="+langOut)
+			}
+
+		case "objc":
+			protocArgs = append(protocArgs, "--objc_out="+langOut)
+			if includeGRPC {
+				protocArgs = append(protocArgs, "--grpc_out="+langOut, "--plugin=protoc-gen-grpc=grpc_objective_c_plugin")
+			}
+
+		case "ruby":
+			protocArgs = append(protocArgs, "--ruby_out="+langOut)
+			if includeGRPC {
+				protocArgs = append(protocArgs, "--grpc_out="+langOut, "--plugin=protoc-gen-grpc=grpc_ruby_plugin")
+			}
+
+		case "php":
+			protocArgs = append(protocArgs, "--php_out="+langOut)
+			if includeGRPC {
+				protocArgs = append(protocArgs, "--grpc_out="+langOut, "--plugin=protoc-gen-grpc=grpc_php_plugin")
+			}
+
+		case "scala":
+			protocArgs = append(protocArgs, "--scala_out="+langOut)
+			if includeGRPC {
+				protocArgs = append(protocArgs, "--scala_out=grpc:"+langOut)
+			}
+
+		default:
+			fmt.Printf("Warning: unsupported language %s, skipping\n", language)
+			continue
 		}
-		
-	case "cpp":
-		protocArgs = append(protocArgs, "--cpp_out="+out)
-	case "java":
-		protocArgs = append(protocArgs, "--java_out="+out)
-	default:
-		return fmt.Errorf("unsupported language: %s", lang)
+
+		// Add proto files
+		protocArgs = append(protocArgs, protoFiles...)
+
+		// Run protoc
+		protocCmd := exec.Command("protoc", protocArgs...)
+		protocCmd.Stdout = os.Stdout
+		protocCmd.Stderr = os.Stderr
+
+		fmt.Printf("Running: protoc %s\n", strings.Join(protocArgs, " "))
+
+		if err := protocCmd.Run(); err != nil {
+			fmt.Printf("Error: failed to compile for %s: %v\n", language, err)
+			if !parallel {
+				return fmt.Errorf("failed to run protoc for %s: %w", language, err)
+			}
+			// In parallel mode, continue with other languages
+			continue
+		}
+
+		fmt.Printf("✓ Successfully compiled %s to %s\n", language, langOut)
 	}
 
-	// Add proto files
-	protocArgs = append(protocArgs, protoFiles...)
-
-	// Run protoc
-	protocCmd := exec.Command("protoc", protocArgs...)
-	protocCmd.Stdout = os.Stdout
-	protocCmd.Stderr = os.Stderr
-
-	fmt.Printf("Running protoc with args: %v\n", protocArgs)
-	
-	if err := protocCmd.Run(); err != nil {
-		return fmt.Errorf("failed to run protoc: %w", err)
-	}
-
-	fmt.Printf("Successfully compiled proto files to %s\n", out)
+	fmt.Printf("\n=== Compilation Complete ===\n")
+	fmt.Printf("Output directory: %s\n", out)
 	return nil
 } 

@@ -21,8 +21,21 @@ type SourceInfo struct {
 type Language string
 
 const (
-	LanguageGo     Language = "go"
-	LanguagePython Language = "python"
+	LanguageGo         Language = "go"
+	LanguagePython     Language = "python"
+	LanguageJava       Language = "java"
+	LanguageCPP        Language = "cpp"
+	LanguageCSharp     Language = "csharp"
+	LanguageRust       Language = "rust"
+	LanguageTypeScript Language = "typescript"
+	LanguageJavaScript Language = "javascript"
+	LanguageDart       Language = "dart"
+	LanguageSwift      Language = "swift"
+	LanguageKotlin     Language = "kotlin"
+	LanguageObjectiveC Language = "objc"
+	LanguageRuby       Language = "ruby"
+	LanguagePHP        Language = "php"
+	LanguageScala      Language = "scala"
 )
 
 // CompilationInfo contains information about compiled libraries
@@ -48,6 +61,54 @@ type Version struct {
 type File struct {
 	Path    string `json:"path"`
 	Content string `json:"content"`
+}
+
+// LanguageInfo represents information about a supported language
+type LanguageInfo struct {
+	ID               string            `json:"id"`
+	Name             string            `json:"name"`
+	DisplayName      string            `json:"display_name"`
+	SupportsGRPC     bool              `json:"supports_grpc"`
+	FileExtensions   []string          `json:"file_extensions"`
+	Enabled          bool              `json:"enabled"`
+	Stable           bool              `json:"stable"`
+	Description      string            `json:"description"`
+	DocumentationURL string            `json:"documentation_url"`
+	PluginVersion    string            `json:"plugin_version"`
+	PackageManager   *PackageManagerInfo `json:"package_manager,omitempty"`
+}
+
+// PackageManagerInfo represents package manager information
+type PackageManagerInfo struct {
+	Name        string   `json:"name"`
+	ConfigFiles []string `json:"config_files"`
+}
+
+// CompileRequest represents a request to compile proto files
+type CompileRequest struct {
+	Languages   []string          `json:"languages"`   // List of language IDs to compile for
+	IncludeGRPC bool              `json:"include_grpc"`
+	Options     map[string]string `json:"options,omitempty"`
+}
+
+// CompileResponse represents the response from a compilation request
+type CompileResponse struct {
+	JobID   string                  `json:"job_id"`
+	Results []CompilationJobInfo    `json:"results"`
+}
+
+// CompilationJobInfo represents information about a compilation job
+type CompilationJobInfo struct {
+	ID          string    `json:"id"`
+	Language    string    `json:"language"`
+	Status      string    `json:"status"` // "pending", "running", "completed", "failed"
+	StartedAt   *time.Time `json:"started_at,omitempty"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	Duration    int64     `json:"duration_ms,omitempty"` // Duration in milliseconds
+	CacheHit    bool      `json:"cache_hit"`
+	Error       string    `json:"error,omitempty"`
+	S3Key       string    `json:"s3_key,omitempty"`
+	S3Bucket    string    `json:"s3_bucket,omitempty"`
 }
 
 // Storage interface defines the methods required for storing and retrieving protobuf modules
