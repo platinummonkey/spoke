@@ -21,7 +21,7 @@ const setCachedData = <T>(key: string, data: T) => {
 export const useModules = (retryCount = 3) => {
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
   const [retryAttempt, setRetryAttempt] = useState(0);
 
   const fetchModules = useCallback(async () => {
@@ -50,7 +50,7 @@ export const useModules = (retryCount = 3) => {
           fetchModules();
         }, Math.min(1000 * Math.pow(2, retryAttempt), 10000));
       } else {
-        setError('Failed to fetch modules. Please try again.');
+        setError(new Error('Failed to fetch modules. Please try again.'));
       }
     } finally {
       setLoading(false);
@@ -73,7 +73,7 @@ export const useModules = (retryCount = 3) => {
 export const useModule = (moduleName: string, retryCount = 3) => {
   const [module, setModule] = useState<Module | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
   const [retryAttempt, setRetryAttempt] = useState(0);
 
   const fetchModule = useCallback(async () => {
@@ -104,7 +104,7 @@ export const useModule = (moduleName: string, retryCount = 3) => {
           fetchModule();
         }, Math.min(1000 * Math.pow(2, retryAttempt), 10000));
       } else {
-        setError('Failed to fetch module. Please try again.');
+        setError(new Error('Failed to fetch module. Please try again.'));
       }
     } finally {
       setLoading(false);

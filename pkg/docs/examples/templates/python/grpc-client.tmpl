@@ -1,0 +1,73 @@
+import grpc
+import {{.PackagePath}}_pb2 as pb
+import {{.PackagePath}}_pb2_grpc as pb_grpc
+
+def main():
+    # Connect to gRPC server
+    channel = grpc.insecure_channel('localhost:50051')
+
+    {{if .ServiceName}}
+    # Create client stub
+    stub = pb_grpc.{{.ServiceName}}Stub(channel)
+
+    {{range .Methods}}
+    # Call {{.Name}}
+    {{if .IsBidirectional}}
+    # Bidirectional streaming example
+    try:
+        responses = stub.{{.Name}}(iter([
+            pb.{{.RequestType}}({{range $i, $f := .SampleFields}}{{if $i}}, {{end}}{{$f.Name}}={{$f.SampleValue}}{{end}})
+        ]))
+        for response in responses:
+            print(f"{{.Name}} response: {response}")
+    except grpc.RpcError as e:
+        print(f"Error calling {{.Name}}: {e}")
+    {{else if .IsClientStream}}
+    # Client streaming example
+    try:
+        response = stub.{{.Name}}(iter([
+            pb.{{.RequestType}}({{range $i, $f := .SampleFields}}{{if $i}}, {{end}}{{$f.Name}}={{$f.SampleValue}}{{end}})
+        ]))
+        print(f"{{.Name}} response: {response}")
+    except grpc.RpcError as e:
+        print(f"Error calling {{.Name}}: {e}")
+    {{else if .IsServerStream}}
+    # Server streaming example
+    try:
+        responses = stub.{{.Name}}(pb.{{.RequestType}}(
+            {{range $i, $f := .SampleFields}}{{if $i}},
+            {{end}}{{$f.Name}}={{$f.SampleValue}}{{end}}
+        ))
+        for response in responses:
+            print(f"{{.Name}} response: {response}")
+    except grpc.RpcError as e:
+        print(f"Error calling {{.Name}}: {e}")
+    {{else}}
+    # Unary call
+    try:
+        response = stub.{{.Name}}(pb.{{.RequestType}}(
+            {{range $i, $f := .SampleFields}}{{if $i}},
+            {{end}}{{$f.Name}}={{$f.SampleValue}}{{end}}
+        ))
+        print(f"{{.Name}} response: {response}")
+    except grpc.RpcError as e:
+        print(f"Error calling {{.Name}}: {e}")
+    {{end}}
+
+    {{end}}
+    {{else}}
+    # No services defined in this module
+    # Use the generated message types:
+    {{range .Messages}}
+    msg = pb.{{.Name}}(
+        {{range $i, $f := .Fields}}{{if $i}},
+        {{end}}{{$f.Name}}={{$f.SampleValue}}{{end}}
+    )
+    print(f"Created message: {msg}")
+    {{end}}
+    {{end}}
+
+    channel.close()
+
+if __name__ == '__main__':
+    main()

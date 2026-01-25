@@ -22,7 +22,6 @@ import {
   Spinner,
   IconButton,
   Tooltip,
-  Select,
   HStack,
   Flex,
 } from '@chakra-ui/react';
@@ -37,12 +36,8 @@ interface ProtoTypesProps {
   files: ProtoFile[];
   moduleName: string;
   version: string;
-  versions: string[];
-  onVersionChange: (version: string) => void;
-}
-
-interface FileResponse {
-  content: string;
+  versions?: string[];
+  onVersionChange?: (version: string) => void;
 }
 
 const MessageFields: React.FC<{ message: Message }> = ({ message }) => (
@@ -328,10 +323,8 @@ export const ProtoTypes: React.FC<ProtoTypesProps> = ({
   files,
   moduleName,
   version,
-  versions,
-  onVersionChange,
 }) => {
-  console.log('ProtoTypes props:', { files, moduleName, version, versions });
+  console.log('ProtoTypes props:', { files, moduleName, version });
   
   return (
     <VStack align="stretch" spacing={6}>

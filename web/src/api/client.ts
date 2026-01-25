@@ -29,16 +29,19 @@ const parseProtoFile = async (content: string): Promise<{ messages: Message[]; e
     if (parsed.root && parsed.root.nested) {
       // Get the package namespace
       const packageName = parsed.package;
-      if (packageName && parsed.root.nested[packageName]?.nested) {
-        const packageNs = parsed.root.nested[packageName].nested;
+      const rootNested = parsed.root.nested as any;
+      if (packageName && rootNested[packageName]?.nested) {
+        const packageNs = rootNested[packageName].nested;
         
         // Process each type in the package
         Object.entries(packageNs).forEach(([name, obj]) => {
+          const objAny = obj as any;
+
           // Process messages
-          if (obj.fields) {
+          if (objAny.fields) {
             const message: Message = {
               name,
-              fields: Object.entries(obj.fields).map(([fieldName, field]) => ({
+              fields: Object.entries(objAny.fields).map(([fieldName, field]: [string, any]) => ({
                 name: fieldName,
                 type: field.type,
                 number: field.id,
@@ -50,24 +53,24 @@ const parseProtoFile = async (content: string): Promise<{ messages: Message[]; e
             };
             messages.push(message);
           }
-          
+
           // Process enums
-          if (obj.values) {
+          if (objAny.values) {
             const enumType: Enum = {
               name,
-              values: Object.entries(obj.values).map(([valueName, value]) => ({
+              values: Object.entries(objAny.values).map(([valueName, value]: [string, any]) => ({
                 name: valueName,
-                number: value,
+                number: value as number,
               })),
             };
             enums.push(enumType);
           }
-          
+
           // Process services
-          if (obj.methods) {
+          if (objAny.methods) {
             const service: Service = {
               name,
-              methods: Object.entries(obj.methods).map(([methodName, method]) => ({
+              methods: Object.entries(objAny.methods).map(([methodName, method]: [string, any]) => ({
                 name: methodName,
                 inputType: method.requestType,
                 outputType: method.responseType,

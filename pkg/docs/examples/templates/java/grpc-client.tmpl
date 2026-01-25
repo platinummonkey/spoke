@@ -1,0 +1,55 @@
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import com.example.{{.ModuleName}}.*;
+
+public class ExampleClient {
+    public static void main(String[] args) {
+        // Connect to gRPC server
+        ManagedChannel channel = ManagedChannelBuilder
+            .forAddress("localhost", 50051)
+            .usePlaintext()
+            .build();
+
+        {{if .ServiceName}}
+        // Create client stub
+        {{.ServiceName}}Grpc.{{.ServiceName}}BlockingStub stub = {{.ServiceName}}Grpc.newBlockingStub(channel);
+
+        {{range .Methods}}
+        // Call {{.Name}}
+        try {
+            {{if or .IsBidirectional .IsClientStream .IsServerStream}}
+            // Streaming call - use async stub for streaming operations
+            {{.ServiceName}}Grpc.{{.ServiceName}}Stub asyncStub = {{.ServiceName}}Grpc.newStub(channel);
+            // Implementation depends on specific streaming type
+            {{else}}
+            // Unary call
+            {{.RequestType}} request = {{.RequestType}}.newBuilder()
+                {{range .SampleFields}}
+                .set{{.Name}}({{.SampleValue}})
+                {{end}}
+                .build();
+
+            {{.ResponseType}} response = stub.{{.Name | toLower}}(request);
+            System.out.println("{{.Name}} response: " + response);
+            {{end}}
+        } catch (Exception e) {
+            System.err.println("Error calling {{.Name}}: " + e.getMessage());
+        }
+        {{end}}
+        {{else}}
+        // No services defined in this module
+        // Use the generated message types:
+        {{range .Messages}}
+        {{.Name}} msg = {{.Name}}.newBuilder()
+            {{range .Fields}}
+            .set{{.Name}}({{.SampleValue}})
+            {{end}}
+            .build();
+        System.out.println("Created message: " + msg);
+        {{end}}
+        {{end}}
+
+        // Shutdown channel
+        channel.shutdown();
+    }
+}

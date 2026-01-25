@@ -39,6 +39,7 @@ import { ChevronRightIcon, ChevronDownIcon, SearchIcon, CopyIcon } from '@chakra
 import { Link as RouterLink } from 'react-router-dom';
 import { Module, ProtoFile } from '../types';
 import { ProtoTypes } from './ProtoTypes';
+import { ApiExplorer } from './ApiExplorer';
 
 // Usage Examples component
 interface UsageExamplesProps {
@@ -287,6 +288,7 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
         <TabList>
           <Tab>Overview</Tab>
           <Tab>Types</Tab>
+          <Tab>API Explorer</Tab>
           <Tab>Usage Examples</Tab>
         </TabList>
 
@@ -403,8 +405,16 @@ export const ModuleDetail: React.FC<ModuleDetailProps> = ({ module, loading, err
                 files={selectedVersionData.files as unknown as ProtoFile[]}
                 moduleName={module.name}
                 version={selectedVersionData.version}
-                versions={versions}
-                onVersionChange={setSelectedVersion}
+              />
+            )}
+          </TabPanel>
+
+          <TabPanel>
+            {selectedVersionData && (
+              <ApiExplorer
+                files={selectedVersionData.files as unknown as ProtoFile[]}
+                moduleName={module.name}
+                version={selectedVersionData.version}
               />
             )}
           </TabPanel>

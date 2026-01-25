@@ -7,7 +7,7 @@ import { Link as RouterLink } from 'react-router-dom';
 interface ModuleListProps {
   modules: Module[];
   loading: boolean;
-  error: string | null;
+  error: Error | null;
   retry: () => void;
 }
 
@@ -49,7 +49,7 @@ export const ModuleList: React.FC<ModuleListProps> = ({ modules = [], loading, e
       <Box p={4}>
         <Alert status="error" mb={4}>
           <AlertIcon />
-          {error}
+          {error.message}
         </Alert>
         <Button onClick={retry} colorScheme="blue">
           Retry

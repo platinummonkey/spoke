@@ -1,0 +1,76 @@
+package main
+
+import (
+	"context"
+	"log"
+
+	pb "{{.PackagePath}}"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+)
+
+func main() {
+	// Connect to gRPC server
+	conn, err := grpc.Dial("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	{{if .ServiceName}}
+	// Create client
+	client := pb.New{{.ServiceName}}Client(conn)
+	ctx := context.Background()
+
+	{{range .Methods}}
+	// Call {{.Name}}
+	{{if .IsBidirectional}}
+	// Bidirectional streaming example
+	stream, err := client.{{.Name}}(ctx)
+	if err != nil {
+		log.Printf("Error calling {{.Name}}: %v", err)
+	}
+	defer stream.CloseSend()
+	{{else if .IsClientStream}}
+	// Client streaming example
+	stream, err := client.{{.Name}}(ctx)
+	if err != nil {
+		log.Printf("Error calling {{.Name}}: %v", err)
+	}
+	defer stream.CloseSend()
+	{{else if .IsServerStream}}
+	// Server streaming example
+	stream, err := client.{{.Name}}(ctx, &pb.{{.RequestType}}{
+		{{range .SampleFields}}
+		{{.Name}}: {{.SampleValue}},
+		{{end}}
+	})
+	if err != nil {
+		log.Printf("Error calling {{.Name}}: %v", err)
+	}
+	{{else}}
+	// Unary call
+	resp{{.Name}}, err := client.{{.Name}}(ctx, &pb.{{.RequestType}}{
+		{{range .SampleFields}}
+		{{.Name}}: {{.SampleValue}},
+		{{end}}
+	})
+	if err != nil {
+		log.Printf("Error calling {{.Name}}: %v", err)
+	} else {
+		log.Printf("{{.Name}} response: %+v", resp{{.Name}})
+	}
+	{{end}}
+	{{end}}
+	{{else}}
+	// No services defined in this module
+	// Use the generated message types:
+	{{range .Messages}}
+	_ = &pb.{{.Name}}{
+		{{range .Fields}}
+		{{.Name}}: {{.SampleValue}},
+		{{end}}
+	}
+	{{end}}
+	{{end}}
+}
