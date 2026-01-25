@@ -163,12 +163,19 @@ func TestInitializeDefaultRegistry(t *testing.T) {
 		t.Fatal("expected non-nil registry")
 	}
 
-	if registry.Count() != 3 {
-		t.Errorf("expected 3 languages in registry, got %d", registry.Count())
+	if registry.Count() != 15 {
+		t.Errorf("expected 15 languages in registry, got %d", registry.Count())
 	}
 
 	// Verify each default language is registered
-	for _, id := range []string{LanguageGo, LanguagePython, LanguageJava} {
+	expectedLanguages := []string{
+		LanguageGo, LanguagePython, LanguageJava,
+		LanguageCPP, LanguageCSharp, LanguageRust,
+		LanguageTypeScript, LanguageJavaScript, LanguageDart,
+		LanguageSwift, LanguageKotlin, LanguageObjectiveC,
+		LanguageRuby, LanguagePHP, LanguageScala,
+	}
+	for _, id := range expectedLanguages {
 		spec, err := registry.Get(id)
 		if err != nil {
 			t.Errorf("expected language %s to be registered: %v", id, err)
@@ -180,7 +187,7 @@ func TestInitializeDefaultRegistry(t *testing.T) {
 
 	// Verify all are enabled
 	enabled := registry.ListEnabled()
-	if len(enabled) != 3 {
-		t.Errorf("expected 3 enabled languages, got %d", len(enabled))
+	if len(enabled) != 15 {
+		t.Errorf("expected 15 enabled languages, got %d", len(enabled))
 	}
 }
