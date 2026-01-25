@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>{{.GroupId | default "com.spoke.generated"}}</groupId>
+    <artifactId>{{.ArtifactId}}</artifactId>
+    <version>{{.Version}}</version>
+    <packaging>jar</packaging>
+
+    <name>{{.ModuleName}}</name>
+    <description>Protocol Buffer generated code for {{.ModuleName}}</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
+        <protobuf.version>{{.ProtobufVersion | default "3.25.1"}}</protobuf.version>
+{{- if .IncludeGRPC}}
+        <grpc.version>{{.GRPCVersion | default "1.60.0"}}</grpc.version>
+{{- end}}
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>${protobuf.version}</version>
+        </dependency>
+{{- if .IncludeGRPC}}
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-protobuf</artifactId>
+            <version>${grpc.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-stub</artifactId>
+            <version>${grpc.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-netty-shaded</artifactId>
+            <version>${grpc.version}</version>
+        </dependency>
+{{- end}}
+{{- range .Dependencies}}
+        <dependency>
+            <groupId>{{.GroupId}}</groupId>
+            <artifactId>{{.ArtifactId}}</artifactId>
+            <version>{{.Version}}</version>
+        </dependency>
+{{- end}}
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>

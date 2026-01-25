@@ -1,0 +1,13 @@
+module {{.ModuleName}}
+
+go {{.GoVersion | default "1.21"}}
+
+require (
+	google.golang.org/protobuf {{.ProtobufVersion | default "v1.31.0"}}
+{{- if .IncludeGRPC}}
+	google.golang.org/grpc {{.GRPCVersion | default "v1.60.0"}}
+{{- end}}
+{{- range .Dependencies}}
+	{{.ImportPath}} {{.Version}}
+{{- end}}
+)

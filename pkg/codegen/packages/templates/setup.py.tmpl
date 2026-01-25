@@ -1,0 +1,29 @@
+from setuptools import setup, find_packages
+
+setup(
+    name="{{.PackageName}}",
+    version="{{.Version}}",
+    description="Protocol Buffer generated code for {{.ModuleName}}",
+    author="Spoke Generated",
+    packages=find_packages(),
+    install_requires=[
+        "protobuf=={{.ProtobufVersion | default "4.25.1"}}",
+{{- if .IncludeGRPC}}
+        "grpcio=={{.GRPCVersion | default "1.60.0"}}",
+        "grpcio-tools=={{.GRPCVersion | default "1.60.0"}}",
+{{- end}}
+{{- range .Dependencies}}
+        "{{.Name}}=={{.Version}}",
+{{- end}}
+    ],
+    python_requires=">=3.8",
+    classifiers=[
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Developers",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+    ],
+)

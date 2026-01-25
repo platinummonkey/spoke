@@ -1,0 +1,27 @@
+{
+  "name": "{{.PackageName}}",
+  "version": "{{.Version}}",
+  "description": "Protocol Buffer generated code for {{.ModuleName}}",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"No tests specified\""
+  },
+  "dependencies": {
+{{- if .IncludeGRPC}}
+    "@grpc/grpc-js": "{{.GRPCVersion | default "^1.9.0"}}",
+    "@grpc/proto-loader": "{{.ProtoLoaderVersion | default "^0.7.10"}}",
+{{- end}}
+    "google-protobuf": "{{.ProtobufVersion | default "^3.21.0"}}"
+{{- range $i, $dep := .Dependencies}}{{if $i}},{{end}}
+    "{{$dep.Name}}": "{{$dep.Version}}"
+{{- end}}
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

@@ -1,0 +1,31 @@
+# {{.ModuleName}}
+
+Protocol Buffer generated code for Go.
+
+## Installation
+
+```bash
+go get {{.ModuleName}}@{{.Version}}
+```
+
+## Usage
+
+```go
+import "{{.ModuleName}}"
+
+// Use generated types...
+```
+
+## Requirements
+
+- Go {{.GoVersion | default "1.21"}}+
+- google.golang.org/protobuf {{.ProtobufVersion | default "v1.31.0"}}
+{{- if .IncludeGRPC}}
+- google.golang.org/grpc {{.GRPCVersion | default "v1.60.0"}}
+{{- end}}
+
+## Generated from
+
+- Module: {{.OriginalModule}}
+- Version: {{.OriginalVersion}}
+- Generated: {{.GeneratedAt}}
