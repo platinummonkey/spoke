@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/platinummonkey/spoke/pkg/api"
+	"github.com/platinummonkey/spoke/pkg/codegen/languages"
 )
 
 // CompilationRequest represents a request to compile a module version
@@ -143,26 +144,33 @@ func parseDependencyKey(key string) []string {
 
 // Compiler watches for changes to proto files and recompiles them after a delay
 type Compiler struct {
-	storage       api.Storage
-	delay         time.Duration
-	queue         map[string]*CompilationRequest
-	pendingMutex  sync.Mutex
-	compileMutex  sync.Mutex
-	stopChan      chan struct{}
-	compileTicker *time.Ticker
-	graph         *DependencyGraph
-	processedSet  map[string]time.Time // Track recently processed modules to avoid duplicate work
+	storage          api.Storage
+	delay            time.Duration
+	queue            map[string]*CompilationRequest
+	pendingMutex     sync.Mutex
+	compileMutex     sync.Mutex
+	stopChan         chan struct{}
+	compileTicker    *time.Ticker
+	graph            *DependencyGraph
+	processedSet     map[string]time.Time // Track recently processed modules to avoid duplicate work
+	languageRegistry *languages.Registry  // Language registry for dynamic compilation
 }
 
 // NewCompiler creates a new compiler with the given delay
-func NewCompiler(storage api.Storage, delay time.Duration) *Compiler {
+func NewCompiler(storage api.Storage, delay time.Duration, langRegistry *languages.Registry) *Compiler {
+	if langRegistry == nil {
+		// Create default registry if not provided
+		langRegistry = languages.NewRegistry()
+	}
+
 	return &Compiler{
-		storage:      storage,
-		delay:        delay,
-		queue:        make(map[string]*CompilationRequest),
-		stopChan:     make(chan struct{}),
-		graph:        NewDependencyGraph(),
-		processedSet: make(map[string]time.Time),
+		storage:          storage,
+		delay:            delay,
+		queue:            make(map[string]*CompilationRequest),
+		stopChan:         make(chan struct{}),
+		graph:            NewDependencyGraph(),
+		processedSet:     make(map[string]time.Time),
+		languageRegistry: langRegistry,
 	}
 }
 
@@ -295,8 +303,10 @@ func (c *Compiler) compile(request CompilationRequest) {
 	// Update dependency graph
 	c.graph.AddNode(request.ModuleName, request.Version, version.Dependencies)
 
-	// Compile for each supported language
-	for _, lang := range []api.Language{api.LanguageGo, api.LanguagePython} {
+	// Compile for each enabled language in the registry
+	enabledLanguages := c.languageRegistry.ListEnabled()
+	for _, langSpec := range enabledLanguages {
+		lang := api.Language(langSpec.ID)
 		log.Printf("Compiling %s@%s for %s", request.ModuleName, request.Version, lang)
 		c.compileLanguage(version, lang)
 	}

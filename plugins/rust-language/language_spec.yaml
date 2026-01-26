@@ -1,0 +1,29 @@
+id: rust
+name: Rust
+display_name: Rust (prost + tonic)
+supports_grpc: true
+file_extensions:
+  - .rs
+enabled: true
+stable: true
+description: Rust language support with prost and tonic for Protocol Buffers
+documentation_url: https://github.com/tokio-rs/prost
+plugin_version: "0.11.0"
+protoc_plugin: protoc-gen-prost
+docker_image: spoke/rust-protoc:1.2
+
+package_manager:
+  name: cargo
+  config_files:
+    - Cargo.toml
+    - README.md
+  dependency_map:
+    protobuf: prost
+    grpc: tonic
+  default_versions:
+    prost: "0.11"
+    tonic: "0.9"
+
+custom_options:
+  bytes: "."
+  file_descriptor_set: "false"

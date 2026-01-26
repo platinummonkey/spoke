@@ -1,16 +1,29 @@
 import React, { Suspense } from 'react';
 import { ChakraProvider, Container, Box, Heading, HStack, Spinner, Center, Button } from '@chakra-ui/react';
 import { BrowserRouter as Router, Routes, Route, useParams, Link as RouterLink } from 'react-router-dom';
-import { StarIcon, InfoIcon } from '@chakra-ui/icons';
+import { StarIcon, InfoIcon, DownloadIcon } from '@chakra-ui/icons';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { EnhancedSearchBar } from './components/EnhancedSearchBar';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useModules, useModule } from './hooks/useModules';
+
+// Create a client for React Query
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60 * 1000, // 1 minute
+      retry: 1,
+    },
+  },
+});
 
 // Lazy load components for code splitting
 const ModuleList = React.lazy(() => import('./components/ModuleList').then(m => ({ default: m.ModuleList })));
 const ModuleDetail = React.lazy(() => import('./components/ModuleDetail').then(m => ({ default: m.ModuleDetail })));
 const UserFeatures = React.lazy(() => import('./components/UserFeatures').then(m => ({ default: m.UserFeatures })));
 const AnalyticsDashboard = React.lazy(() => import('./components/analytics/AnalyticsDashboard').then(m => ({ default: m.AnalyticsDashboard })));
+const PluginMarketplace = React.lazy(() => import('./components/plugins/PluginMarketplace').then(m => ({ default: m.default })));
+const PluginDetail = React.lazy(() => import('./pages/PluginDetail').then(m => ({ default: m.default })));
 
 const ModuleListPage = () => {
   const { modules, loading, error, retry } = useModules();
@@ -26,7 +39,8 @@ const ModuleDetailPage = () => {
 function App() {
   return (
     <ChakraProvider>
-      <Router>
+      <QueryClientProvider client={queryClient}>
+        <Router>
         <Container maxW="container.xl" py={8}>
           {/* Header with Search */}
           <Box mb={8}>
@@ -42,6 +56,16 @@ function App() {
                 Spoke Registry
               </Heading>
               <HStack spacing={4}>
+                <Button
+                  as={RouterLink}
+                  to="/plugins"
+                  leftIcon={<DownloadIcon />}
+                  size="sm"
+                  variant="ghost"
+                  colorScheme="purple"
+                >
+                  Plugins
+                </Button>
                 <Button
                   as={RouterLink}
                   to="/library"
@@ -80,6 +104,8 @@ function App() {
             >
               <Routes>
                 <Route path="/" element={<ModuleListPage />} />
+                <Route path="/plugins" element={<PluginMarketplace />} />
+                <Route path="/plugins/:id" element={<PluginDetail />} />
                 <Route path="/library" element={<UserFeatures />} />
                 <Route path="/analytics" element={<AnalyticsDashboard />} />
                 <Route path="/modules/:moduleName" element={<ModuleDetailPage />} />
@@ -88,7 +114,8 @@ function App() {
             </Suspense>
           </ErrorBoundary>
         </Container>
-      </Router>
+        </Router>
+      </QueryClientProvider>
     </ChakraProvider>
   );
 }

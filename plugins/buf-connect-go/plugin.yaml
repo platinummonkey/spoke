@@ -1,0 +1,17 @@
+id: buf-connect-go
+name: Buf Connect for Go
+version: 1.5.0
+api_version: 1.0.0
+description: Connect RPC framework for Go (Buf plugin)
+author: Buf Technologies
+license: Apache-2.0
+homepage: https://buf.build/library/connect-go
+repository: https://github.com/bufbuild/connect-go
+type: language
+security_level: verified
+
+metadata:
+  buf_registry: buf.build/library/connect-go
+  buf_version: v1.5.0
+  language_family: go
+  supports_grpc: "true"

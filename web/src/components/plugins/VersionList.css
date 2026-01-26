@@ -1,0 +1,112 @@
+.version-list {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.versions-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.versions-table thead {
+  background: #f7fafc;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.versions-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #4a5568;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.versions-table tbody tr {
+  border-bottom: 1px solid #e2e8f0;
+  transition: background-color 0.2s;
+}
+
+.versions-table tbody tr:hover {
+  background: #f7fafc;
+}
+
+.versions-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.versions-table td {
+  padding: 12px 16px;
+  font-size: 0.875rem;
+  color: #2d3748;
+}
+
+.version-column {
+  font-weight: 600;
+}
+
+.version-number {
+  color: #3182ce;
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.api-version-column {
+  color: #718096;
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.size-column {
+  color: #718096;
+}
+
+.downloads-column {
+  font-weight: 500;
+}
+
+.date-column {
+  color: #718096;
+}
+
+.actions-column {
+  text-align: right;
+}
+
+.download-button {
+  padding: 6px 16px;
+  background: #3182ce;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.download-button:hover {
+  background: #2c5282;
+}
+
+.download-button:active {
+  transform: translateY(1px);
+}
+
+.empty-versions {
+  padding: 3rem;
+  text-align: center;
+  color: #718096;
+  background: #f7fafc;
+  border-radius: 8px;
+  margin-top: 1rem;
+}
+
+.empty-versions p {
+  margin: 0;
+  font-size: 1rem;
+}

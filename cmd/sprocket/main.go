@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -11,7 +12,11 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/platinummonkey/spoke/pkg/codegen/languages"
+	"github.com/platinummonkey/spoke/pkg/plugins"
+	"github.com/platinummonkey/spoke/pkg/plugins/buf"
 	"github.com/platinummonkey/spoke/pkg/storage"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
@@ -44,8 +49,11 @@ func main() {
 		log.Fatalf("Failed to setup watcher: %v", err)
 	}
 
-	// Create compiler
-	compiler := NewCompiler(store, time.Duration(*delaySeconds)*time.Second)
+	// Initialize language registry and load plugins
+	langRegistry := initializeLanguageRegistry()
+
+	// Create compiler with language registry
+	compiler := NewCompiler(store, time.Duration(*delaySeconds)*time.Second, langRegistry)
 
 	// Start the compiler
 	compiler.Start()
@@ -177,29 +185,29 @@ func scanExistingModules(storageDir string, compiler *Compiler) {
 	// Now, identify modules to compile
 	// Start with those that have no dependents (leaf nodes)
 	modulesToCompile := make(map[string]struct{})
-	
+
 	// Process all modules to find those without dependents
 	for _, moduleEntry := range moduleEntries {
 		if !moduleEntry.IsDir() {
 			continue
 		}
-		
+
 		moduleName := moduleEntry.Name()
 		versionsDir := filepath.Join(modulesDir, moduleName, "versions")
-		
+
 		versionEntries, err := os.ReadDir(versionsDir)
 		if err != nil {
 			continue
 		}
-		
+
 		for _, versionEntry := range versionEntries {
 			if !versionEntry.IsDir() {
 				continue
 			}
-			
+
 			versionName := versionEntry.Name()
 			key := fmt.Sprintf("%s@%s", moduleName, versionName)
-			
+
 			// Check if this module has any dependents
 			dependents := compiler.graph.GetDependentsTree(moduleName, versionName)
 			if len(dependents) == 0 {
@@ -208,9 +216,9 @@ func scanExistingModules(storageDir string, compiler *Compiler) {
 			}
 		}
 	}
-	
+
 	log.Printf("Found %d leaf modules to compile first", len(modulesToCompile))
-	
+
 	// Queue leaf modules for compilation with staggered delays
 	i := 0
 	for key := range modulesToCompile {
@@ -218,10 +226,45 @@ func scanExistingModules(storageDir string, compiler *Compiler) {
 		if len(parts) != 2 {
 			continue
 		}
-		
+
 		// Add with staggered delay to avoid overwhelming the system
 		delay := time.Duration(i*500) * time.Millisecond
 		compiler.QueueRecompilationWithDelay(parts[0], parts[1], delay)
 		i++
 	}
+}
+
+// initializeLanguageRegistry initializes the language registry and loads plugins
+func initializeLanguageRegistry() *languages.Registry {
+	logger := logrus.New()
+	logger.SetLevel(logrus.InfoLevel)
+
+	// Create language registry
+	registry := languages.NewRegistry()
+
+	// Load default built-in languages (for backward compatibility)
+	// These would be loaded from the default languages package if it exists
+	log.Println("Initializing language registry...")
+
+	// Load plugins from default directories
+	pluginDirs := plugins.GetDefaultPluginDirectories()
+	pluginLoader := plugins.NewLoader(pluginDirs, logger)
+
+	// Configure Buf plugin support
+	buf.ConfigureLoader(pluginLoader)
+	log.Println("Buf plugin support enabled")
+
+	ctx := context.Background()
+	if err := registry.LoadPlugins(ctx, pluginLoader, logger); err != nil {
+		log.Printf("Warning: Failed to load plugins: %v", err)
+	}
+
+	// Log registered languages
+	enabledLanguages := registry.ListEnabled()
+	log.Printf("Loaded %d enabled languages", len(enabledLanguages))
+	for _, langSpec := range enabledLanguages {
+		log.Printf("  - %s (%s)", langSpec.Name, langSpec.ID)
+	}
+
+	return registry
 } 

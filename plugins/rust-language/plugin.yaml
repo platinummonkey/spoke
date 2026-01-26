@@ -1,0 +1,20 @@
+id: rust-language
+name: Rust Language Plugin
+version: 1.2.0
+api_version: 1.0.0
+description: Protocol Buffers code generation for Rust using prost
+author: Spoke Community
+license: MIT
+homepage: https://plugins.spoke.dev/rust
+repository: https://github.com/spoke-plugins/rust-language
+type: language
+security_level: verified
+permissions:
+  - filesystem:read
+  - filesystem:write
+  - process:exec
+
+metadata:
+  language_family: rust
+  supports_wasm: "true"
+  min_protoc_version: "3.15.0"
