@@ -1,0 +1,28 @@
+# Dockerfile for Web UI
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY web/package*.json ./
+RUN npm ci
+
+# Copy source
+COPY web/ ./
+
+# Build
+RUN npm run build
+
+# Development server (for E2E testing)
+FROM node:18-alpine
+
+WORKDIR /app
+
+COPY web/package*.json ./
+RUN npm ci
+
+COPY web/ ./
+
+EXPOSE 5173
+
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

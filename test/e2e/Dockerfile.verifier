@@ -1,0 +1,29 @@
+# Dockerfile for Plugin Verifier Service
+FROM golang:1.21-alpine AS builder
+
+RUN apk add --no-cache git make gcc musl-dev
+
+WORKDIR /build
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o plugin-verifier ./cmd/spoke-plugin-verifier
+
+# Final stage
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates curl
+
+# Install gosec for security scanning
+RUN wget -O /tmp/gosec.tar.gz https://github.com/securego/gosec/releases/download/v2.18.2/gosec_2.18.2_linux_amd64.tar.gz && \
+    tar -xzf /tmp/gosec.tar.gz -C /usr/local/bin gosec && \
+    rm /tmp/gosec.tar.gz
+
+WORKDIR /app
+
+COPY --from=builder /build/plugin-verifier .
+
+CMD ["./plugin-verifier"]

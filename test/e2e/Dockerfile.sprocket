@@ -1,0 +1,29 @@
+# Dockerfile for Sprocket Compilation Service
+FROM golang:1.21-alpine AS builder
+
+RUN apk add --no-cache git make gcc musl-dev
+
+WORKDIR /build
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o sprocket ./cmd/sprocket
+
+# Final stage
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates protobuf docker
+
+WORKDIR /app
+
+COPY --from=builder /build/sprocket .
+
+# Create plugin directories
+RUN mkdir -p /etc/spoke/plugins /root/.spoke/plugins
+
+EXPOSE 8081
+
+CMD ["./sprocket"]

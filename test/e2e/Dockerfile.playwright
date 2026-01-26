@@ -1,0 +1,15 @@
+# Dockerfile for Playwright E2E Tests
+FROM mcr.microsoft.com/playwright:v1.40.0-focal
+
+WORKDIR /app
+
+# Copy test files
+COPY test/e2e/playwright/ ./
+
+# Install dependencies
+RUN npm install
+
+# Install browsers
+RUN npx playwright install
+
+CMD ["npx", "playwright", "test"]

@@ -1,0 +1,176 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: spoke-mysql-test
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: spoke
+      MYSQL_USER: spoke
+      MYSQL_PASSWORD: spoke
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ../../migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uspoke", "-pspoke"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - spoke-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: spoke-redis-test
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - spoke-network
+
+  # MinIO (S3-compatible storage)
+  minio:
+    image: minio/minio:latest
+    container_name: spoke-minio-test
+    environment:
+      MINIO_ROOT_USER: spoke
+      MINIO_ROOT_PASSWORD: spokespoke
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - spoke-network
+
+  # Spoke API Server
+  spoke-api:
+    build:
+      context: ../..
+      dockerfile: test/e2e/Dockerfile.spoke
+    container_name: spoke-api-test
+    environment:
+      DATABASE_URL: "spoke:spoke@tcp(mysql:3306)/spoke?parseTime=true"
+      REDIS_URL: "redis:6379"
+      S3_ENDPOINT: "http://minio:9000"
+      S3_ACCESS_KEY: "spoke"
+      S3_SECRET_KEY: "spokespoke"
+      S3_BUCKET: "spoke-plugins"
+      PORT: "8080"
+      LOG_LEVEL: "debug"
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - spoke-network
+
+  # Sprocket Compilation Service
+  sprocket:
+    build:
+      context: ../..
+      dockerfile: test/e2e/Dockerfile.sprocket
+    container_name: spoke-sprocket-test
+    environment:
+      DATABASE_URL: "spoke:spoke@tcp(mysql:3306)/spoke?parseTime=true"
+      REDIS_URL: "redis:6379"
+      STORAGE_DIR: "/var/spoke/storage"
+      PLUGIN_DIRS: "/etc/spoke/plugins:/root/.spoke/plugins"
+      LOG_LEVEL: "debug"
+      POLL_DELAY: "10s"
+    volumes:
+      - spoke_storage:/var/spoke/storage
+      - ./test-plugins:/etc/spoke/plugins:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - spoke-network
+
+  # Plugin Verifier Service
+  plugin-verifier:
+    build:
+      context: ../..
+      dockerfile: test/e2e/Dockerfile.verifier
+    container_name: spoke-verifier-test
+    environment:
+      DATABASE_URL: "spoke:spoke@tcp(mysql:3306)/spoke?parseTime=true"
+      POLL_INTERVAL: "30s"
+      MAX_CONCURRENT: "3"
+      LOG_LEVEL: "debug"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - spoke-network
+
+  # Web UI
+  spoke-web:
+    build:
+      context: ../..
+      dockerfile: test/e2e/Dockerfile.web
+    container_name: spoke-web-test
+    environment:
+      VITE_API_URL: "http://localhost:8080"
+    ports:
+      - "5173:5173"
+    depends_on:
+      - spoke-api
+    networks:
+      - spoke-network
+
+  # Playwright E2E Tests
+  playwright:
+    build:
+      context: ../..
+      dockerfile: test/e2e/Dockerfile.playwright
+    container_name: spoke-playwright-test
+    environment:
+      BASE_URL: "http://spoke-web:5173"
+      API_URL: "http://spoke-api:8080"
+    volumes:
+      - ./playwright-results:/app/test-results
+      - ./playwright-report:/app/playwright-report
+    depends_on:
+      - spoke-web
+      - spoke-api
+    networks:
+      - spoke-network
+    profiles:
+      - test
+
+volumes:
+  mysql_data:
+  minio_data:
+  spoke_storage:
+
+networks:
+  spoke-network:
+    driver: bridge
