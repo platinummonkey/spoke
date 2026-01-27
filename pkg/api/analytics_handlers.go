@@ -1,12 +1,11 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.com/platinummonkey/spoke/pkg/analytics"
+	"github.com/platinummonkey/spoke/pkg/httputil"
 )
 
 // AnalyticsHandlers provides analytics API endpoints
@@ -46,12 +45,11 @@ func (h *AnalyticsHandlers) getOverview(w http.ResponseWriter, r *http.Request) 
 
 	overview, err := h.service.GetOverview(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(overview)
+	httputil.WriteSuccess(w, overview)
 }
 
 // getPopularModules handles GET /api/v2/analytics/modules/popular
@@ -63,27 +61,24 @@ func (h *AnalyticsHandlers) getPopularModules(w http.ResponseWriter, r *http.Req
 	ctx := r.Context()
 
 	// Parse query parameters
-	period := r.URL.Query().Get("period")
-	if period == "" {
-		period = "30d"
-	}
+	period := httputil.ParseQueryString(r, "period", "30d")
 
-	limitStr := r.URL.Query().Get("limit")
-	limit := 100
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
-			limit = l
-		}
+	limit, err := httputil.ParseQueryInt(r, "limit", 100)
+	if err != nil {
+		httputil.WriteBadRequest(w, err.Error())
+		return
+	}
+	if limit > 100 {
+		limit = 100
 	}
 
 	modules, err := h.service.GetPopularModules(ctx, period, limit)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(modules)
+	httputil.WriteSuccess(w, modules)
 }
 
 // getTrendingModules handles GET /api/v2/analytics/modules/trending
@@ -93,22 +88,22 @@ func (h *AnalyticsHandlers) getPopularModules(w http.ResponseWriter, r *http.Req
 func (h *AnalyticsHandlers) getTrendingModules(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	limitStr := r.URL.Query().Get("limit")
-	limit := 50
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 50 {
-			limit = l
-		}
+	limit, err := httputil.ParseQueryInt(r, "limit", 50)
+	if err != nil {
+		httputil.WriteBadRequest(w, err.Error())
+		return
+	}
+	if limit > 50 {
+		limit = 50
 	}
 
 	modules, err := h.service.GetTrendingModules(ctx, limit)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(modules)
+	httputil.WriteSuccess(w, modules)
 }
 
 // getModuleStats handles GET /api/v2/analytics/modules/{name}/stats
@@ -118,22 +113,18 @@ func (h *AnalyticsHandlers) getTrendingModules(w http.ResponseWriter, r *http.Re
 func (h *AnalyticsHandlers) getModuleStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	moduleName := vars["name"]
 
-	period := r.URL.Query().Get("period")
-	if period == "" {
-		period = "30d"
-	}
+	period := httputil.ParseQueryString(r, "period", "30d")
 
 	stats, err := h.service.GetModuleStats(ctx, moduleName, period)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	httputil.WriteSuccess(w, stats)
 }
 
 // getModuleHealth handles GET /api/v2/analytics/modules/{name}/health
@@ -143,18 +134,16 @@ func (h *AnalyticsHandlers) getModuleStats(w http.ResponseWriter, r *http.Reques
 func (h *AnalyticsHandlers) getModuleHealth(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	moduleName := vars["name"]
 
-	version := r.URL.Query().Get("version")
+	version := httputil.ParseQueryString(r, "version", "")
 
 	health, err := h.service.GetModuleHealth(ctx, moduleName, version)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(health)
+	httputil.WriteSuccess(w, health)
 }
-
