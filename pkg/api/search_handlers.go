@@ -3,13 +3,12 @@ package api
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/platinummonkey/spoke/pkg/async"
+	"github.com/platinummonkey/spoke/pkg/httputil"
 	"github.com/platinummonkey/spoke/pkg/search"
 )
 
@@ -44,26 +43,24 @@ func (h *EnhancedSearchHandlers) RegisterRoutes(router *mux.Router) {
 func (h *EnhancedSearchHandlers) search(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 
-	query := r.URL.Query().Get("q")
+	query := httputil.ParseQueryString(r, "q", "")
 	if query == "" {
-		http.Error(w, "missing query parameter 'q'", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, "missing query parameter 'q'")
 		return
 	}
 
 	// Parse limit
-	limit := 50
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
+	limit, err := httputil.ParseQueryInt(r, "limit", 50)
+	if err != nil {
+		httputil.WriteBadRequest(w, err.Error())
+		return
 	}
 
 	// Parse offset
-	offset := 0
-	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
-		}
+	offset, err := httputil.ParseQueryInt(r, "offset", 0)
+	if err != nil {
+		httputil.WriteBadRequest(w, err.Error())
+		return
 	}
 
 	// Execute search
@@ -75,7 +72,7 @@ func (h *EnhancedSearchHandlers) search(w http.ResponseWriter, r *http.Request) 
 
 	response, err := h.service.Search(r.Context(), req)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -86,8 +83,7 @@ func (h *EnhancedSearchHandlers) search(w http.ResponseWriter, r *http.Request) 
 	})
 
 	// Return results
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	httputil.WriteSuccess(w, response)
 }
 
 // getSuggestions handles GET /api/v2/search/suggestions
@@ -95,30 +91,28 @@ func (h *EnhancedSearchHandlers) search(w http.ResponseWriter, r *http.Request) 
 //   - prefix: search query prefix (e.g., "user")
 //   - limit: max suggestions (default: 5, max: 20)
 func (h *EnhancedSearchHandlers) getSuggestions(w http.ResponseWriter, r *http.Request) {
-	prefix := r.URL.Query().Get("prefix")
+	prefix := httputil.ParseQueryString(r, "prefix", "")
 	if prefix == "" {
-		http.Error(w, "missing query parameter 'prefix'", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, "missing query parameter 'prefix'")
 		return
 	}
 
 	// Parse limit
-	limit := 5
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
+	limit, err := httputil.ParseQueryInt(r, "limit", 5)
+	if err != nil {
+		httputil.WriteBadRequest(w, err.Error())
+		return
 	}
 
 	// Get suggestions
 	suggestions, err := h.service.GetSuggestions(r.Context(), prefix, limit)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
 	// Return suggestions
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	httputil.WriteSuccess(w, map[string]interface{}{
 		"prefix":      prefix,
 		"suggestions": suggestions,
 	})

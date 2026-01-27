@@ -1,12 +1,11 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.com/platinummonkey/spoke/pkg/auth"
+	"github.com/platinummonkey/spoke/pkg/httputil"
 	"github.com/platinummonkey/spoke/pkg/orgs"
 )
 
@@ -51,18 +50,25 @@ func (h *OrgHandlers) RegisterRoutes(router *mux.Router) {
 	router.HandleFunc("/invitations/{token}/accept", h.AcceptInvitation).Methods("POST")
 }
 
+// getAuthContext is a helper to extract and validate auth context
+func getAuthContext(r *http.Request) (*auth.AuthContext, bool) {
+	authCtx, ok := r.Context().Value("auth").(*auth.AuthContext)
+	if !ok || authCtx == nil || authCtx.User == nil {
+		return nil, false
+	}
+	return authCtx, true
+}
+
 // CreateOrganization creates a new organization
 func (h *OrgHandlers) CreateOrganization(w http.ResponseWriter, r *http.Request) {
-	// Get authenticated user
-	authCtx := r.Context().Value("auth").(*auth.AuthContext)
-	if authCtx == nil || authCtx.User == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	authCtx, ok := getAuthContext(r)
+	if !ok {
+		httputil.WriteUnauthorized(w, "Unauthorized")
 		return
 	}
 
 	var req orgs.CreateOrgRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
@@ -76,230 +82,199 @@ func (h *OrgHandlers) CreateOrganization(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.orgService.CreateOrganization(org); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
 	// Add creator as admin member
 	if err := h.orgService.AddMember(org.ID, authCtx.User.ID, auth.RoleAdmin, nil); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(org)
+	httputil.WriteCreated(w, org)
 }
 
 // ListOrganizations lists organizations for the authenticated user
 func (h *OrgHandlers) ListOrganizations(w http.ResponseWriter, r *http.Request) {
-	authCtx := r.Context().Value("auth").(*auth.AuthContext)
-	if authCtx == nil || authCtx.User == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	authCtx, ok := getAuthContext(r)
+	if !ok {
+		httputil.WriteUnauthorized(w, "Unauthorized")
 		return
 	}
 
 	orgs, err := h.orgService.ListOrganizations(authCtx.User.ID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(orgs)
+	httputil.WriteSuccess(w, orgs)
 }
 
 // GetOrganization retrieves an organization by ID
 func (h *OrgHandlers) GetOrganization(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	org, err := h.orgService.GetOrganization(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		httputil.WriteNotFoundError(w, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(org)
+	httputil.WriteSuccess(w, org)
 }
 
 // UpdateOrganization updates an organization
 func (h *OrgHandlers) UpdateOrganization(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	var req orgs.UpdateOrgRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
 	if err := h.orgService.UpdateOrganization(id, &req); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
 	org, err := h.orgService.GetOrganization(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(org)
+	httputil.WriteSuccess(w, org)
 }
 
 // DeleteOrganization deletes an organization
 func (h *OrgHandlers) DeleteOrganization(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	if err := h.orgService.DeleteOrganization(id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	httputil.WriteNoContent(w)
 }
 
 // GetQuotas retrieves quotas for an organization
 func (h *OrgHandlers) GetQuotas(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	quotas, err := h.orgService.GetQuotas(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		httputil.WriteNotFoundError(w, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(quotas)
+	httputil.WriteSuccess(w, quotas)
 }
 
 // UpdateQuotas updates quotas for an organization
 func (h *OrgHandlers) UpdateQuotas(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	var quotas orgs.OrgQuotas
-	if err := json.NewDecoder(r.Body).Decode(&quotas); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &quotas) {
 		return
 	}
 
 	if err := h.orgService.UpdateQuotas(id, &quotas); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
 	updatedQuotas, err := h.orgService.GetQuotas(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(updatedQuotas)
+	httputil.WriteSuccess(w, updatedQuotas)
 }
 
 // GetUsage retrieves current usage for an organization
 func (h *OrgHandlers) GetUsage(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	usage, err := h.orgService.GetUsage(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		httputil.WriteNotFoundError(w, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(usage)
+	httputil.WriteSuccess(w, usage)
 }
 
 // GetUsageHistory retrieves usage history for an organization
 func (h *OrgHandlers) GetUsageHistory(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
-	limit := 12 // Default to 12 months
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
-			limit = l
-		}
+	limit, err := httputil.ParseQueryInt(r, "limit", 12)
+	if err != nil {
+		httputil.WriteBadRequest(w, err.Error())
+		return
 	}
 
 	history, err := h.orgService.GetUsageHistory(id, limit)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(history)
+	httputil.WriteSuccess(w, history)
 }
 
 // ListMembers lists members of an organization
 func (h *OrgHandlers) ListMembers(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	members, err := h.orgService.ListMembers(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(members)
+	httputil.WriteSuccess(w, members)
 }
 
 // AddMember adds a member to an organization
 func (h *OrgHandlers) AddMember(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
-	authCtx := r.Context().Value("auth").(*auth.AuthContext)
-	if authCtx == nil || authCtx.User == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	authCtx, ok := getAuthContext(r)
+	if !ok {
+		httputil.WriteUnauthorized(w, "Unauthorized")
 		return
 	}
 
@@ -307,13 +282,12 @@ func (h *OrgHandlers) AddMember(w http.ResponseWriter, r *http.Request) {
 		UserID int64     `json:"user_id"`
 		Role   auth.Role `json:"role"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
 	if err := h.orgService.AddMember(id, req.UserID, req.Role, &authCtx.User.ID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -322,74 +296,64 @@ func (h *OrgHandlers) AddMember(w http.ResponseWriter, r *http.Request) {
 
 // UpdateMember updates a member's role
 func (h *OrgHandlers) UpdateMember(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
-	userID, err := strconv.ParseInt(vars["user_id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+	userID, ok := httputil.ParsePathInt64OrError(w, r, "user_id")
+	if !ok {
 		return
 	}
 
 	var req orgs.UpdateMemberRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
 	if err := h.orgService.UpdateMemberRole(id, userID, req.Role); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	httputil.WriteNoContent(w)
 }
 
 // RemoveMember removes a member from an organization
 func (h *OrgHandlers) RemoveMember(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
-	userID, err := strconv.ParseInt(vars["user_id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+	userID, ok := httputil.ParsePathInt64OrError(w, r, "user_id")
+	if !ok {
 		return
 	}
 
 	if err := h.orgService.RemoveMember(id, userID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	httputil.WriteNoContent(w)
 }
 
 // CreateInvitation creates an invitation
 func (h *OrgHandlers) CreateInvitation(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
-	authCtx := r.Context().Value("auth").(*auth.AuthContext)
-	if authCtx == nil || authCtx.User == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	authCtx, ok := getAuthContext(r)
+	if !ok {
+		httputil.WriteUnauthorized(w, "Unauthorized")
 		return
 	}
 
 	var req orgs.InviteMemberRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
@@ -401,66 +365,59 @@ func (h *OrgHandlers) CreateInvitation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.orgService.CreateInvitation(invitation); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(invitation)
+	httputil.WriteCreated(w, invitation)
 }
 
 // ListInvitations lists invitations for an organization
 func (h *OrgHandlers) ListInvitations(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	invitations, err := h.orgService.ListInvitations(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(invitations)
+	httputil.WriteSuccess(w, invitations)
 }
 
 // RevokeInvitation revokes an invitation
 func (h *OrgHandlers) RevokeInvitation(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	invitationID, err := strconv.ParseInt(vars["invitation_id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid invitation ID", http.StatusBadRequest)
+	invitationID, ok := httputil.ParsePathInt64OrError(w, r, "invitation_id")
+	if !ok {
 		return
 	}
 
 	if err := h.orgService.RevokeInvitation(invitationID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	httputil.WriteNoContent(w)
 }
 
 // AcceptInvitation accepts an invitation
 func (h *OrgHandlers) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	token := vars["token"]
 
-	authCtx := r.Context().Value("auth").(*auth.AuthContext)
-	if authCtx == nil || authCtx.User == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	authCtx, ok := getAuthContext(r)
+	if !ok {
+		httputil.WriteUnauthorized(w, "Unauthorized")
 		return
 	}
 
 	if err := h.orgService.AcceptInvitation(token, authCtx.User.ID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		httputil.WriteBadRequest(w, err.Error())
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	httputil.WriteNoContent(w)
 }

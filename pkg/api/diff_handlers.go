@@ -1,11 +1,10 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 
-	"github.com/gorilla/mux"
+	"github.com/platinummonkey/spoke/pkg/httputil"
 )
 
 // DiffRequest represents a request to compare two versions
@@ -16,26 +15,25 @@ type DiffRequest struct {
 
 // compareDiff compares two versions and returns the differences
 func (s *Server) compareDiff(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	moduleName := vars["name"]
 
 	// Parse request body
 	var req DiffRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
 	// Get both versions
 	fromVer, err := s.storage.GetVersion(moduleName, req.FromVersion)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("From version not found: %v", err), http.StatusNotFound)
+		httputil.WriteNotFoundError(w, fmt.Sprintf("From version not found: %v", err))
 		return
 	}
 
 	toVer, err := s.storage.GetVersion(moduleName, req.ToVersion)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("To version not found: %v", err), http.StatusNotFound)
+		httputil.WriteNotFoundError(w, fmt.Sprintf("To version not found: %v", err))
 		return
 	}
 
@@ -56,6 +54,5 @@ func (s *Server) compareDiff(w http.ResponseWriter, r *http.Request) {
 			len(fromVer.Files), req.FromVersion, len(toVer.Files), req.ToVersion),
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(placeholder)
+	httputil.WriteSuccess(w, placeholder)
 }
