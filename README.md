@@ -255,6 +255,53 @@ spoke compile -dir ./myproject/proto -out ./myproject/generated -lang go
 
 See [HA Architecture](docs/architecture/HA_ARCHITECTURE.md) for detailed documentation.
 
+### Storage Interface
+
+Spoke v1.8.0 introduces a unified `storage.Storage` interface with context support and interface segregation:
+
+```go
+// Canonical storage interface with composable sub-interfaces
+type Storage interface {
+    ModuleReader      // Read module operations with pagination
+    ModuleWriter      // Create module operations
+    VersionReader     // Read version operations with pagination
+    VersionWriter     // Create/update version operations
+    FileStorage       // Content-addressed file storage (S3)
+    ArtifactStorage   // Compiled artifact storage
+    CacheManager      // Cache invalidation
+    HealthChecker     // Health checks
+}
+```
+
+**Key Features:**
+- **Context-aware**: All methods support cancellation and timeouts via `context.Context`
+- **Interface segregation**: Use only the capabilities you need (e.g., `ModuleReader` for read-only)
+- **Pagination**: Built-in support for `ListModulesPaginated` and `ListVersionsPaginated`
+- **Testability**: Easy to mock specific sub-interfaces
+
+**Implementations:**
+- `FileSystemStorage`: Local filesystem backend
+- `PostgresStorage`: PostgreSQL + S3 + Redis backend
+
+**Migration:**
+- The legacy `api.Storage` interface is deprecated but will continue working until v2.0.0
+- See [Migration Guide](pkg/storage/DEPRECATION.md) for details
+
+**Example:**
+```go
+// Context propagation from HTTP request
+func (h *Handler) GetModule(w http.ResponseWriter, r *http.Request) {
+    module, err := h.storage.GetModuleContext(r.Context(), name)
+    // Automatically canceled if client disconnects
+}
+
+// Use sub-interface for read-only operations
+func AnalyzeDeps(reader storage.VersionReader, module, version string) error {
+    ver, err := reader.GetVersionContext(ctx, module, version)
+    // Cannot accidentally write
+}
+```
+
 ## Configuration
 
 Spoke is configured via environment variables:

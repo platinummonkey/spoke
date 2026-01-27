@@ -1,8 +1,10 @@
 package storage
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -268,4 +270,157 @@ func (s *FileSystemStorage) UpdateVersion(version *api.Version) error {
 	}
 
 	return nil
-} 
+}
+
+// Context-aware methods that implement the storage.Storage interface
+// These delegate to the existing non-context methods for backward compatibility
+
+// CreateModuleContext implements storage.ModuleWriter
+func (s *FileSystemStorage) CreateModuleContext(ctx context.Context, module *api.Module) error {
+	return s.CreateModule(module)
+}
+
+// GetModuleContext implements storage.ModuleReader
+func (s *FileSystemStorage) GetModuleContext(ctx context.Context, name string) (*api.Module, error) {
+	return s.GetModule(name)
+}
+
+// ListModulesContext implements storage.ModuleReader
+func (s *FileSystemStorage) ListModulesContext(ctx context.Context) ([]*api.Module, error) {
+	return s.ListModules()
+}
+
+// ListModulesPaginated implements storage.ModuleReader
+func (s *FileSystemStorage) ListModulesPaginated(ctx context.Context, limit, offset int) ([]*api.Module, int64, error) {
+	modules, err := s.ListModules()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	total := int64(len(modules))
+
+	// Apply pagination
+	start := offset
+	if start > len(modules) {
+		start = len(modules)
+	}
+
+	end := start + limit
+	if end > len(modules) {
+		end = len(modules)
+	}
+
+	return modules[start:end], total, nil
+}
+
+// CreateVersionContext implements storage.VersionWriter
+func (s *FileSystemStorage) CreateVersionContext(ctx context.Context, version *api.Version) error {
+	return s.CreateVersion(version)
+}
+
+// GetVersionContext implements storage.VersionReader
+func (s *FileSystemStorage) GetVersionContext(ctx context.Context, moduleName, version string) (*api.Version, error) {
+	return s.GetVersion(moduleName, version)
+}
+
+// ListVersionsContext implements storage.VersionReader
+func (s *FileSystemStorage) ListVersionsContext(ctx context.Context, moduleName string) ([]*api.Version, error) {
+	return s.ListVersions(moduleName)
+}
+
+// ListVersionsPaginated implements storage.VersionReader
+func (s *FileSystemStorage) ListVersionsPaginated(ctx context.Context, moduleName string, limit, offset int) ([]*api.Version, int64, error) {
+	versions, err := s.ListVersions(moduleName)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	total := int64(len(versions))
+
+	// Apply pagination
+	start := offset
+	if start > len(versions) {
+		start = len(versions)
+	}
+
+	end := start + limit
+	if end > len(versions) {
+		end = len(versions)
+	}
+
+	return versions[start:end], total, nil
+}
+
+// GetFileContext implements storage.VersionReader
+func (s *FileSystemStorage) GetFileContext(ctx context.Context, moduleName, version, path string) (*api.File, error) {
+	return s.GetFile(moduleName, version, path)
+}
+
+// UpdateVersionContext implements storage.VersionWriter
+func (s *FileSystemStorage) UpdateVersionContext(ctx context.Context, version *api.Version) error {
+	return s.UpdateVersion(version)
+}
+
+// GetFileContent implements storage.FileStorage
+// Filesystem storage doesn't support content-addressed storage
+func (s *FileSystemStorage) GetFileContent(ctx context.Context, hash string) (io.ReadCloser, error) {
+	return nil, fmt.Errorf("GetFileContent not implemented: filesystem storage doesn't support content-addressed storage")
+}
+
+// PutFileContent implements storage.FileStorage
+// Filesystem storage doesn't support content-addressed storage
+func (s *FileSystemStorage) PutFileContent(ctx context.Context, content io.Reader, contentType string) (hash string, err error) {
+	return "", fmt.Errorf("PutFileContent not implemented: filesystem storage doesn't support content-addressed storage")
+}
+
+// GetCompiledArtifact implements storage.ArtifactStorage
+func (s *FileSystemStorage) GetCompiledArtifact(ctx context.Context, moduleName, version, language string) (io.ReadCloser, error) {
+	artifactPath := filepath.Join(s.rootDir, moduleName, "versions", version, "compiled", language+".tar.gz")
+	file, err := os.Open(artifactPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, api.ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to open compiled artifact: %w", err)
+	}
+	return file, nil
+}
+
+// PutCompiledArtifact implements storage.ArtifactStorage
+func (s *FileSystemStorage) PutCompiledArtifact(ctx context.Context, moduleName, version, language string, artifact io.Reader) error {
+	compiledDir := filepath.Join(s.rootDir, moduleName, "versions", version, "compiled")
+	if err := os.MkdirAll(compiledDir, 0755); err != nil {
+		return fmt.Errorf("failed to create compiled directory: %w", err)
+	}
+
+	artifactPath := filepath.Join(compiledDir, language+".tar.gz")
+	file, err := os.Create(artifactPath)
+	if err != nil {
+		return fmt.Errorf("failed to create artifact file: %w", err)
+	}
+	defer file.Close()
+
+	if _, err := io.Copy(file, artifact); err != nil {
+		return fmt.Errorf("failed to write artifact: %w", err)
+	}
+
+	return nil
+}
+
+// InvalidateCache implements storage.CacheManager
+// Filesystem storage has no cache to invalidate
+func (s *FileSystemStorage) InvalidateCache(ctx context.Context, patterns ...string) error {
+	return nil // No-op for filesystem storage
+}
+
+// HealthCheck implements storage.HealthChecker
+func (s *FileSystemStorage) HealthCheck(ctx context.Context) error {
+	_, err := os.Stat(s.rootDir)
+	if err != nil {
+		return fmt.Errorf("filesystem storage health check failed: %w", err)
+	}
+	return nil
+}
+
+// Verify that FileSystemStorage implements storage.Storage at compile time
+var _ Storage = (*FileSystemStorage)(nil) 

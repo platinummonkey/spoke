@@ -19,7 +19,7 @@ import (
 
 var tracer = otel.Tracer("spoke/storage/postgres")
 
-// PostgresStorage implements StorageV2 using PostgreSQL + S3 + Redis
+// PostgresStorage implements storage.Storage using PostgreSQL + S3 + Redis
 type PostgresStorage struct {
 	connManager *ConnectionManager
 	db          *sql.DB // Deprecated: use connManager.Primary() instead
@@ -691,3 +691,6 @@ func (s *PostgresStorage) Close() error {
 	}
 	return nil
 }
+
+// Verify that PostgresStorage implements storage.Storage at compile time
+var _ storage.Storage = (*PostgresStorage)(nil)

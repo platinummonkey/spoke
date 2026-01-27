@@ -120,18 +120,33 @@ type CompilationJobInfo struct {
 }
 
 // Storage interface defines the methods required for storing and retrieving protobuf modules
+//
+// DEPRECATED: Use storage.Storage interface instead.
+// This interface will be removed in v2.0.0 (12 months from v1.8.0 release).
+//
+// Migration: Replace api.Storage with storage.Storage and use context-aware methods:
+//   - CreateModule → CreateModuleContext(ctx, module)
+//   - GetModule → GetModuleContext(ctx, name)
+//   - ListModules → ListModulesContext(ctx)
+//   - CreateVersion → CreateVersionContext(ctx, version)
+//   - GetVersion → GetVersionContext(ctx, moduleName, version)
+//   - ListVersions → ListVersionsContext(ctx, moduleName)
+//   - UpdateVersion → UpdateVersionContext(ctx, version)
+//   - GetFile → GetFileContext(ctx, moduleName, version, path)
+//
+// See pkg/storage/DEPRECATION.md for detailed migration guide.
 type Storage interface {
 	// Module operations
 	CreateModule(module *Module) error
 	GetModule(name string) (*Module, error)
 	ListModules() ([]*Module, error)
-	
+
 	// Version operations
 	CreateVersion(version *Version) error
 	GetVersion(moduleName, version string) (*Version, error)
 	ListVersions(moduleName string) ([]*Version, error)
 	UpdateVersion(version *Version) error
-	
+
 	// File operations
 	GetFile(moduleName, version, path string) (*File, error)
 } 

@@ -8,7 +8,74 @@ import (
 	"github.com/platinummonkey/spoke/pkg/api"
 )
 
+// ModuleReader defines read operations for protobuf modules
+type ModuleReader interface {
+	GetModuleContext(ctx context.Context, name string) (*api.Module, error)
+	ListModulesContext(ctx context.Context) ([]*api.Module, error)
+	ListModulesPaginated(ctx context.Context, limit, offset int) ([]*api.Module, int64, error)
+}
+
+// ModuleWriter defines write operations for protobuf modules
+type ModuleWriter interface {
+	CreateModuleContext(ctx context.Context, module *api.Module) error
+}
+
+// VersionReader defines read operations for module versions
+type VersionReader interface {
+	GetVersionContext(ctx context.Context, moduleName, version string) (*api.Version, error)
+	ListVersionsContext(ctx context.Context, moduleName string) ([]*api.Version, error)
+	ListVersionsPaginated(ctx context.Context, moduleName string, limit, offset int) ([]*api.Version, int64, error)
+	GetFileContext(ctx context.Context, moduleName, version, path string) (*api.File, error)
+}
+
+// VersionWriter defines write operations for module versions
+type VersionWriter interface {
+	CreateVersionContext(ctx context.Context, version *api.Version) error
+	UpdateVersionContext(ctx context.Context, version *api.Version) error
+}
+
+// FileStorage defines content-addressed file storage operations
+type FileStorage interface {
+	GetFileContent(ctx context.Context, hash string) (io.ReadCloser, error)
+	PutFileContent(ctx context.Context, content io.Reader, contentType string) (hash string, err error)
+}
+
+// ArtifactStorage defines compiled artifact storage operations
+type ArtifactStorage interface {
+	GetCompiledArtifact(ctx context.Context, moduleName, version, language string) (io.ReadCloser, error)
+	PutCompiledArtifact(ctx context.Context, moduleName, version, language string, artifact io.Reader) error
+}
+
+// CacheManager defines cache invalidation operations
+type CacheManager interface {
+	InvalidateCache(ctx context.Context, patterns ...string) error
+}
+
+// HealthChecker defines health check operations
+type HealthChecker interface {
+	HealthCheck(ctx context.Context) error
+}
+
+// Storage is the canonical storage interface that combines all storage capabilities.
+// It provides context-aware, composable operations for protobuf schema registry storage.
+//
+// This interface supersedes api.Storage and StorageV2, providing a unified API
+// with proper context propagation, interface segregation, and modern Go practices.
+type Storage interface {
+	ModuleReader
+	ModuleWriter
+	VersionReader
+	VersionWriter
+	FileStorage
+	ArtifactStorage
+	CacheManager
+	HealthChecker
+}
+
 // StorageV2 extends the base Storage interface with modern features
+//
+// DEPRECATED: Use Storage interface instead.
+// StorageV2 will be removed in v2.0.0 (superseded by Storage).
 type StorageV2 interface {
 	api.Storage // Embed existing interface for backward compatibility
 
