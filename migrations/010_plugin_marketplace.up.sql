@@ -17,16 +17,17 @@ CREATE TABLE IF NOT EXISTS plugins (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     verified_at TIMESTAMP NULL,
     verified_by VARCHAR(255) NULL,
-    download_count BIGINT NOT NULL DEFAULT 0,
-    INDEX idx_plugins_type (type),
-    INDEX idx_plugins_security (security_level),
-    INDEX idx_plugins_enabled (enabled),
-    INDEX idx_plugins_downloads (download_count DESC)
+    download_count BIGINT NOT NULL DEFAULT 0
 );
+
+CREATE INDEX IF NOT EXISTS idx_plugins_type ON plugins(type);
+CREATE INDEX IF NOT EXISTS idx_plugins_security ON plugins(security_level);
+CREATE INDEX IF NOT EXISTS idx_plugins_enabled ON plugins(enabled);
+CREATE INDEX IF NOT EXISTS idx_plugins_downloads ON plugins(download_count DESC);
 
 -- Plugin versions table
 CREATE TABLE IF NOT EXISTS plugin_versions (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id BIGSERIAL PRIMARY KEY,
     plugin_id VARCHAR(255) NOT NULL,
     version VARCHAR(50) NOT NULL,  -- Semver
     api_version VARCHAR(50) NOT NULL,  -- SDK API version
@@ -36,45 +37,48 @@ CREATE TABLE IF NOT EXISTS plugin_versions (
     size_bytes BIGINT NOT NULL,
     downloads BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_plugin_version (plugin_id, version),
-    INDEX idx_plugin_versions_plugin (plugin_id, version),
-    INDEX idx_plugin_versions_downloads (downloads DESC),
-    FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
+    CONSTRAINT unique_plugin_version UNIQUE (plugin_id, version),
+    CONSTRAINT fk_plugin_versions_plugin FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_plugin_versions_plugin ON plugin_versions(plugin_id, version);
+CREATE INDEX IF NOT EXISTS idx_plugin_versions_downloads ON plugin_versions(downloads DESC);
 
 -- Plugin ratings and reviews
 CREATE TABLE IF NOT EXISTS plugin_reviews (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id BIGSERIAL PRIMARY KEY,
     plugin_id VARCHAR(255) NOT NULL,
     user_id VARCHAR(255) NOT NULL,  -- User identifier
     rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
     review TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_plugin_user_review (plugin_id, user_id),
-    INDEX idx_plugin_reviews_plugin (plugin_id, rating DESC),
-    INDEX idx_plugin_reviews_user (user_id),
-    FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
+    CONSTRAINT unique_plugin_user_review UNIQUE (plugin_id, user_id),
+    CONSTRAINT fk_plugin_reviews_plugin FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_plugin_reviews_plugin ON plugin_reviews(plugin_id, rating DESC);
+CREATE INDEX IF NOT EXISTS idx_plugin_reviews_user ON plugin_reviews(user_id);
 
 -- Plugin installations (track who installed what)
 CREATE TABLE IF NOT EXISTS plugin_installations (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id BIGSERIAL PRIMARY KEY,
     plugin_id VARCHAR(255) NOT NULL,
     version VARCHAR(50) NOT NULL,
     user_id VARCHAR(255) NULL,  -- User identifier
     organization_id VARCHAR(255) NULL,  -- Organization identifier
     installed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     uninstalled_at TIMESTAMP NULL,
-    INDEX idx_plugin_installations_plugin (plugin_id, version),
-    INDEX idx_plugin_installations_user (user_id, installed_at DESC),
-    INDEX idx_plugin_installations_org (organization_id, installed_at DESC),
-    FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
+    CONSTRAINT fk_plugin_installations_plugin FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_plugin_installations_plugin ON plugin_installations(plugin_id, version);
+CREATE INDEX IF NOT EXISTS idx_plugin_installations_user ON plugin_installations(user_id, installed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_plugin_installations_org ON plugin_installations(organization_id, installed_at DESC);
 
 -- Plugin statistics (aggregated daily)
 CREATE TABLE IF NOT EXISTS plugin_stats_daily (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id BIGSERIAL PRIMARY KEY,
     plugin_id VARCHAR(255) NOT NULL,
     date DATE NOT NULL,
     downloads BIGINT NOT NULL DEFAULT 0,
@@ -84,34 +88,37 @@ CREATE TABLE IF NOT EXISTS plugin_stats_daily (
     avg_rating FLOAT,
     review_count BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_plugin_date (plugin_id, date),
-    INDEX idx_plugin_stats_daily_plugin (plugin_id, date DESC),
-    INDEX idx_plugin_stats_daily_downloads (downloads DESC, date DESC),
-    FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
+    CONSTRAINT unique_plugin_date UNIQUE (plugin_id, date),
+    CONSTRAINT fk_plugin_stats_daily_plugin FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_plugin_stats_daily_plugin ON plugin_stats_daily(plugin_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_plugin_stats_daily_downloads ON plugin_stats_daily(downloads DESC, date DESC);
 
 -- Plugin dependencies
 CREATE TABLE IF NOT EXISTS plugin_dependencies (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id BIGSERIAL PRIMARY KEY,
     plugin_id VARCHAR(255) NOT NULL,
     version VARCHAR(50) NOT NULL,
     depends_on_plugin_id VARCHAR(255) NOT NULL,
     depends_on_version VARCHAR(50) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_plugin_deps_plugin (plugin_id, version),
-    INDEX idx_plugin_deps_depends_on (depends_on_plugin_id),
-    FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE,
-    FOREIGN KEY (depends_on_plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
+    CONSTRAINT fk_plugin_dependencies_plugin FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE,
+    CONSTRAINT fk_plugin_dependencies_depends_on FOREIGN KEY (depends_on_plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_plugin_deps_plugin ON plugin_dependencies(plugin_id, version);
+CREATE INDEX IF NOT EXISTS idx_plugin_deps_depends_on ON plugin_dependencies(depends_on_plugin_id);
 
 -- Plugin tags for better discoverability
 CREATE TABLE IF NOT EXISTS plugin_tags (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id BIGSERIAL PRIMARY KEY,
     plugin_id VARCHAR(255) NOT NULL,
     tag VARCHAR(100) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_plugin_tag (plugin_id, tag),
-    INDEX idx_plugin_tags_tag (tag),
-    INDEX idx_plugin_tags_plugin (plugin_id),
-    FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
+    CONSTRAINT unique_plugin_tag UNIQUE (plugin_id, tag),
+    CONSTRAINT fk_plugin_tags_plugin FOREIGN KEY (plugin_id) REFERENCES plugins(id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_plugin_tags_tag ON plugin_tags(tag);
+CREATE INDEX IF NOT EXISTS idx_plugin_tags_plugin ON plugin_tags(plugin_id);

@@ -11,20 +11,61 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-// setupTestDB creates an in-memory SQLite database with required schema
-func setupTestDB(t *testing.T) *sql.DB {
-	db, err := sql.Open("sqlite3", ":memory:")
+// setupTestDB creates a PostgreSQL test container and returns the database connection
+func setupTestDB(t *testing.T) (*sql.DB, func()) {
+	ctx := context.Background()
+
+	// Check if Docker/Podman is available
+	provider, err := testcontainers.ProviderDocker.GetProvider()
+	if err != nil {
+		t.Skip("Docker/Podman not available, skipping container tests")
+	}
+	defer provider.Close()
+
+	// Start PostgreSQL container
+	postgresContainer, err := postgres.Run(ctx,
+		"postgres:16-alpine",
+		postgres.WithDatabase("spoke_test"),
+		postgres.WithUsername("spoke"),
+		postgres.WithPassword("spoke_test_password"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(60*time.Second)),
+		testcontainers.CustomizeRequest(testcontainers.GenericContainerRequest{
+			ContainerRequest: testcontainers.ContainerRequest{
+				NetworkMode: "podman", // Use podman network instead of bridge
+			},
+		}),
+	)
+	if err != nil {
+		t.Skipf("Failed to start PostgreSQL container: %v", err)
+	}
+
+	// Get connection string
+	connStr, err := postgresContainer.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	// Connect to database
+	db, err := sql.Open("postgres", connStr)
+	require.NoError(t, err)
+
+	// Wait for connection
+	err = db.Ping()
 	require.NoError(t, err)
 
 	// Create minimal schema for testing
 	schema := `
-	CREATE TABLE plugin_verifications (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
+	CREATE TABLE IF NOT EXISTS plugin_verifications (
+		id SERIAL PRIMARY KEY,
 		plugin_id VARCHAR(255) NOT NULL,
 		version VARCHAR(50) NOT NULL,
 		status VARCHAR(50) NOT NULL DEFAULT 'pending',
@@ -35,6 +76,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 		submitted_by VARCHAR(255),
 		approved_by VARCHAR(255),
 		rejected_by VARCHAR(255),
+		verified_by VARCHAR(255),
 		reason TEXT,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		submitted_at TIMESTAMP,
@@ -42,39 +84,37 @@ func setupTestDB(t *testing.T) *sql.DB {
 		completed_at TIMESTAMP
 	);
 
-	CREATE TABLE plugin_verification_errors (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		verification_id INTEGER NOT NULL,
+	CREATE TABLE IF NOT EXISTS plugin_verification_errors (
+		id SERIAL PRIMARY KEY,
+		verification_id INTEGER NOT NULL REFERENCES plugin_verifications(id) ON DELETE CASCADE,
 		field VARCHAR(255),
 		message TEXT,
-		severity VARCHAR(50),
-		FOREIGN KEY (verification_id) REFERENCES plugin_verifications(id)
+		severity VARCHAR(50)
 	);
 
-	CREATE TABLE plugin_verification_issues (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		verification_id INTEGER NOT NULL,
+	CREATE TABLE IF NOT EXISTS plugin_verification_issues (
+		id SERIAL PRIMARY KEY,
+		verification_id INTEGER NOT NULL REFERENCES plugin_verifications(id) ON DELETE CASCADE,
 		severity VARCHAR(50),
 		category VARCHAR(255),
 		description TEXT,
 		file VARCHAR(255),
 		line INTEGER,
 		recommendation TEXT,
-		cwe_id VARCHAR(50),
-		FOREIGN KEY (verification_id) REFERENCES plugin_verifications(id)
+		cwe_id VARCHAR(50)
 	);
 
-	CREATE TABLE plugin_verification_audit (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		verification_id INTEGER NOT NULL,
+	CREATE TABLE IF NOT EXISTS plugin_verification_audit (
+		id SERIAL PRIMARY KEY,
+		verification_id INTEGER NOT NULL REFERENCES plugin_verifications(id) ON DELETE CASCADE,
 		action VARCHAR(255) NOT NULL,
 		actor VARCHAR(255),
 		details TEXT,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
-	CREATE TABLE plugin_security_scans (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
+	CREATE TABLE IF NOT EXISTS plugin_security_scans (
+		id SERIAL PRIMARY KEY,
 		plugin_id VARCHAR(255) NOT NULL,
 		version VARCHAR(50) NOT NULL,
 		scan_type VARCHAR(50) NOT NULL,
@@ -90,12 +130,20 @@ func setupTestDB(t *testing.T) *sql.DB {
 	_, err = db.Exec(schema)
 	require.NoError(t, err)
 
-	return db
+	// Return cleanup function
+	cleanup := func() {
+		db.Close()
+		if err := postgresContainer.Terminate(ctx); err != nil {
+			t.Logf("Failed to terminate container: %s", err)
+		}
+	}
+
+	return db, cleanup
 }
 
 func TestNewVerifier(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)
@@ -106,8 +154,8 @@ func TestNewVerifier(t *testing.T) {
 }
 
 func TestSubmitForVerification(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)
@@ -135,8 +183,8 @@ func TestSubmitForVerification(t *testing.T) {
 }
 
 func TestApproveVerification(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)
@@ -167,8 +215,8 @@ func TestApproveVerification(t *testing.T) {
 }
 
 func TestRejectVerification(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)
@@ -199,8 +247,8 @@ func TestRejectVerification(t *testing.T) {
 }
 
 func TestGetVerificationStatus(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)
@@ -225,8 +273,8 @@ func TestGetVerificationStatus(t *testing.T) {
 }
 
 func TestListPendingVerifications(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)
@@ -258,8 +306,8 @@ func TestListPendingVerifications(t *testing.T) {
 }
 
 func TestRunVerification_ValidPlugin(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)
@@ -331,8 +379,8 @@ func main() {
 }
 
 func TestRunVerification_InvalidManifest(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)
@@ -381,8 +429,8 @@ name: Bad Plugin
 }
 
 func TestRunVerification_SecurityIssues(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)
@@ -618,8 +666,8 @@ func makeVerificationDecision(manifestErrors []ValidationError, securityIssues [
 }
 
 func TestStoreAndLoadValidationErrors(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)
@@ -658,8 +706,8 @@ func TestStoreAndLoadValidationErrors(t *testing.T) {
 }
 
 func TestStoreAndLoadSecurityIssues(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)
@@ -715,8 +763,8 @@ func TestStoreAndLoadSecurityIssues(t *testing.T) {
 }
 
 func TestRecordAuditLog(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)
@@ -746,8 +794,8 @@ func TestRecordAuditLog(t *testing.T) {
 }
 
 func TestRecordScanStartAndComplete(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)
@@ -774,8 +822,8 @@ func TestRecordScanStartAndComplete(t *testing.T) {
 }
 
 func TestUpdateVerificationStatus(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)
@@ -812,8 +860,8 @@ func TestDownloadFile(t *testing.T) {
 	}))
 	defer server.Close()
 
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)
@@ -837,8 +885,8 @@ func TestDownloadFile_NotFound(t *testing.T) {
 	}))
 	defer server.Close()
 
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)
@@ -860,8 +908,8 @@ func TestDownloadFile_ContextCancelled(t *testing.T) {
 	}))
 	defer server.Close()
 
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)
@@ -878,8 +926,8 @@ func TestDownloadFile_ContextCancelled(t *testing.T) {
 }
 
 func TestGetDB(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	logger := getTestLogger()
 	verifier := NewVerifier(db, logger)

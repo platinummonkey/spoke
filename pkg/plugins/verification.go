@@ -66,7 +66,7 @@ func (v *Verifier) SubmitForVerification(ctx context.Context, req *VerificationR
 
 	query := `
 		INSERT INTO plugin_verifications (plugin_id, version, status, submitted_by, submitted_at)
-		VALUES (?, ?, 'pending', ?, NOW())
+		VALUES ($1, $2, 'pending', $3, CURRENT_TIMESTAMP)
 	`
 
 	result, err := v.db.ExecContext(ctx, query, req.PluginID, req.Version, req.SubmittedBy)
@@ -99,7 +99,7 @@ func (v *Verifier) RunVerification(ctx context.Context, verificationID int64, do
 	// Get verification details
 	var pluginID, version string
 	err := v.db.QueryRowContext(ctx,
-		"SELECT plugin_id, version FROM plugin_verifications WHERE id = ?",
+		"SELECT plugin_id, version FROM plugin_verifications WHERE id = $1",
 		verificationID).Scan(&pluginID, &version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get verification details: %w", err)
@@ -218,10 +218,10 @@ func (v *Verifier) ApproveVerification(ctx context.Context, verificationID int64
 		UPDATE plugin_verifications
 		SET status = 'approved',
 		    security_level = 'verified',
-		    verified_by = ?,
-		    completed_at = NOW(),
-		    reason = ?
-		WHERE id = ?
+		    verified_by = $1,
+		    completed_at = CURRENT_TIMESTAMP,
+		    reason = $2
+		WHERE id = $3
 	`
 
 	_, err := v.db.ExecContext(ctx, query, approvedBy, reason, verificationID)
@@ -240,10 +240,10 @@ func (v *Verifier) RejectVerification(ctx context.Context, verificationID int64,
 	query := `
 		UPDATE plugin_verifications
 		SET status = 'rejected',
-		    verified_by = ?,
-		    completed_at = NOW(),
-		    reason = ?
-		WHERE id = ?
+		    verified_by = $1,
+		    completed_at = CURRENT_TIMESTAMP,
+		    reason = $2
+		WHERE id = $3
 	`
 
 	_, err := v.db.ExecContext(ctx, query, rejectedBy, reason, verificationID)
@@ -265,7 +265,7 @@ func (v *Verifier) GetVerificationStatus(ctx context.Context, verificationID int
 		SELECT plugin_id, version, status, security_level, reason,
 		       submitted_at, started_at, completed_at
 		FROM plugin_verifications
-		WHERE id = ?
+		WHERE id = $1
 	`
 
 	var startedAt, completedAt sql.NullTime
@@ -317,7 +317,7 @@ func (v *Verifier) ListPendingVerifications(ctx context.Context, limit int) ([]*
 		FROM plugin_verifications
 		WHERE status IN ('pending', 'review_required')
 		ORDER BY submitted_at ASC
-		LIMIT ?
+		LIMIT $1
 	`
 
 	rows, err := v.db.QueryContext(ctx, query, limit)
@@ -396,9 +396,9 @@ func (v *Verifier) downloadFile(ctx context.Context, url, destPath string) error
 func (v *Verifier) updateVerificationStatus(ctx context.Context, verificationID int64, status string) error {
 	var query string
 	if status == "in_progress" {
-		query = `UPDATE plugin_verifications SET status = ?, started_at = NOW() WHERE id = ?`
+		query = `UPDATE plugin_verifications SET status = $1, started_at = CURRENT_TIMESTAMP WHERE id = $2`
 	} else {
-		query = `UPDATE plugin_verifications SET status = ? WHERE id = ?`
+		query = `UPDATE plugin_verifications SET status = $1 WHERE id = $2`
 	}
 
 	_, err := v.db.ExecContext(ctx, query, status, verificationID)
@@ -408,11 +408,11 @@ func (v *Verifier) updateVerificationStatus(ctx context.Context, verificationID 
 func (v *Verifier) completeVerification(ctx context.Context, result *VerificationResult) error {
 	query := `
 		UPDATE plugin_verifications
-		SET status = ?,
-		    security_level = ?,
-		    completed_at = NOW(),
-		    reason = ?
-		WHERE id = ?
+		SET status = $1,
+		    security_level = $2,
+		    completed_at = CURRENT_TIMESTAMP,
+		    reason = $3
+		WHERE id = $4
 	`
 
 	_, err := v.db.ExecContext(ctx, query,
@@ -435,7 +435,7 @@ func (v *Verifier) completeVerification(ctx context.Context, result *Verificatio
 func (v *Verifier) storeValidationError(ctx context.Context, verificationID int64, err ValidationError) error {
 	query := `
 		INSERT INTO plugin_validation_errors (verification_id, field, message, severity)
-		VALUES (?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4)
 	`
 	_, dbErr := v.db.ExecContext(ctx, query, verificationID, err.Field, err.Message, err.Severity)
 	return dbErr
@@ -445,7 +445,7 @@ func (v *Verifier) storeSecurityIssue(ctx context.Context, verificationID int64,
 	query := `
 		INSERT INTO plugin_security_issues
 		(verification_id, severity, category, description, file, line_number, recommendation, cwe_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 	_, err := v.db.ExecContext(ctx, query,
 		verificationID,
@@ -461,7 +461,7 @@ func (v *Verifier) storeSecurityIssue(ctx context.Context, verificationID int64,
 }
 
 func (v *Verifier) loadValidationErrors(ctx context.Context, verificationID int64) ([]ValidationError, error) {
-	query := `SELECT field, message, severity FROM plugin_validation_errors WHERE verification_id = ?`
+	query := `SELECT field, message, severity FROM plugin_validation_errors WHERE verification_id = $1`
 	rows, err := v.db.QueryContext(ctx, query, verificationID)
 	if err != nil {
 		return nil, err
@@ -482,7 +482,7 @@ func (v *Verifier) loadSecurityIssues(ctx context.Context, verificationID int64)
 	query := `
 		SELECT severity, category, description, file, line_number, recommendation, cwe_id
 		FROM plugin_security_issues
-		WHERE verification_id = ?
+		WHERE verification_id = $1
 	`
 	rows, err := v.db.QueryContext(ctx, query, verificationID)
 	if err != nil {
@@ -523,7 +523,7 @@ func (v *Verifier) loadSecurityIssues(ctx context.Context, verificationID int64)
 func (v *Verifier) recordAuditLog(ctx context.Context, verificationID int64, action, actor, details string) {
 	query := `
 		INSERT INTO plugin_verification_audit (verification_id, action, actor, details)
-		VALUES (?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4)
 	`
 	v.db.ExecContext(ctx, query, verificationID, action, actor, details)
 }
@@ -531,7 +531,7 @@ func (v *Verifier) recordAuditLog(ctx context.Context, verificationID int64, act
 func (v *Verifier) recordScanStart(ctx context.Context, pluginID, version, scanType string) (int64, error) {
 	query := `
 		INSERT INTO plugin_scan_history (plugin_id, version, scan_type, status, started_at)
-		VALUES (?, ?, ?, 'in_progress', NOW())
+		VALUES ($1, $2, $3, 'in_progress', CURRENT_TIMESTAMP)
 	`
 	result, err := v.db.ExecContext(ctx, query, pluginID, version, scanType)
 	if err != nil {
@@ -543,13 +543,13 @@ func (v *Verifier) recordScanStart(ctx context.Context, pluginID, version, scanT
 func (v *Verifier) recordScanComplete(ctx context.Context, scanID int64, status string, issuesFound, criticalIssues int, errorMsg string) {
 	query := `
 		UPDATE plugin_scan_history
-		SET status = ?,
-		    issues_found = ?,
-		    critical_issues = ?,
-		    error_message = ?,
-		    completed_at = NOW(),
-		    scan_duration_ms = TIMESTAMPDIFF(MICROSECOND, started_at, NOW()) / 1000
-		WHERE id = ?
+		SET status = $1,
+		    issues_found = $2,
+		    critical_issues = $3,
+		    error_message = $4,
+		    completed_at = CURRENT_TIMESTAMP,
+		    scan_duration_ms = EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - started_at)) * 1000
+		WHERE id = $5
 	`
 	v.db.ExecContext(ctx, query, status, issuesFound, criticalIssues,
 		sql.NullString{String: errorMsg, Valid: errorMsg != ""}, scanID)
