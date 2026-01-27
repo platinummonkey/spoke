@@ -2,13 +2,9 @@
 
 ![Spoke Logo](./web/public/logos/logo_main.png)
 
-[![CI](https://github.com/platinummonkey/spoke/actions/workflows/ci.yml/badge.svg)](https://github.com/platinummonkey/spoke/actions/workflows/ci.yml)
-[![Lint](https://github.com/platinummonkey/spoke/actions/workflows/lint.yml/badge.svg)](https://github.com/platinummonkey/spoke/actions/workflows/lint.yml)
-[![Security](https://github.com/platinummonkey/spoke/actions/workflows/security.yml/badge.svg)](https://github.com/platinummonkey/spoke/actions/workflows/security.yml)
-[![Coverage](https://github.com/platinummonkey/spoke/actions/workflows/coverage.yml/badge.svg)](https://github.com/platinummonkey/spoke/actions/workflows/coverage.yml)
-[![Build](https://github.com/platinummonkey/spoke/actions/workflows/build.yml/badge.svg)](https://github.com/platinummonkey/spoke/actions/workflows/build.yml)
-
-THIS IS A POC HACK WEEK PROJECT. NOT FOR PRODUCTION USE.
+[![CI](https://github.com/platinummonkey/spoke/actions/workflows/spoke-validate.yml/badge.svg)](https://github.com/platinummonkey/spoke/actions/workflows/spoke-validate.yml)
+[![Push](https://github.com/platinummonkey/spoke/actions/workflows/spoke-push.yml/badge.svg)](https://github.com/platinummonkey/spoke/actions/workflows/spoke-push.yml)
+[![Docs](https://github.com/platinummonkey/spoke/actions/workflows/hugo.yml/badge.svg)](https://github.com/platinummonkey/spoke/actions/workflows/hugo.yml)
 
 Spoke is a Protobuf Schema Registry that helps manage and version your Protocol Buffer definitions. It provides a simple way to store, retrieve, and compile protobuf files with dependency management.
 
