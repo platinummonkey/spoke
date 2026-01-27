@@ -4,6 +4,7 @@ spoke-cli
 sprocket
 spoke-server
 .DS_Store
+coverage.out
 
 # Hugo documentation
 docs/public/

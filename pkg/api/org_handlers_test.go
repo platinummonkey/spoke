@@ -787,6 +787,235 @@ func strPtr(s string) *string {
 	return &s
 }
 
+// TestAddMember_Success tests successfully adding a member
+func TestAddMember_Success(t *testing.T) {
+	service := &mockOrgService{
+		addMemberFunc: func(orgID int64, userID int64, role auth.Role, invitedBy *int64) error {
+			assert.Equal(t, int64(1), orgID)
+			assert.Equal(t, int64(2), userID)
+			assert.Equal(t, auth.RoleDeveloper, role)
+			return nil
+		},
+	}
+	handlers := NewOrgHandlers(service)
+
+	reqBody, _ := json.Marshal(map[string]interface{}{
+		"user_id": 2,
+		"role":    "developer",
+	})
+	authCtx := createAuthContext(1, "testuser")
+	req := createAuthRequest("POST", "/orgs/1/members", reqBody, authCtx)
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.AddMember(w, req)
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+}
+
+// TestAddMember_Unauthorized tests adding member without auth
+func TestAddMember_Unauthorized(t *testing.T) {
+	service := &mockOrgService{}
+	handlers := NewOrgHandlers(service)
+
+	reqBody, _ := json.Marshal(map[string]interface{}{
+		"user_id": 2,
+		"role":    "developer",
+	})
+	req := httptest.NewRequest("POST", "/orgs/1/members", bytes.NewBuffer(reqBody))
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.AddMember(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+// TestAddMember_InvalidID tests with invalid organization ID
+func TestAddMember_InvalidID(t *testing.T) {
+	service := &mockOrgService{}
+	handlers := NewOrgHandlers(service)
+
+	reqBody, _ := json.Marshal(map[string]interface{}{
+		"user_id": 2,
+		"role":    "developer",
+	})
+	authCtx := createAuthContext(1, "testuser")
+	req := createAuthRequest("POST", "/orgs/invalid/members", reqBody, authCtx)
+	req = mux.SetURLVars(req, map[string]string{"id": "invalid"})
+	w := httptest.NewRecorder()
+
+	handlers.AddMember(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// TestAddMember_ServiceError tests service error
+func TestAddMember_ServiceError(t *testing.T) {
+	service := &mockOrgService{
+		addMemberFunc: func(orgID int64, userID int64, role auth.Role, invitedBy *int64) error {
+			return errors.New("service error")
+		},
+	}
+	handlers := NewOrgHandlers(service)
+
+	reqBody, _ := json.Marshal(map[string]interface{}{
+		"user_id": 2,
+		"role":    "developer",
+	})
+	authCtx := createAuthContext(1, "testuser")
+	req := createAuthRequest("POST", "/orgs/1/members", reqBody, authCtx)
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.AddMember(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+// TestCreateInvitation_Success tests successfully creating an invitation
+func TestCreateInvitation_Success(t *testing.T) {
+	service := &mockOrgService{
+		createInvitationFunc: func(inv *orgs.OrgInvitation) error {
+			assert.Equal(t, int64(1), inv.OrgID)
+			assert.Equal(t, "newuser@example.com", inv.Email)
+			assert.Equal(t, auth.RoleDeveloper, inv.Role)
+			inv.ID = 1
+			inv.Token = "test-token-123"
+			return nil
+		},
+	}
+	handlers := NewOrgHandlers(service)
+
+	reqBody, _ := json.Marshal(orgs.InviteMemberRequest{
+		Email: "newuser@example.com",
+		Role:  auth.RoleDeveloper,
+	})
+	authCtx := createAuthContext(1, "testuser")
+	req := createAuthRequest("POST", "/orgs/1/invitations", reqBody, authCtx)
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.CreateInvitation(w, req)
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+
+	var response orgs.OrgInvitation
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, "test-token-123", response.Token)
+}
+
+// TestCreateInvitation_Unauthorized tests creating invitation without auth
+func TestCreateInvitation_Unauthorized(t *testing.T) {
+	service := &mockOrgService{}
+	handlers := NewOrgHandlers(service)
+
+	reqBody, _ := json.Marshal(orgs.InviteMemberRequest{
+		Email: "newuser@example.com",
+		Role:  auth.RoleDeveloper,
+	})
+	req := httptest.NewRequest("POST", "/orgs/1/invitations", bytes.NewBuffer(reqBody))
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.CreateInvitation(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+// TestCreateInvitation_InvalidJSON tests with invalid JSON
+func TestCreateInvitation_InvalidJSON(t *testing.T) {
+	service := &mockOrgService{}
+	handlers := NewOrgHandlers(service)
+
+	authCtx := createAuthContext(1, "testuser")
+	req := createAuthRequest("POST", "/orgs/1/invitations", []byte("invalid json"), authCtx)
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.CreateInvitation(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// TestCreateInvitation_ServiceError tests service error
+func TestCreateInvitation_ServiceError(t *testing.T) {
+	service := &mockOrgService{
+		createInvitationFunc: func(inv *orgs.OrgInvitation) error {
+			return errors.New("service error")
+		},
+	}
+	handlers := NewOrgHandlers(service)
+
+	reqBody, _ := json.Marshal(orgs.InviteMemberRequest{
+		Email: "newuser@example.com",
+		Role:  auth.RoleDeveloper,
+	})
+	authCtx := createAuthContext(1, "testuser")
+	req := createAuthRequest("POST", "/orgs/1/invitations", reqBody, authCtx)
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.CreateInvitation(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+// TestAcceptInvitation_Success tests successfully accepting an invitation
+func TestAcceptInvitation_Success(t *testing.T) {
+	service := &mockOrgService{
+		acceptInvitationFunc: func(token string, userID int64) (*orgs.Organization, error) {
+			assert.Equal(t, "test-token-123", token)
+			assert.Equal(t, int64(2), userID)
+			return &orgs.Organization{ID: 1, Name: "test-org"}, nil
+		},
+	}
+	handlers := NewOrgHandlers(service)
+
+	authCtx := createAuthContext(2, "newuser")
+	req := createAuthRequest("POST", "/invitations/test-token-123/accept", nil, authCtx)
+	req = mux.SetURLVars(req, map[string]string{"token": "test-token-123"})
+	w := httptest.NewRecorder()
+
+	handlers.AcceptInvitation(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+// TestAcceptInvitation_Unauthorized tests accepting without auth
+func TestAcceptInvitation_Unauthorized(t *testing.T) {
+	service := &mockOrgService{}
+	handlers := NewOrgHandlers(service)
+
+	req := httptest.NewRequest("POST", "/invitations/test-token-123/accept", nil)
+	req = mux.SetURLVars(req, map[string]string{"token": "test-token-123"})
+	w := httptest.NewRecorder()
+
+	handlers.AcceptInvitation(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+// TestAcceptInvitation_InvalidToken tests with invalid token
+func TestAcceptInvitation_InvalidToken(t *testing.T) {
+	service := &mockOrgService{
+		acceptInvitationFunc: func(token string, userID int64) (*orgs.Organization, error) {
+			return nil, errors.New("invalid or expired token")
+		},
+	}
+	handlers := NewOrgHandlers(service)
+
+	authCtx := createAuthContext(2, "newuser")
+	req := createAuthRequest("POST", "/invitations/invalid/accept", nil, authCtx)
+	req = mux.SetURLVars(req, map[string]string{"token": "invalid"})
+	w := httptest.NewRecorder()
+
+	handlers.AcceptInvitation(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
 // Benchmark tests
 func BenchmarkCreateOrganization(b *testing.B) {
 	service := &mockOrgService{
