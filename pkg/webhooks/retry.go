@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"runtime/debug"
 	"time"
 )
 
@@ -110,6 +111,13 @@ func (w *RetryWorker) Start(ctx context.Context, checkInterval time.Duration) {
 	w.ticker = time.NewTicker(checkInterval)
 
 	go func() {
+		// Recover from panics to prevent crashing the process
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("[RetryWorker] PANIC: %v\n%s\n", r, debug.Stack())
+			}
+		}()
+
 		for {
 			select {
 			case <-ctx.Done():

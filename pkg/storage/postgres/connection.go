@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -288,6 +289,13 @@ func (cm *ConnectionManager) StartHealthCheckRoutine(ctx context.Context, interv
 	ticker := time.NewTicker(interval)
 	go func() {
 		defer ticker.Stop()
+
+		// Recover from panics to prevent crashing the process
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("[HealthCheckRoutine] PANIC: %v\n%s\n", r, debug.Stack())
+			}
+		}()
 
 		for {
 			select {

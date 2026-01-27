@@ -65,6 +65,19 @@ func (m *MultiLogger) logAsync(ctx context.Context, event *AuditEvent) error {
 		m.wg.Add(1)
 		go func(l Logger) {
 			defer m.wg.Done()
+
+			// Recover from panics to prevent crashing the process
+			defer func() {
+				if r := recover(); r != nil {
+					err := fmt.Errorf("panic in audit logger: %v", r)
+					select {
+					case m.errChan <- err:
+					default:
+						// Channel full, drop error
+					}
+				}
+			}()
+
 			if err := l.Log(ctx, event); err != nil {
 				select {
 				case m.errChan <- err:

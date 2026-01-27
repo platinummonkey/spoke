@@ -116,6 +116,18 @@ func TimeoutMiddleware(timeout time.Duration) func(http.Handler) http.Handler {
 			done := make(chan bool)
 
 			go func() {
+				// Recover from panics to prevent crashing the process
+				defer func() {
+					if rec := recover(); rec != nil {
+						log.Printf("[TimeoutMiddleware] PANIC in handler: %v\n%s", rec, string(debug.Stack()))
+						// Try to send done signal, but don't block if channel is closed
+						select {
+						case done <- false:
+						default:
+						}
+					}
+				}()
+
 				next.ServeHTTP(w, r)
 				done <- true
 			}()

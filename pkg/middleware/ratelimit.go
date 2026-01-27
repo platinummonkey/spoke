@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -146,12 +147,20 @@ func (rl *RateLimiter) Cleanup() {
 func (rl *RateLimiter) StartCleanup(ctx context.Context) {
 	ticker := time.NewTicker(rl.config.WindowDuration)
 	go func() {
+		defer ticker.Stop()
+
+		// Recover from panics to prevent crashing the process
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("[RateLimiter] PANIC in cleanup: %v\n%s\n", r, debug.Stack())
+			}
+		}()
+
 		for {
 			select {
 			case <-ticker.C:
 				rl.Cleanup()
 			case <-ctx.Done():
-				ticker.Stop()
 				return
 			}
 		}

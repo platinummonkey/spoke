@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -268,6 +269,14 @@ func (o *DefaultOrchestrator) CompileAll(ctx context.Context, req *CompileReques
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+
+			// Recover from panics to prevent crashing the process
+			defer func() {
+				if r := recover(); r != nil {
+					fmt.Printf("[Orchestrator] PANIC in worker: %v\n%s\n", r, debug.Stack())
+				}
+			}()
+
 			for work := range workCh {
 				// Create language-specific request
 				langReq := &CompileRequest{
@@ -301,6 +310,14 @@ func (o *DefaultOrchestrator) CompileAll(ctx context.Context, req *CompileReques
 
 	// Wait for all workers to finish
 	go func() {
+		// Recover from panics (unlikely but defensive)
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("[Orchestrator] PANIC in wait goroutine: %v\n%s\n", r, debug.Stack())
+				close(resultCh)
+			}
+		}()
+
 		wg.Wait()
 		close(resultCh)
 	}()
