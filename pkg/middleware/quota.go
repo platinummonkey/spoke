@@ -3,7 +3,9 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"time"
 
+	"github.com/platinummonkey/spoke/pkg/async"
 	"github.com/platinummonkey/spoke/pkg/auth"
 	"github.com/platinummonkey/spoke/pkg/orgs"
 )
@@ -117,37 +119,33 @@ func getOrgIDFromContext(ctx context.Context) int64 {
 }
 
 // IncrementModuleUsage increments module usage for an organization
-func IncrementModuleUsage(orgService orgs.Service, orgID int64) {
-	go func() {
-		if err := orgService.IncrementModules(orgID); err != nil {
-			// Log error but don't block
-		}
-	}()
+// Context-aware version that properly manages goroutine lifecycle
+func IncrementModuleUsage(ctx context.Context, orgService orgs.Service, orgID int64) {
+	async.SafeGo(ctx, 5*time.Second, "increment module usage", func(ctx context.Context) error {
+		return orgService.IncrementModules(orgID)
+	})
 }
 
 // IncrementVersionUsage increments version usage for an organization
-func IncrementVersionUsage(orgService orgs.Service, orgID int64) {
-	go func() {
-		if err := orgService.IncrementVersions(orgID); err != nil {
-			// Log error but don't block
-		}
-	}()
+// Context-aware version that properly manages goroutine lifecycle
+func IncrementVersionUsage(ctx context.Context, orgService orgs.Service, orgID int64) {
+	async.SafeGo(ctx, 5*time.Second, "increment version usage", func(ctx context.Context) error {
+		return orgService.IncrementVersions(orgID)
+	})
 }
 
 // IncrementStorageUsage increments storage usage for an organization
-func IncrementStorageUsage(orgService orgs.Service, orgID int64, bytes int64) {
-	go func() {
-		if err := orgService.IncrementStorage(orgID, bytes); err != nil {
-			// Log error but don't block
-		}
-	}()
+// Context-aware version that properly manages goroutine lifecycle
+func IncrementStorageUsage(ctx context.Context, orgService orgs.Service, orgID int64, bytes int64) {
+	async.SafeGo(ctx, 5*time.Second, "increment storage usage", func(ctx context.Context) error {
+		return orgService.IncrementStorage(orgID, bytes)
+	})
 }
 
 // IncrementCompileJobUsage increments compile job usage for an organization
-func IncrementCompileJobUsage(orgService orgs.Service, orgID int64) {
-	go func() {
-		if err := orgService.IncrementCompileJobs(orgID); err != nil {
-			// Log error but don't block
-		}
-	}()
+// Context-aware version that properly manages goroutine lifecycle
+func IncrementCompileJobUsage(ctx context.Context, orgService orgs.Service, orgID int64) {
+	async.SafeGo(ctx, 5*time.Second, "increment compile job usage", func(ctx context.Context) error {
+		return orgService.IncrementCompileJobs(orgID)
+	})
 }

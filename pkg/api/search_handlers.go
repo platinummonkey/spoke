@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/platinummonkey/spoke/pkg/async"
 	"github.com/platinummonkey/spoke/pkg/search"
 )
 
@@ -78,10 +80,10 @@ func (h *EnhancedSearchHandlers) search(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Record search in history (async, don't block response)
-	go func() {
+	async.SafeGo(r.Context(), 5*time.Second, "record search", func(ctx context.Context) error {
 		durationMs := int(time.Since(startTime).Milliseconds())
-		_ = h.service.RecordSearch(r.Context(), query, response.TotalCount, durationMs)
-	}()
+		return h.service.RecordSearch(ctx, query, response.TotalCount, durationMs)
+	})
 
 	// Return results
 	w.Header().Set("Content-Type", "application/json")

@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/platinummonkey/spoke/pkg/analytics"
+	"github.com/platinummonkey/spoke/pkg/async"
 	"github.com/platinummonkey/spoke/pkg/codegen"
 	"github.com/platinummonkey/spoke/pkg/codegen/orchestrator"
 	"github.com/platinummonkey/spoke/pkg/search"
@@ -356,7 +356,7 @@ func (s *Server) getModule(w http.ResponseWriter, r *http.Request) {
 
 	// Track module view event asynchronously
 	if s.eventTracker != nil {
-		go func() {
+		async.SafeGo(r.Context(), 5*time.Second, "track module view", func(ctx context.Context) error {
 			source := "api"
 			if r.Header.Get("User-Agent") != "" && strings.Contains(r.Header.Get("User-Agent"), "Mozilla") {
 				source = "web"
@@ -374,11 +374,8 @@ func (s *Server) getModule(w http.ResponseWriter, r *http.Request) {
 				UserAgent:      analytics.GetUserAgent(r),
 			}
 
-			ctx := context.Background()
-			if err := s.eventTracker.TrackModuleView(ctx, event); err != nil {
-				log.Printf("Failed to track module view event: %v", err)
-			}
-		}()
+			return s.eventTracker.TrackModuleView(ctx, event)
+		})
 	}
 
 	json.NewEncoder(w).Encode(moduleWithVersions)
@@ -403,13 +400,9 @@ func (s *Server) createVersion(w http.ResponseWriter, r *http.Request) {
 
 	// Trigger search indexing asynchronously (don't block the response)
 	if s.searchIndexer != nil {
-		go func() {
-			ctx := context.Background()
-			if err := s.searchIndexer.IndexVersion(ctx, version.ModuleName, version.Version); err != nil {
-				log.Printf("Failed to index version %s/%s: %v", version.ModuleName, version.Version, err)
-				// Don't fail the request - indexing is non-critical
-			}
-		}()
+		async.SafeGo(r.Context(), 10*time.Second, "index version", func(ctx context.Context) error {
+			return s.searchIndexer.IndexVersion(ctx, version.ModuleName, version.Version)
+		})
 	}
 
 	w.WriteHeader(http.StatusCreated)
@@ -439,7 +432,7 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 
 	// Track module version view event asynchronously
 	if s.eventTracker != nil {
-		go func() {
+		async.SafeGo(r.Context(), 5*time.Second, "track version view", func(ctx context.Context) error {
 			source := "api"
 			if r.Header.Get("User-Agent") != "" && strings.Contains(r.Header.Get("User-Agent"), "Mozilla") {
 				source = "web"
@@ -457,11 +450,8 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 				UserAgent:      analytics.GetUserAgent(r),
 			}
 
-			ctx := context.Background()
-			if err := s.eventTracker.TrackModuleView(ctx, event); err != nil {
-				log.Printf("Failed to track module version view event: %v", err)
-			}
-		}()
+			return s.eventTracker.TrackModuleView(ctx, event)
+		})
 	}
 
 	json.NewEncoder(w).Encode(version)
@@ -536,7 +526,7 @@ func (s *Server) downloadCompiled(w http.ResponseWriter, r *http.Request) {
 
 	// Track download event asynchronously (non-blocking)
 	if s.eventTracker != nil {
-		go func() {
+		async.SafeGo(r.Context(), 5*time.Second, "track download", func(ctx context.Context) error {
 			event := analytics.DownloadEvent{
 				UserID:         analytics.ExtractUserID(r),
 				OrganizationID: analytics.ExtractOrganizationID(r),
@@ -556,11 +546,8 @@ func (s *Server) downloadCompiled(w http.ResponseWriter, r *http.Request) {
 				event.ErrorMessage = downloadErr.Error()
 			}
 
-			ctx := context.Background()
-			if err := s.eventTracker.TrackDownload(ctx, event); err != nil {
-				log.Printf("Failed to track download event: %v", err)
-			}
-		}()
+			return s.eventTracker.TrackDownload(ctx, event)
+		})
 	}
 }
 
