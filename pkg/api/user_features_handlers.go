@@ -4,9 +4,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"github.com/gorilla/mux"
+	"github.com/platinummonkey/spoke/pkg/httputil"
 )
 
 // UserFeaturesHandlers provides HTTP handlers for user features (saved searches, bookmarks)
@@ -76,7 +76,7 @@ func (h *UserFeaturesHandlers) listSavedSearches(w http.ResponseWriter, r *http.
 
 	rows, err := h.db.QueryContext(r.Context(), query)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -108,8 +108,7 @@ func (h *UserFeaturesHandlers) listSavedSearches(w http.ResponseWriter, r *http.
 		searches = append(searches, search)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	httputil.WriteSuccess(w, map[string]interface{}{
 		"saved_searches": searches,
 		"count":          len(searches),
 	})
@@ -118,14 +117,15 @@ func (h *UserFeaturesHandlers) listSavedSearches(w http.ResponseWriter, r *http.
 // createSavedSearch handles POST /api/v2/saved-searches
 func (h *UserFeaturesHandlers) createSavedSearch(w http.ResponseWriter, r *http.Request) {
 	var req SavedSearch
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
 	// Validate required fields
-	if req.Name == "" || req.Query == "" {
-		http.Error(w, "name and query are required", http.StatusBadRequest)
+	if !httputil.RequireNonEmpty(w, req.Name, "name") {
+		return
+	}
+	if !httputil.RequireNonEmpty(w, req.Query, "query") {
 		return
 	}
 
@@ -149,21 +149,17 @@ func (h *UserFeaturesHandlers) createSavedSearch(w http.ResponseWriter, r *http.
 	).Scan(&req.ID, &req.CreatedAt, &req.UpdatedAt)
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(req)
+	httputil.WriteCreated(w, req)
 }
 
 // getSavedSearch handles GET /api/v2/saved-searches/{id}
 func (h *UserFeaturesHandlers) getSavedSearch(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
@@ -176,7 +172,7 @@ func (h *UserFeaturesHandlers) getSavedSearch(w http.ResponseWriter, r *http.Req
 	var search SavedSearch
 	var filtersJSON []byte
 
-	err = h.db.QueryRowContext(r.Context(), query, id).Scan(
+	err := h.db.QueryRowContext(r.Context(), query, id).Scan(
 		&search.ID,
 		&search.UserID,
 		&search.Name,
@@ -189,11 +185,11 @@ func (h *UserFeaturesHandlers) getSavedSearch(w http.ResponseWriter, r *http.Req
 	)
 
 	if err == sql.ErrNoRows {
-		http.Error(w, "saved search not found", http.StatusNotFound)
+		httputil.WriteNotFoundError(w, "saved search not found")
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -201,22 +197,18 @@ func (h *UserFeaturesHandlers) getSavedSearch(w http.ResponseWriter, r *http.Req
 		json.Unmarshal(filtersJSON, &search.Filters)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(search)
+	httputil.WriteSuccess(w, search)
 }
 
 // updateSavedSearch handles PUT /api/v2/saved-searches/{id}
 func (h *UserFeaturesHandlers) updateSavedSearch(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	var req SavedSearch
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
@@ -229,7 +221,7 @@ func (h *UserFeaturesHandlers) updateSavedSearch(w http.ResponseWriter, r *http.
 		RETURNING updated_at
 	`
 
-	err = h.db.QueryRowContext(
+	err := h.db.QueryRowContext(
 		r.Context(),
 		query,
 		req.Name,
@@ -241,42 +233,39 @@ func (h *UserFeaturesHandlers) updateSavedSearch(w http.ResponseWriter, r *http.
 	).Scan(&req.UpdatedAt)
 
 	if err == sql.ErrNoRows {
-		http.Error(w, "saved search not found", http.StatusNotFound)
+		httputil.WriteNotFoundError(w, "saved search not found")
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
 	req.ID = id
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(req)
+	httputil.WriteSuccess(w, req)
 }
 
 // deleteSavedSearch handles DELETE /api/v2/saved-searches/{id}
 func (h *UserFeaturesHandlers) deleteSavedSearch(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	query := `DELETE FROM saved_searches WHERE id = $1`
 	result, err := h.db.ExecContext(r.Context(), query, id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		http.Error(w, "saved search not found", http.StatusNotFound)
+		httputil.WriteNotFoundError(w, "saved search not found")
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	httputil.WriteNoContent(w)
 }
 
 // listBookmarks handles GET /api/v2/bookmarks
@@ -290,7 +279,7 @@ func (h *UserFeaturesHandlers) listBookmarks(w http.ResponseWriter, r *http.Requ
 
 	rows, err := h.db.QueryContext(r.Context(), query)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -324,8 +313,7 @@ func (h *UserFeaturesHandlers) listBookmarks(w http.ResponseWriter, r *http.Requ
 		bookmarks = append(bookmarks, bookmark)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	httputil.WriteSuccess(w, map[string]interface{}{
 		"bookmarks": bookmarks,
 		"count":     len(bookmarks),
 	})
@@ -369,21 +357,17 @@ func (h *UserFeaturesHandlers) createBookmark(w http.ResponseWriter, r *http.Req
 	).Scan(&req.ID, &req.CreatedAt, &req.UpdatedAt)
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(req)
+	httputil.WriteCreated(w, req)
 }
 
 // getBookmark handles GET /api/v2/bookmarks/{id}
 func (h *UserFeaturesHandlers) getBookmark(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
@@ -396,7 +380,7 @@ func (h *UserFeaturesHandlers) getBookmark(w http.ResponseWriter, r *http.Reques
 	var bookmark Bookmark
 	var tags sql.NullString
 
-	err = h.db.QueryRowContext(r.Context(), query, id).Scan(
+	err := h.db.QueryRowContext(r.Context(), query, id).Scan(
 		&bookmark.ID,
 		&bookmark.UserID,
 		&bookmark.ModuleName,
@@ -410,11 +394,11 @@ func (h *UserFeaturesHandlers) getBookmark(w http.ResponseWriter, r *http.Reques
 	)
 
 	if err == sql.ErrNoRows {
-		http.Error(w, "bookmark not found", http.StatusNotFound)
+		httputil.WriteNotFoundError(w, "bookmark not found")
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -422,22 +406,18 @@ func (h *UserFeaturesHandlers) getBookmark(w http.ResponseWriter, r *http.Reques
 		bookmark.Tags = parsePostgresArray(tags.String)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(bookmark)
+	httputil.WriteSuccess(w, bookmark)
 }
 
 // updateBookmark handles PUT /api/v2/bookmarks/{id}
 func (h *UserFeaturesHandlers) updateBookmark(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	var req Bookmark
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
@@ -450,45 +430,42 @@ func (h *UserFeaturesHandlers) updateBookmark(w http.ResponseWriter, r *http.Req
 		RETURNING updated_at
 	`
 
-	err = h.db.QueryRowContext(r.Context(), query, req.Notes, tagsArray, id).Scan(&req.UpdatedAt)
+	err := h.db.QueryRowContext(r.Context(), query, req.Notes, tagsArray, id).Scan(&req.UpdatedAt)
 
 	if err == sql.ErrNoRows {
-		http.Error(w, "bookmark not found", http.StatusNotFound)
+		httputil.WriteNotFoundError(w, "bookmark not found")
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
 	req.ID = id
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(req)
+	httputil.WriteSuccess(w, req)
 }
 
 // deleteBookmark handles DELETE /api/v2/bookmarks/{id}
 func (h *UserFeaturesHandlers) deleteBookmark(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+	id, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	query := `DELETE FROM bookmarks WHERE id = $1`
 	result, err := h.db.ExecContext(r.Context(), query, id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		http.Error(w, "bookmark not found", http.StatusNotFound)
+		httputil.WriteNotFoundError(w, "bookmark not found")
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	httputil.WriteNoContent(w)
 }
 
 // Helper functions for PostgreSQL array handling

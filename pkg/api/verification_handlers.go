@@ -2,12 +2,12 @@ package api
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/gorilla/mux"
+	"github.com/platinummonkey/spoke/pkg/httputil"
 	"github.com/platinummonkey/spoke/pkg/plugins"
 	"github.com/sirupsen/logrus"
 )
@@ -57,13 +57,12 @@ type SubmitVerificationResponse struct {
 
 // submitVerification handles POST /api/v1/plugins/{id}/versions/{version}/verify
 func (h *VerificationHandlers) submitVerification(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	pluginID := vars["id"]
 	version := vars["version"]
 
 	var req SubmitVerificationRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.sendError(w, http.StatusBadRequest, "Invalid request body")
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
@@ -78,7 +77,7 @@ func (h *VerificationHandlers) submitVerification(w http.ResponseWriter, r *http
 	verificationID, err := h.verifier.SubmitForVerification(r.Context(), verificationReq)
 	if err != nil {
 		h.logger.Errorf("Failed to submit verification: %v", err)
-		h.sendError(w, http.StatusInternalServerError, "Failed to submit verification")
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -88,7 +87,7 @@ func (h *VerificationHandlers) submitVerification(w http.ResponseWriter, r *http
 		Message:        "Verification request submitted successfully",
 	}
 
-	h.sendJSON(w, http.StatusCreated, response)
+	httputil.WriteJSON(w, http.StatusCreated, response)
 }
 
 // VerificationResponse contains detailed verification information
@@ -109,21 +108,19 @@ type VerificationResponse struct {
 
 // getVerification handles GET /api/v1/verifications/{id}
 func (h *VerificationHandlers) getVerification(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	verificationID, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		h.sendError(w, http.StatusBadRequest, "Invalid verification ID")
+	verificationID, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	result, err := h.verifier.GetVerificationStatus(r.Context(), verificationID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			h.sendError(w, http.StatusNotFound, "Verification not found")
+			httputil.WriteNotFoundError(w, "Verification not found")
 			return
 		}
 		h.logger.Errorf("Failed to get verification: %v", err)
-		h.sendError(w, http.StatusInternalServerError, "Failed to get verification")
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -144,7 +141,7 @@ func (h *VerificationHandlers) getVerification(w http.ResponseWriter, r *http.Re
 		response.CompletedAt = result.CompletedAt.Format("2006-01-02T15:04:05Z")
 	}
 
-	h.sendJSON(w, http.StatusOK, response)
+	httputil.WriteSuccess(w, response)
 }
 
 // ListVerificationsResponse contains a list of verifications
@@ -191,7 +188,7 @@ func (h *VerificationHandlers) listVerifications(w http.ResponseWriter, r *http.
 	rows, err := h.verifier.GetDB().QueryContext(r.Context(), query, args...)
 	if err != nil {
 		h.logger.Errorf("Failed to list verifications: %v", err)
-		h.sendError(w, http.StatusInternalServerError, "Failed to list verifications")
+		httputil.WriteInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -220,7 +217,7 @@ func (h *VerificationHandlers) listVerifications(w http.ResponseWriter, r *http.
 		Offset:        offset,
 	}
 
-	h.sendJSON(w, http.StatusOK, response)
+	httputil.WriteSuccess(w, response)
 }
 
 // ApprovalRequest contains the request body for approval/rejection
@@ -231,32 +228,28 @@ type ApprovalRequest struct {
 
 // approveVerification handles POST /api/v1/verifications/{id}/approve
 func (h *VerificationHandlers) approveVerification(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	verificationID, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		h.sendError(w, http.StatusBadRequest, "Invalid verification ID")
+	verificationID, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	var req ApprovalRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.sendError(w, http.StatusBadRequest, "Invalid request body")
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
-	if req.ApprovedBy == "" {
-		h.sendError(w, http.StatusBadRequest, "approved_by is required")
+	if !httputil.RequireNonEmpty(w, req.ApprovedBy, "approved_by") {
 		return
 	}
 
-	err = h.verifier.ApproveVerification(r.Context(), verificationID, req.ApprovedBy, req.Reason)
+	err := h.verifier.ApproveVerification(r.Context(), verificationID, req.ApprovedBy, req.Reason)
 	if err != nil {
 		h.logger.Errorf("Failed to approve verification: %v", err)
-		h.sendError(w, http.StatusInternalServerError, "Failed to approve verification")
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	h.sendJSON(w, http.StatusOK, map[string]string{
+	httputil.WriteSuccess(w, map[string]string{
 		"message": "Verification approved successfully",
 		"status":  "approved",
 	})
@@ -264,37 +257,32 @@ func (h *VerificationHandlers) approveVerification(w http.ResponseWriter, r *htt
 
 // rejectVerification handles POST /api/v1/verifications/{id}/reject
 func (h *VerificationHandlers) rejectVerification(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	verificationID, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		h.sendError(w, http.StatusBadRequest, "Invalid verification ID")
+	verificationID, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	var req ApprovalRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.sendError(w, http.StatusBadRequest, "Invalid request body")
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
-	if req.ApprovedBy == "" {
-		h.sendError(w, http.StatusBadRequest, "approved_by is required")
+	if !httputil.RequireNonEmpty(w, req.ApprovedBy, "approved_by") {
 		return
 	}
 
-	if req.Reason == "" {
-		h.sendError(w, http.StatusBadRequest, "reason is required for rejection")
+	if !httputil.RequireNonEmpty(w, req.Reason, "reason") {
 		return
 	}
 
-	err = h.verifier.RejectVerification(r.Context(), verificationID, req.ApprovedBy, req.Reason)
+	err := h.verifier.RejectVerification(r.Context(), verificationID, req.ApprovedBy, req.Reason)
 	if err != nil {
 		h.logger.Errorf("Failed to reject verification: %v", err)
-		h.sendError(w, http.StatusInternalServerError, "Failed to reject verification")
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	h.sendJSON(w, http.StatusOK, map[string]string{
+	httputil.WriteSuccess(w, map[string]string{
 		"message": "Verification rejected",
 		"status":  "rejected",
 	})
@@ -342,7 +330,7 @@ func (h *VerificationHandlers) getVerificationStats(w http.ResponseWriter, r *ht
 
 	if err != nil {
 		h.logger.Errorf("Failed to get verification stats: %v", err)
-		h.sendError(w, http.StatusInternalServerError, "Failed to get verification stats")
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -360,7 +348,7 @@ func (h *VerificationHandlers) getVerificationStats(w http.ResponseWriter, r *ht
 		"review_required": stats.ReviewRequired,
 	}
 
-	h.sendJSON(w, http.StatusOK, stats)
+	httputil.WriteSuccess(w, stats)
 }
 
 // SecurityScoreResponse contains plugin security score information
@@ -380,7 +368,7 @@ type SecurityScoreResponse struct{
 
 // getPluginSecurityScore handles GET /api/v1/plugins/{id}/security-score
 func (h *VerificationHandlers) getPluginSecurityScore(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	pluginID := vars["id"]
 
 	query := `SELECT * FROM plugin_security_scores WHERE plugin_id = ?`
@@ -404,11 +392,11 @@ func (h *VerificationHandlers) getPluginSecurityScore(w http.ResponseWriter, r *
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			h.sendError(w, http.StatusNotFound, "Plugin not found")
+			httputil.WriteNotFoundError(w, "Plugin not found")
 			return
 		}
 		h.logger.Errorf("Failed to get security score: %v", err)
-		h.sendError(w, http.StatusInternalServerError, "Failed to get security score")
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -416,20 +404,10 @@ func (h *VerificationHandlers) getPluginSecurityScore(w http.ResponseWriter, r *
 		score.LastVerifiedAt = lastVerifiedAt.String
 	}
 
-	h.sendJSON(w, http.StatusOK, score)
+	httputil.WriteSuccess(w, score)
 }
 
 // Helper methods
-
-func (h *VerificationHandlers) sendJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
-}
-
-func (h *VerificationHandlers) sendError(w http.ResponseWriter, status int, message string) {
-	h.sendJSON(w, status, map[string]string{"error": message})
-}
 
 func parseIntParam(param string, defaultValue int) int {
 	if param == "" {
