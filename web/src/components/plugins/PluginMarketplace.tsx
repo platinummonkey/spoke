@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { PluginType, SecurityLevel } from '../../types/plugin';
 import { usePlugins } from '../../hooks/usePlugins';
 import PluginCard from './PluginCard';

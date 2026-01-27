@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState } from 'react';
 import './StarRating.css';
 
 interface StarRatingProps {
@@ -16,7 +16,7 @@ export default function StarRating({
   interactive = false,
   onRatingChange,
 }: StarRatingProps) {
-  const [hoveredRating, setHoveredRating] = React.useState<number | null>(null);
+  const [hoveredRating, setHoveredRating] = useState<number | null>(null);
 
   const getStarClass = (starIndex: number): string => {
     const currentRating = hoveredRating !== null ? hoveredRating : rating;

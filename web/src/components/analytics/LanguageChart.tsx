@@ -23,7 +23,7 @@ export const LanguageChart: React.FC<LanguageChartProps> = ({ period }) => {
   // For now, simulate language distribution since we don't have it directly
   // In production, you'd want a separate endpoint for this
   const languages = ['go', 'python', 'typescript', 'java', 'cpp'];
-  const chartData = languages.map((lang, idx) => ({
+  const chartData = languages.map((lang) => ({
     name: lang.toUpperCase(),
     value: modules.length > 0 ? Math.floor(Math.random() * 1000) + 100 : 0,
   }));
@@ -62,7 +62,7 @@ export const LanguageChart: React.FC<LanguageChartProps> = ({ period }) => {
           fill="#8884d8"
           dataKey="value"
         >
-          {chartData.map((entry, index) => (
+          {chartData.map((_, index) => (
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
         </Pie>

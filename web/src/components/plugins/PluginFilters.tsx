@@ -1,4 +1,3 @@
-import React from 'react';
 import { PluginType, SecurityLevel } from '../../types/plugin';
 import './PluginFilters.css';
 

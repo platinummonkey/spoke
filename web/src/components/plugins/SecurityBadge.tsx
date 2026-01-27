@@ -1,4 +1,3 @@
-import React from 'react';
 import { SecurityLevel } from '../../types/plugin';
 import './SecurityBadge.css';
 

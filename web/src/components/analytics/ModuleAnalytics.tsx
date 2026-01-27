@@ -64,7 +64,7 @@ export const ModuleAnalytics: React.FC<ModuleAnalyticsProps> = ({ moduleName, ve
     return 'red';
   };
 
-  const getHealthStatus = (score: number): string => {
+  const getHealthStatus = (score: number): 'success' | 'warning' | 'error' => {
     if (score >= 80) return 'success';
     if (score >= 60) return 'warning';
     return 'error';

@@ -1,4 +1,3 @@
-import React from 'react';
 import { PluginVersion } from '../../types/plugin';
 import pluginService from '../../services/pluginService';
 import './VersionList.css';

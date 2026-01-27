@@ -8,7 +8,6 @@ interface TopModulesChartProps {
 }
 
 export const TopModulesChart: React.FC<TopModulesChartProps> = ({ modules }) => {
-  const barColor = useColorModeValue('#3182ce', '#63b3ed');
   const gridColor = useColorModeValue('#e2e8f0', '#4a5568');
   const textColor = useColorModeValue('#2d3748', '#e2e8f0');
 
@@ -51,7 +50,7 @@ export const TopModulesChart: React.FC<TopModulesChartProps> = ({ modules }) => 
             border: `1px solid ${gridColor}`,
             borderRadius: '4px',
           }}
-          formatter={(value: number, name: string, props: any) => {
+          formatter={(value: number, name: string) => {
             if (name === 'downloads' || name === 'views') {
               return [value.toLocaleString(), name === 'downloads' ? 'Downloads' : 'Views'];
             }
@@ -64,7 +63,7 @@ export const TopModulesChart: React.FC<TopModulesChartProps> = ({ modules }) => 
         />
         <Legend />
         <Bar dataKey="downloads" name="Downloads">
-          {chartData.map((entry, index) => (
+          {chartData.map((_, index) => (
             <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
           ))}
         </Bar>

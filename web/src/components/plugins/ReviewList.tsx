@@ -1,4 +1,3 @@
-import React from 'react';
 import { PluginReview } from '../../types/plugin';
 import StarRating from './StarRating';
 import './ReviewList.css';
