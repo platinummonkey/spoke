@@ -1441,3 +1441,69 @@ func TestGetOrganization_DatabaseError_WithSqlmock(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
+
+// TestListModulePermissions_QueryError tests database query error
+func TestListModulePermissions_QueryError_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	mock.ExpectQuery("SELECT mp.id, mp.organization_id, mp.permission, mp.granted_at, o.name").
+		WithArgs("test-module").
+		WillReturnError(errors.New("database connection failed"))
+
+	req := httptest.NewRequest("GET", "/auth/modules/test-module/permissions", nil)
+	req = mux.SetURLVars(req, map[string]string{"module_name": "test-module"})
+	w := httptest.NewRecorder()
+
+	handlers.listModulePermissions(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestRemoveOrganizationMember_Error tests database error
+func TestRemoveOrganizationMember_Error_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	mock.ExpectExec("DELETE FROM organization_members").
+		WithArgs("123", "456").
+		WillReturnError(errors.New("database error"))
+
+	req := httptest.NewRequest("DELETE", "/auth/organizations/123/members/456", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "123", "user_id": "456"})
+	w := httptest.NewRecorder()
+
+	handlers.removeOrganizationMember(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestRevokeModulePermission_Error tests database error
+func TestRevokeModulePermission_Error_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	mock.ExpectExec("DELETE FROM module_permissions").
+		WithArgs("123").
+		WillReturnError(errors.New("database error"))
+
+	req := httptest.NewRequest("DELETE", "/auth/modules/test/permissions/123", nil)
+	req = mux.SetURLVars(req, map[string]string{"permission_id": "123"})
+	w := httptest.NewRecorder()
+
+	handlers.revokeModulePermission(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
