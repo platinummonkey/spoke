@@ -296,6 +296,122 @@ lsof -i :8080,3307,6380,9000
 podman machine start
 ```
 
+### Container Build Failures (Corporate Credential Helper)
+
+**Problem:** Docker/Podman builds fail with credential helper errors:
+```
+[ddtool] retrieving identity jwt: context deadline exceeded
+Error: error getting credentials - err: exit status 1
+```
+
+**Cause:** Corporate credential helper (ddtool, ecr-login, etc.) attempts to authenticate even for public Docker Hub images, causing timeouts when corporate VPN/vault is unreachable.
+
+**Solution 1: Pre-pull Images (Recommended)**
+
+Use the provided script to pre-pull all required images:
+
+```bash
+# Navigate to test/e2e directory
+cd test/e2e
+
+# Pre-pull all base images (works with docker or podman)
+./scripts/pre-pull-images.sh
+
+# Now build with docker-compose (pulls are cached)
+docker-compose build
+
+# Start services
+docker-compose up -d
+```
+
+Or manually pre-pull each image:
+
+```bash
+docker pull golang:1.21-alpine
+docker pull alpine:latest
+docker pull mysql:8.0
+docker pull redis:7-alpine
+docker pull minio/minio:latest
+```
+
+**Solution 2: Temporary Credential Helper Bypass**
+
+Temporarily disable credential helpers for public registries:
+
+```bash
+# Backup your Docker config
+cp ~/.docker/config.json ~/.docker/config.json.backup
+
+# Remove credHelpers for the session
+jq 'del(.credHelpers)' ~/.docker/config.json > ~/.docker/config.json.tmp
+mv ~/.docker/config.json.tmp ~/.docker/config.json
+
+# Run your builds
+cd test/e2e
+docker-compose up -d
+
+# Restore original config
+mv ~/.docker/config.json.backup ~/.docker/config.json
+```
+
+**Solution 3: Use Plain Docker Build**
+
+Build services individually without compose:
+
+```bash
+cd ../..  # Go to repo root
+
+# Build each service
+docker build -f test/e2e/Dockerfile.spoke -t spoke-api:local .
+docker build -f test/e2e/Dockerfile.sprocket -t sprocket:local .
+docker build -f test/e2e/Dockerfile.verifier -t verifier:local .
+docker build -f test/e2e/Dockerfile.web -t spoke-web:local .
+docker build -f test/e2e/Dockerfile.playwright -t playwright:local .
+
+# Update docker-compose.yml to use local tags
+# (See docker-compose.override.yml example below)
+```
+
+**Solution 4: Skip Container Builds**
+
+Build binaries locally and run tests without containers:
+
+```bash
+# Build locally
+cd ../..  # Go to repo root
+make build
+
+# Start only infrastructure services (MySQL, Redis, MinIO)
+cd test/e2e
+docker-compose up -d mysql redis minio
+
+# Run binaries directly
+export DATABASE_URL="spoke:spoke@tcp(localhost:3307)/spoke?parseTime=true"
+export REDIS_URL="localhost:6380"
+../../bin/spoke-api &
+../../bin/sprocket &
+
+# Run tests
+./scripts/test-api.sh
+```
+
+**Prevention: Configure Docker for Corporate Networks**
+
+Add to `~/.docker/config.json` to explicitly route only corporate registries through credential helpers:
+
+```json
+{
+  "auths": {},
+  "credHelpers": {
+    "registry.company.com": "ddtool",
+    "registry-internal.company.com": "ddtool"
+  },
+  "credStore": ""
+}
+```
+
+This ensures only internal registries use credential helpers, while public registries (Docker Hub, etc.) use anonymous pulls.
+
 ### Tests Timing Out
 
 **Problem:** Services not ready

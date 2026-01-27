@@ -4,6 +4,7 @@ services:
   # MySQL Database
   mysql:
     image: mysql:8.0
+    pull_policy: missing
     container_name: spoke-mysql-test
     environment:
       MYSQL_ROOT_PASSWORD: root
@@ -26,6 +27,7 @@ services:
   # Redis Cache
   redis:
     image: redis:7-alpine
+    pull_policy: missing
     container_name: spoke-redis-test
     ports:
       - "6380:6379"
@@ -40,6 +42,7 @@ services:
   # MinIO (S3-compatible storage)
   minio:
     image: minio/minio:latest
+    pull_policy: missing
     container_name: spoke-minio-test
     environment:
       MINIO_ROOT_USER: spoke
@@ -63,6 +66,7 @@ services:
     build:
       context: ../..
       dockerfile: test/e2e/Dockerfile.spoke
+      pull_policy: missing
     container_name: spoke-api-test
     environment:
       DATABASE_URL: "spoke:spoke@tcp(mysql:3306)/spoke?parseTime=true"
@@ -95,6 +99,7 @@ services:
     build:
       context: ../..
       dockerfile: test/e2e/Dockerfile.sprocket
+      pull_policy: missing
     container_name: spoke-sprocket-test
     environment:
       DATABASE_URL: "spoke:spoke@tcp(mysql:3306)/spoke?parseTime=true"
@@ -119,6 +124,7 @@ services:
     build:
       context: ../..
       dockerfile: test/e2e/Dockerfile.verifier
+      pull_policy: missing
     container_name: spoke-verifier-test
     environment:
       DATABASE_URL: "spoke:spoke@tcp(mysql:3306)/spoke?parseTime=true"
@@ -136,6 +142,7 @@ services:
     build:
       context: ../..
       dockerfile: test/e2e/Dockerfile.web
+      pull_policy: missing
     container_name: spoke-web-test
     environment:
       VITE_API_URL: "http://localhost:8080"
@@ -151,6 +158,7 @@ services:
     build:
       context: ../..
       dockerfile: test/e2e/Dockerfile.playwright
+      pull_policy: missing
     container_name: spoke-playwright-test
     environment:
       BASE_URL: "http://spoke-web:5173"
