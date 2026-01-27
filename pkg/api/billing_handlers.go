@@ -1,13 +1,12 @@
 package api
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
-	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.com/platinummonkey/spoke/pkg/billing"
+	"github.com/platinummonkey/spoke/pkg/httputil"
 )
 
 // BillingHandlers handles billing-related HTTP requests
@@ -48,272 +47,228 @@ func (h *BillingHandlers) RegisterRoutes(router *mux.Router) {
 
 // CreateSubscription creates a new subscription
 func (h *BillingHandlers) CreateSubscription(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	orgID, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	orgID, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	var req billing.CreateSubscriptionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
 	subscription, err := h.billingService.CreateSubscription(orgID, &req)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(subscription)
+	httputil.WriteCreated(w, subscription)
 }
 
 // GetSubscription retrieves a subscription
 func (h *BillingHandlers) GetSubscription(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	orgID, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	orgID, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	subscription, err := h.billingService.GetSubscription(orgID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		httputil.WriteNotFoundError(w, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(subscription)
+	httputil.WriteSuccess(w, subscription)
 }
 
 // UpdateSubscription updates a subscription
 func (h *BillingHandlers) UpdateSubscription(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	orgID, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	orgID, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	var req billing.UpdateSubscriptionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
 	subscription, err := h.billingService.UpdateSubscription(orgID, &req)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(subscription)
+	httputil.WriteSuccess(w, subscription)
 }
 
 // CancelSubscription cancels a subscription
 func (h *BillingHandlers) CancelSubscription(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	orgID, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	orgID, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	var req struct {
 		Immediately bool `json:"immediately"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		// Default to false if no body
-		req.Immediately = false
-	}
+	// Default to false if no body or parsing fails
+	httputil.ParseJSON(r, &req)
 
 	if err := h.billingService.CancelSubscription(orgID, req.Immediately); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	httputil.WriteNoContent(w)
 }
 
 // ReactivateSubscription reactivates a canceled subscription
 func (h *BillingHandlers) ReactivateSubscription(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	orgID, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	orgID, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	subscription, err := h.billingService.ReactivateSubscription(orgID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(subscription)
+	httputil.WriteSuccess(w, subscription)
 }
 
 // GetInvoice retrieves an invoice
 func (h *BillingHandlers) GetInvoice(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	invoiceID, err := strconv.ParseInt(vars["invoice_id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid invoice ID", http.StatusBadRequest)
+	invoiceID, ok := httputil.ParsePathInt64OrError(w, r, "invoice_id")
+	if !ok {
 		return
 	}
 
 	invoice, err := h.billingService.GetInvoice(invoiceID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		httputil.WriteNotFoundError(w, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(invoice)
+	httputil.WriteSuccess(w, invoice)
 }
 
 // ListInvoices lists invoices for an organization
 func (h *BillingHandlers) ListInvoices(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	orgID, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	orgID, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
-	limit := 100
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
-			limit = l
-		}
+	limit, err := httputil.ParseQueryInt(r, "limit", 100)
+	if err != nil {
+		httputil.WriteBadRequest(w, err.Error())
+		return
 	}
 
 	invoices, err := h.billingService.ListInvoices(orgID, limit)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(invoices)
+	httputil.WriteSuccess(w, invoices)
 }
 
 // GenerateInvoice generates an invoice for an organization
 func (h *BillingHandlers) GenerateInvoice(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	orgID, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	orgID, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	invoice, err := h.billingService.GenerateInvoice(orgID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(invoice)
+	httputil.WriteCreated(w, invoice)
 }
 
 // AddPaymentMethod adds a payment method
 func (h *BillingHandlers) AddPaymentMethod(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	orgID, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	orgID, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	var req billing.CreatePaymentMethodRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
 	paymentMethod, err := h.billingService.AddPaymentMethod(orgID, &req)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(paymentMethod)
+	httputil.WriteCreated(w, paymentMethod)
 }
 
 // ListPaymentMethods lists payment methods
 func (h *BillingHandlers) ListPaymentMethods(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	orgID, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	orgID, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
 	methods, err := h.billingService.ListPaymentMethods(orgID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(methods)
+	httputil.WriteSuccess(w, methods)
 }
 
 // SetDefaultPaymentMethod sets a payment method as default
 func (h *BillingHandlers) SetDefaultPaymentMethod(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	orgID, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	orgID, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
-	pmID, err := strconv.ParseInt(vars["pm_id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid payment method ID", http.StatusBadRequest)
+	pmID, ok := httputil.ParsePathInt64OrError(w, r, "pm_id")
+	if !ok {
 		return
 	}
 
 	if err := h.billingService.SetDefaultPaymentMethod(orgID, pmID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	httputil.WriteNoContent(w)
 }
 
 // RemovePaymentMethod removes a payment method
 func (h *BillingHandlers) RemovePaymentMethod(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	orgID, err := strconv.ParseInt(vars["id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+	orgID, ok := httputil.ParsePathInt64OrError(w, r, "id")
+	if !ok {
 		return
 	}
 
-	pmID, err := strconv.ParseInt(vars["pm_id"], 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid payment method ID", http.StatusBadRequest)
+	pmID, ok := httputil.ParsePathInt64OrError(w, r, "pm_id")
+	if !ok {
 		return
 	}
 
 	if err := h.billingService.RemovePaymentMethod(orgID, pmID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	httputil.WriteNoContent(w)
 }
 
 // HandleWebhook handles Stripe webhook events
@@ -321,7 +276,7 @@ func (h *BillingHandlers) HandleWebhook(w http.ResponseWriter, r *http.Request) 
 	// Read the request body
 	payload, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, "Failed to read request body")
 		return
 	}
 
@@ -330,7 +285,7 @@ func (h *BillingHandlers) HandleWebhook(w http.ResponseWriter, r *http.Request) 
 
 	// Handle the webhook
 	if err := h.billingService.HandleWebhook(payload, signature); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		httputil.WriteBadRequest(w, err.Error())
 		return
 	}
 
