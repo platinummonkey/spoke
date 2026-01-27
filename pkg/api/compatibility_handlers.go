@@ -1,12 +1,12 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	"github.com/platinummonkey/spoke/pkg/api/protobuf"
 	"github.com/platinummonkey/spoke/pkg/compatibility"
+	"github.com/platinummonkey/spoke/pkg/httputil"
 )
 
 // CompatibilityHandlers handles compatibility checking HTTP requests
@@ -32,7 +32,7 @@ func (h *CompatibilityHandlers) RegisterRoutes(router *mux.Router) {
 
 // checkCompatibility handles POST /modules/{name}/compatibility
 func (h *CompatibilityHandlers) checkCompatibility(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	moduleName := vars["name"]
 
 	var req struct {
@@ -41,18 +41,15 @@ func (h *CompatibilityHandlers) checkCompatibility(w http.ResponseWriter, r *htt
 		Mode       string `json:"mode"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
 	// Validate required fields
-	if req.OldVersion == "" {
-		http.Error(w, "old_version is required", http.StatusBadRequest)
+	if !httputil.RequireNonEmpty(w, req.OldVersion, "old_version") {
 		return
 	}
-	if req.NewVersion == "" {
-		http.Error(w, "new_version is required", http.StatusBadRequest)
+	if !httputil.RequireNonEmpty(w, req.NewVersion, "new_version") {
 		return
 	}
 
@@ -75,7 +72,7 @@ func (h *CompatibilityHandlers) checkCompatibility(w http.ResponseWriter, r *htt
 		case "NONE":
 			mode = compatibility.CompatibilityModeNone
 		default:
-			http.Error(w, "invalid compatibility mode", http.StatusBadRequest)
+			httputil.WriteBadRequest(w, "invalid compatibility mode")
 			return
 		}
 	}
@@ -83,14 +80,14 @@ func (h *CompatibilityHandlers) checkCompatibility(w http.ResponseWriter, r *htt
 	// Get old version
 	oldVer, err := h.storage.GetVersion(moduleName, req.OldVersion)
 	if err != nil {
-		http.Error(w, "old version not found: "+err.Error(), http.StatusNotFound)
+		httputil.WriteNotFoundError(w, "old version not found: "+err.Error())
 		return
 	}
 
 	// Get new version
 	newVer, err := h.storage.GetVersion(moduleName, req.NewVersion)
 	if err != nil {
-		http.Error(w, "new version not found: "+err.Error(), http.StatusNotFound)
+		httputil.WriteNotFoundError(w, "new version not found: "+err.Error())
 		return
 	}
 
@@ -98,7 +95,7 @@ func (h *CompatibilityHandlers) checkCompatibility(w http.ResponseWriter, r *htt
 	oldParser := protobuf.NewStringParser(oldVer.Files[0].Content)
 	oldAST, err := oldParser.Parse()
 	if err != nil {
-		http.Error(w, "failed to parse old schema: "+err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -106,7 +103,7 @@ func (h *CompatibilityHandlers) checkCompatibility(w http.ResponseWriter, r *htt
 	newParser := protobuf.NewStringParser(newVer.Files[0].Content)
 	newAST, err := newParser.Parse()
 	if err != nil {
-		http.Error(w, "failed to parse new schema: "+err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -114,19 +111,19 @@ func (h *CompatibilityHandlers) checkCompatibility(w http.ResponseWriter, r *htt
 	builder := compatibility.NewSchemaGraphBuilder()
 	oldSchema, err := builder.BuildFromAST(oldAST)
 	if err != nil {
-		http.Error(w, "failed to build old schema: "+err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 	newSchema, err := builder.BuildFromAST(newAST)
 	if err != nil {
-		http.Error(w, "failed to build new schema: "+err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
 	// Compare schemas
 	result, err := compatibility.CheckCompatibility(oldSchema, newSchema, mode)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -147,17 +144,18 @@ func (h *CompatibilityHandlers) checkCompatibility(w http.ResponseWriter, r *htt
 		InfoCount:    result.Summary.Infos,
 	}
 
-	// Set appropriate status code
+	// Set appropriate status code and return result
 	if !result.Compatible {
-		w.WriteHeader(http.StatusConflict)
+		httputil.WriteJSON(w, http.StatusConflict, response)
+		return
 	}
 
-	json.NewEncoder(w).Encode(response)
+	httputil.WriteSuccess(w, response)
 }
 
 // checkVersionCompatibility handles GET /modules/{name}/versions/{version}/compatibility
 func (h *CompatibilityHandlers) checkVersionCompatibility(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	moduleName := vars["name"]
 	version := vars["version"]
 
@@ -181,7 +179,7 @@ func (h *CompatibilityHandlers) checkVersionCompatibility(w http.ResponseWriter,
 		case "NONE":
 			mode = compatibility.CompatibilityModeNone
 		default:
-			http.Error(w, "invalid compatibility mode", http.StatusBadRequest)
+			httputil.WriteBadRequest(w, "invalid compatibility mode")
 			return
 		}
 	}
@@ -189,20 +187,20 @@ func (h *CompatibilityHandlers) checkVersionCompatibility(w http.ResponseWriter,
 	// Get the version to check
 	newVer, err := h.storage.GetVersion(moduleName, version)
 	if err != nil {
-		http.Error(w, "version not found: "+err.Error(), http.StatusNotFound)
+		httputil.WriteNotFoundError(w, "version not found: "+err.Error())
 		return
 	}
 
 	// Get all versions to find the previous one
 	versions, err := h.storage.ListVersions(moduleName)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
 	if len(versions) < 2 {
 		// No previous version to compare against
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		httputil.WriteSuccess(w, map[string]interface{}{
 			"compatible": true,
 			"mode":       mode,
 			"message":    "No previous version to compare against",
@@ -220,7 +218,7 @@ func (h *CompatibilityHandlers) checkVersionCompatibility(w http.ResponseWriter,
 	}
 
 	if oldVer == nil {
-		http.Error(w, "could not find previous version", http.StatusNotFound)
+		httputil.WriteNotFoundError(w, "could not find previous version")
 		return
 	}
 
@@ -228,7 +226,7 @@ func (h *CompatibilityHandlers) checkVersionCompatibility(w http.ResponseWriter,
 	oldParser := protobuf.NewStringParser(oldVer.Files[0].Content)
 	oldAST, err := oldParser.Parse()
 	if err != nil {
-		http.Error(w, "failed to parse old schema: "+err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -236,7 +234,7 @@ func (h *CompatibilityHandlers) checkVersionCompatibility(w http.ResponseWriter,
 	newParser := protobuf.NewStringParser(newVer.Files[0].Content)
 	newAST, err := newParser.Parse()
 	if err != nil {
-		http.Error(w, "failed to parse new schema: "+err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -244,19 +242,19 @@ func (h *CompatibilityHandlers) checkVersionCompatibility(w http.ResponseWriter,
 	builder := compatibility.NewSchemaGraphBuilder()
 	oldSchema, err := builder.BuildFromAST(oldAST)
 	if err != nil {
-		http.Error(w, "failed to build old schema: "+err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 	newSchema, err := builder.BuildFromAST(newAST)
 	if err != nil {
-		http.Error(w, "failed to build new schema: "+err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
 	// Compare schemas
 	result, err := compatibility.CheckCompatibility(oldSchema, newSchema, mode)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -281,10 +279,11 @@ func (h *CompatibilityHandlers) checkVersionCompatibility(w http.ResponseWriter,
 		InfoCount:    result.Summary.Infos,
 	}
 
-	// Set appropriate status code
+	// Set appropriate status code and return result
 	if !result.Compatible {
-		w.WriteHeader(http.StatusConflict)
+		httputil.WriteJSON(w, http.StatusConflict, response)
+		return
 	}
 
-	json.NewEncoder(w).Encode(response)
+	httputil.WriteSuccess(w, response)
 }

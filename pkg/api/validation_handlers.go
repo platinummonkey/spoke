@@ -1,11 +1,11 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	"github.com/platinummonkey/spoke/pkg/api/protobuf"
+	"github.com/platinummonkey/spoke/pkg/httputil"
 	"github.com/platinummonkey/spoke/pkg/validation"
 )
 
@@ -47,13 +47,11 @@ func (h *ValidationHandlers) validateProto(w http.ResponseWriter, r *http.Reques
 		} `json:"config"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
-	if req.Content == "" {
-		http.Error(w, "content is required", http.StatusBadRequest)
+	if !httputil.RequireNonEmpty(w, req.Content, "content") {
 		return
 	}
 
@@ -61,7 +59,7 @@ func (h *ValidationHandlers) validateProto(w http.ResponseWriter, r *http.Reques
 	parser := protobuf.NewStringParser(req.Content)
 	ast, err := parser.Parse()
 	if err != nil {
-		http.Error(w, "failed to parse proto: "+err.Error(), http.StatusBadRequest)
+		httputil.WriteBadRequest(w, "failed to parse proto: "+err.Error())
 		return
 	}
 
@@ -94,29 +92,30 @@ func (h *ValidationHandlers) validateProto(w http.ResponseWriter, r *http.Reques
 		WarningCount: len(result.Warnings),
 	}
 
-	// Set appropriate status code
+	// Set appropriate status code and return result
 	if !result.Valid {
-		w.WriteHeader(http.StatusUnprocessableEntity)
+		httputil.WriteJSON(w, http.StatusUnprocessableEntity, response)
+		return
 	}
 
-	json.NewEncoder(w).Encode(response)
+	httputil.WriteSuccess(w, response)
 }
 
 // validateVersion handles GET /modules/{name}/versions/{version}/validate
 func (h *ValidationHandlers) validateVersion(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	moduleName := vars["name"]
 	version := vars["version"]
 
 	// Get the version
 	ver, err := h.storage.GetVersion(moduleName, version)
 	if err != nil {
-		http.Error(w, "version not found: "+err.Error(), http.StatusNotFound)
+		httputil.WriteNotFoundError(w, "version not found: "+err.Error())
 		return
 	}
 
 	if len(ver.Files) == 0 {
-		http.Error(w, "no proto files in version", http.StatusNotFound)
+		httputil.WriteNotFoundError(w, "no proto files in version")
 		return
 	}
 
@@ -124,7 +123,7 @@ func (h *ValidationHandlers) validateVersion(w http.ResponseWriter, r *http.Requ
 	parser := protobuf.NewStringParser(ver.Files[0].Content)
 	ast, err := parser.Parse()
 	if err != nil {
-		http.Error(w, "failed to parse proto: "+err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -151,12 +150,13 @@ func (h *ValidationHandlers) validateVersion(w http.ResponseWriter, r *http.Requ
 		WarningCount: len(result.Warnings),
 	}
 
-	// Set appropriate status code
+	// Set appropriate status code and return result
 	if !result.Valid {
-		w.WriteHeader(http.StatusUnprocessableEntity)
+		httputil.WriteJSON(w, http.StatusUnprocessableEntity, response)
+		return
 	}
 
-	json.NewEncoder(w).Encode(response)
+	httputil.WriteSuccess(w, response)
 }
 
 // normalizeProto handles POST /normalize
@@ -174,13 +174,11 @@ func (h *ValidationHandlers) normalizeProto(w http.ResponseWriter, r *http.Reque
 		} `json:"config"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
-	if req.Content == "" {
-		http.Error(w, "content is required", http.StatusBadRequest)
+	if !httputil.RequireNonEmpty(w, req.Content, "content") {
 		return
 	}
 
@@ -199,7 +197,7 @@ func (h *ValidationHandlers) normalizeProto(w http.ResponseWriter, r *http.Reque
 	normalizer := validation.NewNormalizer(config)
 	normalized, err := normalizer.NormalizeString(req.Content)
 	if err != nil {
-		http.Error(w, "failed to normalize: "+err.Error(), http.StatusBadRequest)
+		httputil.WriteBadRequest(w, "failed to normalize: "+err.Error())
 		return
 	}
 
@@ -211,5 +209,5 @@ func (h *ValidationHandlers) normalizeProto(w http.ResponseWriter, r *http.Reque
 		Normalized: normalized,
 	}
 
-	json.NewEncoder(w).Encode(response)
+	httputil.WriteSuccess(w, response)
 }

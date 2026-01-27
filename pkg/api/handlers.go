@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"net/http"
 	"sort"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"github.com/platinummonkey/spoke/pkg/analytics"
 	"github.com/platinummonkey/spoke/pkg/async"
 	"github.com/platinummonkey/spoke/pkg/codegen/orchestrator"
+	"github.com/platinummonkey/spoke/pkg/httputil"
 	"github.com/platinummonkey/spoke/pkg/search"
 )
 
@@ -144,8 +144,7 @@ func (s *Server) RegisterRoutes(registrar RouteRegistrar) {
 // createModule handles POST /modules
 func (s *Server) createModule(w http.ResponseWriter, r *http.Request) {
 	var module Module
-	if err := json.NewDecoder(r.Body).Decode(&module); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &module) {
 		return
 	}
 
@@ -153,19 +152,18 @@ func (s *Server) createModule(w http.ResponseWriter, r *http.Request) {
 	module.UpdatedAt = time.Now()
 
 	if err := s.storage.CreateModule(&module); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(module)
+	httputil.WriteCreated(w, module)
 }
 
 // listModules handles GET /modules
 func (s *Server) listModules(w http.ResponseWriter, r *http.Request) {
 	modules, err := s.storage.ListModules()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -178,7 +176,7 @@ func (s *Server) listModules(w http.ResponseWriter, r *http.Request) {
 	for i, module := range modules {
 		versions, err := s.storage.ListVersions(module.Name)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httputil.WriteInternalError(w, err)
 			return
 		}
 
@@ -196,22 +194,22 @@ func (s *Server) listModules(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	json.NewEncoder(w).Encode(modulesWithVersions)
+	httputil.WriteSuccess(w, modulesWithVersions)
 }
 
 // getModule handles GET /modules/{name}
 func (s *Server) getModule(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	module, err := s.storage.GetModule(vars["name"])
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		httputil.WriteNotFoundError(w, err.Error())
 		return
 	}
 
 	// Get versions for this module
 	versions, err := s.storage.ListVersions(vars["name"])
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -253,15 +251,14 @@ func (s *Server) getModule(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	json.NewEncoder(w).Encode(moduleWithVersions)
+	httputil.WriteSuccess(w, moduleWithVersions)
 }
 
 // createVersion handles POST /modules/{name}/versions
 func (s *Server) createVersion(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	var version Version
-	if err := json.NewDecoder(r.Body).Decode(&version); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &version) {
 		return
 	}
 
@@ -269,7 +266,7 @@ func (s *Server) createVersion(w http.ResponseWriter, r *http.Request) {
 	version.CreatedAt = time.Now()
 
 	if err := s.storage.CreateVersion(&version); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -280,28 +277,27 @@ func (s *Server) createVersion(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(version)
+	httputil.WriteCreated(w, version)
 }
 
 // listVersions handles GET /modules/{name}/versions
 func (s *Server) listVersions(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	versions, err := s.storage.ListVersions(vars["name"])
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	json.NewEncoder(w).Encode(versions)
+	httputil.WriteSuccess(w, versions)
 }
 
 // getVersion handles GET /modules/{name}/versions/{version}
 func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	version, err := s.storage.GetVersion(vars["name"], vars["version"])
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		httputil.WriteNotFoundError(w, err.Error())
 		return
 	}
 
@@ -329,17 +325,17 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	json.NewEncoder(w).Encode(version)
+	httputil.WriteSuccess(w, version)
 }
 
 // getFile handles GET /modules/{name}/versions/{version}/files/{path}
 func (s *Server) getFile(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	file, err := s.storage.GetFile(vars["name"], vars["version"], vars["path"])
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		httputil.WriteNotFoundError(w, err.Error())
 		return
 	}
 
-	json.NewEncoder(w).Encode(file)
+	httputil.WriteSuccess(w, file)
 }
