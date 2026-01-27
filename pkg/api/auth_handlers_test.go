@@ -1235,3 +1235,209 @@ func TestRevokeModulePermission_Success_WithSqlmock(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, w.Code)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
+
+// TestListOrganizationMembers_Success tests successful listing of organization members
+func TestListOrganizationMembers_Success_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	joinedAt := time.Now()
+	rows := sqlmock.NewRows([]string{"user_id", "role", "joined_at", "username", "email"}).
+		AddRow(int64(1), "owner", joinedAt, "alice", "alice@example.com").
+		AddRow(int64(2), "member", joinedAt.Add(-24*time.Hour), "bob", "bob@example.com")
+
+	mock.ExpectQuery("SELECT om.user_id, om.role, om.joined_at, u.username, u.email").
+		WithArgs("123").
+		WillReturnRows(rows)
+
+	req := httptest.NewRequest("GET", "/auth/organizations/123/members", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "123"})
+	w := httptest.NewRecorder()
+
+	handlers.listOrganizationMembers(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+
+	var members []map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &members)
+	assert.NoError(t, err)
+	assert.Len(t, members, 2)
+	assert.Equal(t, float64(1), members[0]["user_id"])
+	assert.Equal(t, "owner", members[0]["role"])
+	assert.Equal(t, "alice", members[0]["username"])
+	assert.Equal(t, "alice@example.com", members[0]["email"])
+	assert.Equal(t, float64(2), members[1]["user_id"])
+	assert.Equal(t, "member", members[1]["role"])
+}
+
+// TestListOrganizationMembers_EmptyResult tests when organization has no members
+func TestListOrganizationMembers_EmptyResult_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	rows := sqlmock.NewRows([]string{"user_id", "role", "joined_at", "username", "email"})
+
+	mock.ExpectQuery("SELECT om.user_id, om.role, om.joined_at, u.username, u.email").
+		WithArgs("123").
+		WillReturnRows(rows)
+
+	req := httptest.NewRequest("GET", "/auth/organizations/123/members", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "123"})
+	w := httptest.NewRecorder()
+
+	handlers.listOrganizationMembers(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+
+	var members []map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &members)
+	assert.NoError(t, err)
+	assert.Len(t, members, 0)
+}
+
+// TestListOrganizationMembers_QueryError tests database query error
+func TestListOrganizationMembers_QueryError_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	mock.ExpectQuery("SELECT om.user_id, om.role, om.joined_at, u.username, u.email").
+		WithArgs("123").
+		WillReturnError(errors.New("database connection failed"))
+
+	req := httptest.NewRequest("GET", "/auth/organizations/123/members", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "123"})
+	w := httptest.NewRecorder()
+
+	handlers.listOrganizationMembers(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestListTokens_MissingUserID tests listTokens without user_id parameter
+func TestListTokens_MissingUserID(t *testing.T) {
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	req := httptest.NewRequest("GET", "/auth/tokens", nil)
+	w := httptest.NewRecorder()
+
+	handlers.listTokens(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "user_id")
+}
+
+// TestListTokens_Success tests successful token listing
+// Note: Skipped due to PostgreSQL array type complexity with sqlmock
+func TestListTokens_Success_WithSqlmock(t *testing.T) {
+	t.Skip("Requires PostgreSQL integration tests - sqlmock doesn't handle array types well")
+}
+
+// TestListTokens_EmptyResult tests when user has no tokens
+func TestListTokens_EmptyResult_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	rows := sqlmock.NewRows([]string{"id", "user_id", "token_prefix", "name", "scopes", "expires_at", "last_used_at", "created_at", "revoked_at"})
+
+	mock.ExpectQuery("SELECT id, user_id, token_prefix, name, scopes, expires_at, last_used_at, created_at, revoked_at").
+		WithArgs("123").
+		WillReturnRows(rows)
+
+	req := httptest.NewRequest("GET", "/auth/tokens?user_id=123", nil)
+	w := httptest.NewRecorder()
+
+	handlers.listTokens(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+
+	var tokens []map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &tokens)
+	assert.NoError(t, err)
+	assert.Len(t, tokens, 0)
+}
+
+// TestListTokens_QueryError tests database query error
+func TestListTokens_QueryError_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	mock.ExpectQuery("SELECT id, user_id, token_prefix, name, scopes, expires_at, last_used_at, created_at, revoked_at").
+		WithArgs("123").
+		WillReturnError(errors.New("database connection failed"))
+
+	req := httptest.NewRequest("GET", "/auth/tokens?user_id=123", nil)
+	w := httptest.NewRecorder()
+
+	handlers.listTokens(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestGetOrganization_NotFound tests when organization doesn't exist
+func TestGetOrganization_NotFound_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	mock.ExpectQuery("SELECT id, name, description, is_active, created_at, updated_at").
+		WithArgs("999").
+		WillReturnError(sql.ErrNoRows)
+
+	req := httptest.NewRequest("GET", "/auth/organizations/999", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "999"})
+	w := httptest.NewRecorder()
+
+	handlers.getOrganization(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "not found")
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestGetOrganization_DatabaseError tests database error
+func TestGetOrganization_DatabaseError_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	mock.ExpectQuery("SELECT id, name, description, is_active, created_at, updated_at").
+		WithArgs("123").
+		WillReturnError(errors.New("database connection failed"))
+
+	req := httptest.NewRequest("GET", "/auth/organizations/123", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "123"})
+	w := httptest.NewRecorder()
+
+	handlers.getOrganization(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
