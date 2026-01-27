@@ -25,7 +25,7 @@ echo ""
 images=(
     "golang:1.21-alpine"
     "alpine:latest"
-    "mysql:8.0"
+    "postgres:16-alpine"
     "redis:7-alpine"
     "minio/minio:latest"
 )

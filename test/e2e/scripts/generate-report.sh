@@ -19,7 +19,7 @@ echo ""
 echo "| Service | Status |"
 echo "|---------|--------|"
 
-services=("spoke-mysql-test:MySQL" "spoke-redis-test:Redis" "spoke-minio-test:MinIO" "spoke-api-test:Spoke API" "spoke-sprocket-test:Sprocket" "spoke-verifier-test:Verifier" "spoke-web-test:Web UI")
+services=("spoke-postgres-test:PostgreSQL" "spoke-redis-test:Redis" "spoke-minio-test:MinIO" "spoke-api-test:Spoke API" "spoke-sprocket-test:Sprocket" "spoke-verifier-test:Verifier" "spoke-web-test:Web UI")
 
 for service in "${services[@]}"; do
     container="${service%%:*}"

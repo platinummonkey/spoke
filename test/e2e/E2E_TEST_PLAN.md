@@ -65,7 +65,7 @@ podman-compose up -d
 docker-compose up -d
 
 # Expected: 8 containers running
-# - mysql, redis, minio
+# - postgres, redis, minio
 # - spoke-api, sprocket, plugin-verifier
 # - spoke-web
 # - playwright (profile=test, not started yet)
@@ -80,7 +80,7 @@ docker-compose up -d
 podman-compose ps
 
 # Expected output:
-# spoke-mysql-test       Up (healthy)
+# spoke-postgres-test    Up (healthy)
 # spoke-redis-test       Up (healthy)
 # spoke-minio-test       Up (healthy)
 # spoke-api-test         Up (healthy)
@@ -92,7 +92,7 @@ podman-compose ps
 ### Step 1.3: Verify Database Migrations
 ```bash
 # Check migrations applied
-podman exec spoke-mysql-test mysql -uspoke -pspoke spoke -e "SHOW TABLES;"
+podman exec spoke-postgres-test psql -U spoke -d spoke -c "\dt"
 
 # Expected tables:
 # - plugins
@@ -676,8 +676,8 @@ for i in {1..50}; do
 done
 wait
 
-# Check MySQL connections
-podman exec spoke-mysql-test mysql -uspoke -pspoke -e "SHOW PROCESSLIST;"
+# Check PostgreSQL connections
+podman exec spoke-postgres-test psql -U spoke -d spoke -c "SELECT * FROM pg_stat_activity;"
 ```
 
 **Success Criteria:**

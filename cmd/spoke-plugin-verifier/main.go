@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
 	"github.com/platinummonkey/spoke/pkg/plugins"
 	"github.com/sirupsen/logrus"
 )
@@ -86,7 +86,7 @@ func main() {
 func parseFlags() *Config {
 	config := &Config{}
 
-	flag.StringVar(&config.DBConnectionString, "db", getEnv("DATABASE_URL", "spoke:spoke@tcp(localhost:3306)/spoke"), "Database connection string")
+	flag.StringVar(&config.DBConnectionString, "db", getEnv("DATABASE_URL", "postgres://spoke:spoke@localhost:5432/spoke?sslmode=disable"), "Database connection string")
 	flag.DurationVar(&config.PollInterval, "poll-interval", 30*time.Second, "Interval to poll for pending verifications")
 	flag.IntVar(&config.MaxConcurrent, "max-concurrent", 3, "Maximum concurrent verifications")
 	flag.StringVar(&config.LogLevel, "log-level", "info", "Log level (debug, info, warn, error)")
@@ -112,7 +112,7 @@ func setupLogger(logLevel string) *logrus.Logger {
 }
 
 func connectDatabase(connectionString string) (*sql.DB, error) {
-	db, err := sql.Open("mysql", connectionString)
+	db, err := sql.Open("postgres", connectionString)
 	if err != nil {
 		return nil, err
 	}

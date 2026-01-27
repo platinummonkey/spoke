@@ -28,7 +28,7 @@ The `marketplace` package provides a complete REST API and service layer for the
                       ↓
 ┌────────────────────┬────────────────────────────┐
 │    Database        │      Storage               │
-│  (MySQL/Postgres)  │  (Filesystem/S3)          │
+│  (PostgreSQL)      │  (Filesystem/S3)          │
 │  - plugins         │  - plugin archives         │
 │  - versions        │  - manifests               │
 │  - reviews         │                            │
@@ -47,7 +47,7 @@ import (
 )
 
 // Initialize database
-db, err := sql.Open("mysql", "user:pass@tcp(localhost:3306)/spoke")
+db, err := sql.Open("postgres", "postgres://user:pass@localhost:5432/spoke?sslmode=disable")
 if err != nil {
     log.Fatal(err)
 }
@@ -129,10 +129,10 @@ Run migrations to create required tables:
 
 ```bash
 # Up migration
-mysql -u user -p spoke < migrations/010_plugin_marketplace.up.sql
+psql -U user -d spoke -f migrations/010_plugin_marketplace.up.sql
 
 # Down migration (rollback)
-mysql -u user -p spoke < migrations/010_plugin_marketplace.down.sql
+psql -U user -d spoke -f migrations/010_plugin_marketplace.down.sql
 ```
 
 Tables created:
@@ -245,7 +245,7 @@ Environment variables:
 
 ```bash
 # Database
-DATABASE_URL=mysql://user:pass@localhost:3306/spoke
+DATABASE_URL=postgres://user:pass@localhost:5432/spoke?sslmode=disable
 
 # Storage
 PLUGIN_STORAGE_TYPE=filesystem  # or "s3"

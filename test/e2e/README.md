@@ -74,7 +74,7 @@ podman-compose --profile test run playwright npx playwright test --headed
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| MySQL | 3307 | Database |
+| PostgreSQL | 5433 | Database |
 | Redis | 6380 | Cache |
 | MinIO | 9000/9001 | S3-compatible storage |
 | Spoke API | 8080 | REST API server |
@@ -135,8 +135,8 @@ podman-compose logs -f spoke-api
 ### Access Service Directly
 
 ```bash
-# MySQL
-podman exec -it spoke-mysql-test mysql -uspoke -pspoke spoke
+# PostgreSQL
+podman exec -it spoke-postgres-test psql -U spoke -d spoke
 
 # Redis
 podman exec -it spoke-redis-test redis-cli
@@ -329,7 +329,7 @@ Or manually pre-pull each image:
 ```bash
 docker pull golang:1.21-alpine
 docker pull alpine:latest
-docker pull mysql:8.0
+docker pull postgres:16-alpine
 docker pull redis:7-alpine
 docker pull minio/minio:latest
 ```
@@ -381,12 +381,12 @@ Build binaries locally and run tests without containers:
 cd ../..  # Go to repo root
 make build
 
-# Start only infrastructure services (MySQL, Redis, MinIO)
+# Start only infrastructure services (PostgreSQL, Redis, MinIO)
 cd test/e2e
-docker-compose up -d mysql redis minio
+docker-compose up -d postgres redis minio
 
 # Run binaries directly
-export DATABASE_URL="spoke:spoke@tcp(localhost:3307)/spoke?parseTime=true"
+export DATABASE_URL="postgres://spoke:spoke@localhost:5433/spoke?sslmode=disable"
 export REDIS_URL="localhost:6380"
 ../../bin/spoke-api &
 ../../bin/sprocket &
@@ -431,10 +431,10 @@ sleep 30
 **Solution:**
 ```bash
 # Check migration logs
-podman-compose logs mysql
+podman-compose logs postgres
 
 # Manually run migrations
-podman exec spoke-mysql-test mysql -uspoke -pspoke spoke < ../../migrations/010_plugin_marketplace.up.sql
+podman exec spoke-postgres-test psql -U spoke -d spoke -f /docker-entrypoint-initdb.d/010_plugin_marketplace.up.sql
 ```
 
 ### Playwright Tests Failing

@@ -148,12 +148,7 @@ buf_integration_test.go:117: Buf plugin loader configuration successful
 **Build Results:**
 - ✅ `spoke-api` - Built successfully
 - ✅ `sprocket` - Built successfully
-- ⚠️ `spoke-plugin-verifier` - **FAILED initially** (missing dependency)
-  - Error: `no required module provides package github.com/go-sql-driver/mysql`
-  - Fix: `go get github.com/go-sql-driver/mysql`
-  - Status after fix: ✅ Built successfully
-
-**Bug Filed:** spoke-a4r - Missing go-sql-driver/mysql dependency (P3)
+- ✅ `spoke-plugin-verifier` - Built successfully (migrated to PostgreSQL)
 
 ---
 
@@ -199,7 +194,7 @@ Error: error getting credentials - err: exit status 1, out: `retrieving identity
 ERROR:podman_compose:Build command failed
 ```
 
-**Root Cause:** Podman/Docker attempting to authenticate to corporate vault (vault.us1-build.fed.dog) for public base images (golang:1.21-alpine, alpine:latest, mysql:8.0, redis:7-alpine)
+**Root Cause:** Podman/Docker attempting to authenticate to corporate vault (vault.us1-build.fed.dog) for public base images (golang:1.21-alpine, alpine:latest, postgres:16-alpine, redis:7-alpine)
 
 **Impact:** Cannot run full E2E test suite with services orchestration
 
@@ -220,7 +215,6 @@ ERROR:podman_compose:Build command failed
 | Bug ID | Title | Priority | Status |
 |--------|-------|----------|--------|
 | spoke-4b3 | E2E: Docker/Podman authentication blocks container builds | P2 | Open |
-| spoke-a4r | Missing go-sql-driver/mysql dependency in go.mod | P3 | Open |
 | spoke-5iw | Web UI: TypeScript compilation errors | P1 | Open |
 | spoke-xqz | Missing unit tests for validator and verification components | P1 | Open |
 
@@ -241,17 +235,6 @@ podman-compose up -d
 2. Use plain `docker build` commands instead of compose
 3. Add `--no-cache` or `--pull=never` flags
 4. Disable ddtool credential helper in environment
-
----
-
-#### spoke-a4r: Missing MySQL Driver Dependency (P3)
-**Impact:** Cannot build plugin verifier without manual go get
-**Fix:** Add to go.mod:
-```bash
-go get github.com/go-sql-driver/mysql
-git add go.mod go.sum
-git commit -m "Add missing MySQL driver dependency"
-```
 
 ---
 
@@ -345,10 +328,9 @@ const [_idx, data] = entry;  // or just: const data = entry[1];
    - Estimated fix time: 1-2 hours
    - Assign to: DevOps/Infrastructure team
 
-4. **🟢 LOW: Fix Missing Dependency (P3)**
-   - Low impact, quick fix
-   - Estimated fix time: 5 minutes
-   - Can fix immediately: `go get github.com/go-sql-driver/mysql`
+4. **✅ RESOLVED: Missing Dependency (P3)**
+   - Fixed by migrating to PostgreSQL
+   - No longer applicable
 
 ### Medium-Term Improvements
 
@@ -454,9 +436,6 @@ go test ./pkg/marketplace/... -v
 go build -o /tmp/spoke-api ./cmd/spoke
 go build -o /tmp/sprocket ./cmd/sprocket
 go build -o /tmp/spoke-plugin-verifier ./cmd/spoke-plugin-verifier
-
-# Fix missing dependency
-go get github.com/go-sql-driver/mysql
 
 # Web UI build
 cd web && npm run build

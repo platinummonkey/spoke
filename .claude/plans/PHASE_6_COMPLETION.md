@@ -510,12 +510,12 @@ curl http://localhost:8080/api/v1/verifications/stats
 
 **Required:**
 - gosec (optional but recommended): `go install github.com/securego/gosec/v2/cmd/gosec@latest`
-- MySQL/MariaDB (database)
+- PostgreSQL (database)
 
 **Go Packages:**
 - github.com/sirupsen/logrus (logging)
 - github.com/gorilla/mux (routing)
-- github.com/go-sql-driver/mysql (database driver)
+- github.com/lib/pq (database driver)
 
 ## Success Criteria Met
 

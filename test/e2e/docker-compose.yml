@@ -1,23 +1,22 @@
 version: '3.8'
 
 services:
-  # MySQL Database
-  mysql:
-    image: mysql:8.0
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
     pull_policy: missing
-    container_name: spoke-mysql-test
+    container_name: spoke-postgres-test
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: spoke
-      MYSQL_USER: spoke
-      MYSQL_PASSWORD: spoke
+      POSTGRES_PASSWORD: spoke
+      POSTGRES_USER: spoke
+      POSTGRES_DB: spoke
     ports:
-      - "3307:3306"
+      - "5433:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data
       - ../../migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uspoke", "-pspoke"]
+      test: ["CMD-SHELL", "pg_isready -U spoke -d spoke"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -69,7 +68,7 @@ services:
       pull_policy: missing
     container_name: spoke-api-test
     environment:
-      DATABASE_URL: "spoke:spoke@tcp(mysql:3306)/spoke?parseTime=true"
+      DATABASE_URL: "postgres://spoke:spoke@postgres:5432/spoke?sslmode=disable"
       REDIS_URL: "redis:6379"
       S3_ENDPOINT: "http://minio:9000"
       S3_ACCESS_KEY: "spoke"
@@ -80,7 +79,7 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -102,7 +101,7 @@ services:
       pull_policy: missing
     container_name: spoke-sprocket-test
     environment:
-      DATABASE_URL: "spoke:spoke@tcp(mysql:3306)/spoke?parseTime=true"
+      DATABASE_URL: "postgres://spoke:spoke@postgres:5432/spoke?sslmode=disable"
       REDIS_URL: "redis:6379"
       STORAGE_DIR: "/var/spoke/storage"
       PLUGIN_DIRS: "/etc/spoke/plugins:/root/.spoke/plugins"
@@ -112,7 +111,7 @@ services:
       - spoke_storage:/var/spoke/storage
       - ./test-plugins:/etc/spoke/plugins:ro
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -127,12 +126,12 @@ services:
       pull_policy: missing
     container_name: spoke-verifier-test
     environment:
-      DATABASE_URL: "spoke:spoke@tcp(mysql:3306)/spoke?parseTime=true"
+      DATABASE_URL: "postgres://spoke:spoke@postgres:5432/spoke?sslmode=disable"
       POLL_INTERVAL: "30s"
       MAX_CONCURRENT: "3"
       LOG_LEVEL: "debug"
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
     networks:
       - spoke-network
@@ -175,7 +174,7 @@ services:
       - test
 
 volumes:
-  mysql_data:
+  postgres_data:
   minio_data:
   spoke_storage:
 

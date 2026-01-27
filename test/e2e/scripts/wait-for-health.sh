@@ -13,11 +13,11 @@ elapsed=0
 while [ $elapsed -lt $MAX_WAIT ]; do
     echo "Checking service health (${elapsed}s/${MAX_WAIT}s)..."
 
-    # Check MySQL
-    if podman exec spoke-mysql-test mysqladmin ping -h localhost -uspoke -pspoke --silent 2>/dev/null; then
-        echo "✓ MySQL is healthy"
+    # Check PostgreSQL
+    if podman exec spoke-postgres-test pg_isready -U spoke -d spoke 2>/dev/null | grep -q "accepting connections"; then
+        echo "✓ PostgreSQL is healthy"
     else
-        echo "  MySQL not ready yet..."
+        echo "  PostgreSQL not ready yet..."
         sleep $WAIT_INTERVAL
         elapsed=$((elapsed + WAIT_INTERVAL))
         continue

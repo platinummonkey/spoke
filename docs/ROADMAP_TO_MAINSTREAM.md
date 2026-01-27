@@ -69,7 +69,6 @@ Spoke is a well-architected protobuf schema registry POC with solid foundations 
 **Required Features:**
 - **Metadata Storage:**
   - PostgreSQL backend for modules/versions/metadata
-  - MySQL support as alternative
   - Schema migration system (goose, migrate)
   - Connection pooling and failover
 
