@@ -2,12 +2,12 @@ package api
 
 import (
 	"database/sql"
-	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/platinummonkey/spoke/pkg/auth"
+	"github.com/platinummonkey/spoke/pkg/httputil"
 )
 
 // AuthHandlers handles authentication-related HTTP requests
@@ -61,8 +61,7 @@ func (h *AuthHandlers) createUser(w http.ResponseWriter, r *http.Request) {
 		IsBot    bool   `json:"is_bot"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
@@ -95,17 +94,16 @@ func (h *AuthHandlers) createUser(w http.ResponseWriter, r *http.Request) {
 		FROM users WHERE id = $1
 	`, userID).Scan(&user.ID, &user.Username, &user.Email, &user.IsBot, &user.IsActive, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(user)
+	httputil.WriteCreated(w,user)
 }
 
 // getUser handles GET /auth/users/{id}
 func (h *AuthHandlers) getUser(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	userID := vars["id"]
 
 	user := &auth.User{}
@@ -114,20 +112,20 @@ func (h *AuthHandlers) getUser(w http.ResponseWriter, r *http.Request) {
 		FROM users WHERE id = $1
 	`, userID).Scan(&user.ID, &user.Username, &user.Email, &user.IsBot, &user.IsActive, &user.CreatedAt, &user.UpdatedAt)
 	if err == sql.ErrNoRows {
-		http.Error(w, "user not found", http.StatusNotFound)
+		httputil.WriteNotFoundError(w, "user not found")
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	json.NewEncoder(w).Encode(user)
+	httputil.WriteSuccess(w, user)
 }
 
 // updateUser handles PUT /auth/users/{id}
 func (h *AuthHandlers) updateUser(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	userID := vars["id"]
 
 	var req struct {
@@ -135,8 +133,7 @@ func (h *AuthHandlers) updateUser(w http.ResponseWriter, r *http.Request) {
 		IsActive *bool   `json:"is_active"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
@@ -161,17 +158,16 @@ func (h *AuthHandlers) updateUser(w http.ResponseWriter, r *http.Request) {
 
 	_, err := h.db.Exec(query, args...)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+	httputil.WriteSuccess(w, map[string]string{"status": "updated"})
 }
 
 // deleteUser handles DELETE /auth/users/{id}
 func (h *AuthHandlers) deleteUser(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	userID := vars["id"]
 
 	// Soft delete by setting is_active to false
@@ -180,11 +176,11 @@ func (h *AuthHandlers) deleteUser(w http.ResponseWriter, r *http.Request) {
 		WHERE id = $1
 	`, userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	httputil.WriteNoContent(w)
 }
 
 // createToken handles POST /auth/tokens
@@ -196,18 +192,16 @@ func (h *AuthHandlers) createToken(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt *time.Time `json:"expires_at"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
 	// Validate required fields
 	if req.UserID == 0 {
-		http.Error(w, "user_id is required", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, "user_id is required")
 		return
 	}
-	if req.Name == "" {
-		http.Error(w, "name is required", http.StatusBadRequest)
+	if !httputil.RequireNonEmpty(w, req.Name, "name") {
 		return
 	}
 
@@ -255,16 +249,14 @@ func (h *AuthHandlers) createToken(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   time.Now(),
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(response)
+	httputil.WriteJSON(w, http.StatusCreated, response)
 }
 
 // listTokens handles GET /auth/tokens
 func (h *AuthHandlers) listTokens(w http.ResponseWriter, r *http.Request) {
 	// Get user_id from query params
 	userIDStr := r.URL.Query().Get("user_id")
-	if userIDStr == "" {
-		http.Error(w, "user_id query parameter is required", http.StatusBadRequest)
+	if !httputil.RequireNonEmpty(w, userIDStr, "user_id query parameter") {
 		return
 	}
 
@@ -275,7 +267,7 @@ func (h *AuthHandlers) listTokens(w http.ResponseWriter, r *http.Request) {
 		ORDER BY created_at DESC
 	`, userIDStr)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -296,7 +288,7 @@ func (h *AuthHandlers) listTokens(w http.ResponseWriter, r *http.Request) {
 
 		err := rows.Scan(&id, &userID, &prefix, &name, &scopes, &expiresAt, &lastUsedAt, &createdAt, &revokedAt)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httputil.WriteInternalError(w, err)
 			return
 		}
 
@@ -312,12 +304,12 @@ func (h *AuthHandlers) listTokens(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	json.NewEncoder(w).Encode(tokens)
+	httputil.WriteSuccess(w, tokens)
 }
 
 // getToken handles GET /auth/tokens/{id}
 func (h *AuthHandlers) getToken(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	tokenID := vars["id"]
 
 	var (
@@ -337,11 +329,11 @@ func (h *AuthHandlers) getToken(w http.ResponseWriter, r *http.Request) {
 		FROM api_tokens WHERE id = $1
 	`, tokenID).Scan(&id, &userID, &prefix, &name, &scopes, &expiresAt, &lastUsedAt, &createdAt, &revokedAt)
 	if err == sql.ErrNoRows {
-		http.Error(w, "token not found", http.StatusNotFound)
+		httputil.WriteNotFoundError(w, "token not found")
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
@@ -357,12 +349,12 @@ func (h *AuthHandlers) getToken(w http.ResponseWriter, r *http.Request) {
 		"revoked_at":   revokedAt,
 	}
 
-	json.NewEncoder(w).Encode(response)
+	httputil.WriteSuccess(w, response)
 }
 
 // revokeToken handles DELETE /auth/tokens/{id}
 func (h *AuthHandlers) revokeToken(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	tokenID := vars["id"]
 
 	_, err := h.db.Exec(`
@@ -370,11 +362,11 @@ func (h *AuthHandlers) revokeToken(w http.ResponseWriter, r *http.Request) {
 		WHERE id = $1 AND revoked_at IS NULL
 	`, tokenID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	httputil.WriteNoContent(w)
 }
 
 // createOrganization handles POST /auth/organizations
@@ -384,13 +376,11 @@ func (h *AuthHandlers) createOrganization(w http.ResponseWriter, r *http.Request
 		Description string `json:"description"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
-	if req.Name == "" {
-		http.Error(w, "name is required", http.StatusBadRequest)
+	if !httputil.RequireNonEmpty(w, req.Name, "name") {
 		return
 	}
 
@@ -411,17 +401,16 @@ func (h *AuthHandlers) createOrganization(w http.ResponseWriter, r *http.Request
 		FROM organizations WHERE id = $1
 	`, orgID).Scan(&org.ID, &org.Name, &org.Description, &org.IsActive, &org.CreatedAt, &org.UpdatedAt)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(org)
+	httputil.WriteCreated(w,org)
 }
 
 // getOrganization handles GET /auth/organizations/{id}
 func (h *AuthHandlers) getOrganization(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	orgID := vars["id"]
 
 	org := &auth.Organization{}
@@ -430,20 +419,20 @@ func (h *AuthHandlers) getOrganization(w http.ResponseWriter, r *http.Request) {
 		FROM organizations WHERE id = $1
 	`, orgID).Scan(&org.ID, &org.Name, &org.Description, &org.IsActive, &org.CreatedAt, &org.UpdatedAt)
 	if err == sql.ErrNoRows {
-		http.Error(w, "organization not found", http.StatusNotFound)
+		httputil.WriteNotFoundError(w, "organization not found")
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	json.NewEncoder(w).Encode(org)
+	httputil.WriteSuccess(w, org)
 }
 
 // listOrganizationMembers handles GET /auth/organizations/{id}/members
 func (h *AuthHandlers) listOrganizationMembers(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	orgID := vars["id"]
 
 	rows, err := h.db.Query(`
@@ -454,7 +443,7 @@ func (h *AuthHandlers) listOrganizationMembers(w http.ResponseWriter, r *http.Re
 		ORDER BY om.joined_at DESC
 	`, orgID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -471,7 +460,7 @@ func (h *AuthHandlers) listOrganizationMembers(w http.ResponseWriter, r *http.Re
 
 		err := rows.Scan(&userID, &role, &joinedAt, &username, &email)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httputil.WriteInternalError(w, err)
 			return
 		}
 
@@ -484,12 +473,12 @@ func (h *AuthHandlers) listOrganizationMembers(w http.ResponseWriter, r *http.Re
 		})
 	}
 
-	json.NewEncoder(w).Encode(members)
+	httputil.WriteSuccess(w, members)
 }
 
 // addOrganizationMember handles POST /auth/organizations/{id}/members
 func (h *AuthHandlers) addOrganizationMember(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	orgID := vars["id"]
 
 	var req struct {
@@ -497,8 +486,7 @@ func (h *AuthHandlers) addOrganizationMember(w http.ResponseWriter, r *http.Requ
 		Role   string `json:"role"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
@@ -519,17 +507,16 @@ func (h *AuthHandlers) addOrganizationMember(w http.ResponseWriter, r *http.Requ
 		ON CONFLICT (organization_id, user_id) DO UPDATE SET role = $3
 	`, orgID, req.UserID, req.Role)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"status": "added"})
+	httputil.WriteCreated(w,map[string]string{"status": "added"})
 }
 
 // removeOrganizationMember handles DELETE /auth/organizations/{id}/members/{user_id}
 func (h *AuthHandlers) removeOrganizationMember(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	orgID := vars["id"]
 	userID := vars["user_id"]
 
@@ -538,16 +525,16 @@ func (h *AuthHandlers) removeOrganizationMember(w http.ResponseWriter, r *http.R
 		WHERE organization_id = $1 AND user_id = $2
 	`, orgID, userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	httputil.WriteNoContent(w)
 }
 
 // listModulePermissions handles GET /auth/modules/{module_name}/permissions
 func (h *AuthHandlers) listModulePermissions(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	moduleName := vars["module_name"]
 
 	rows, err := h.db.Query(`
@@ -558,7 +545,7 @@ func (h *AuthHandlers) listModulePermissions(w http.ResponseWriter, r *http.Requ
 		ORDER BY mp.granted_at DESC
 	`, moduleName)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 	defer rows.Close()
@@ -575,7 +562,7 @@ func (h *AuthHandlers) listModulePermissions(w http.ResponseWriter, r *http.Requ
 
 		err := rows.Scan(&id, &orgID, &perm, &grantedAt, &orgName)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httputil.WriteInternalError(w, err)
 			return
 		}
 
@@ -588,12 +575,12 @@ func (h *AuthHandlers) listModulePermissions(w http.ResponseWriter, r *http.Requ
 		})
 	}
 
-	json.NewEncoder(w).Encode(permissions)
+	httputil.WriteSuccess(w, permissions)
 }
 
 // grantModulePermission handles POST /auth/modules/{module_name}/permissions
 func (h *AuthHandlers) grantModulePermission(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	moduleName := vars["module_name"]
 
 	var req struct {
@@ -601,8 +588,7 @@ func (h *AuthHandlers) grantModulePermission(w http.ResponseWriter, r *http.Requ
 		Permission     string `json:"permission"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
@@ -625,12 +611,11 @@ func (h *AuthHandlers) grantModulePermission(w http.ResponseWriter, r *http.Requ
 		RETURNING id
 	`, moduleName, req.OrganizationID, req.Permission).Scan(&permID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	httputil.WriteCreated(w,map[string]interface{}{
 		"id":         permID,
 		"status":     "granted",
 		"permission": req.Permission,
@@ -639,7 +624,7 @@ func (h *AuthHandlers) grantModulePermission(w http.ResponseWriter, r *http.Requ
 
 // revokeModulePermission handles DELETE /auth/modules/{module_name}/permissions/{permission_id}
 func (h *AuthHandlers) revokeModulePermission(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	permID := vars["permission_id"]
 
 	_, err := h.db.Exec(`

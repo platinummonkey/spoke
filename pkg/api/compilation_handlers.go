@@ -2,15 +2,14 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
 
-	"github.com/gorilla/mux"
 	"github.com/platinummonkey/spoke/pkg/codegen"
 	"github.com/platinummonkey/spoke/pkg/codegen/orchestrator"
+	"github.com/platinummonkey/spoke/pkg/httputil"
 )
 
 // registerPackageGenerators registers package generators with the orchestrator
@@ -133,33 +132,34 @@ func (s *Server) compileWithOrchestrator(version *Version, language Language) (C
 
 // compileVersion triggers compilation for a version
 func (s *Server) compileVersion(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	moduleName := vars["name"]
 	versionStr := vars["version"]
 
 	// Check if orchestrator is available
 	if s.orchestrator == nil {
-		http.Error(w, "Code generation orchestrator not available", http.StatusServiceUnavailable)
+		httputil.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": "Code generation orchestrator not available",
+		})
 		return
 	}
 
 	// Parse request body
 	var req CompileRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+	if !httputil.ParseJSONOrError(w, r, &req) {
 		return
 	}
 
 	// Validate languages
 	if len(req.Languages) == 0 {
-		http.Error(w, "At least one language must be specified", http.StatusBadRequest)
+		httputil.WriteBadRequest(w, "At least one language must be specified")
 		return
 	}
 
 	// Get version from storage
 	version, err := s.storage.GetVersion(moduleName, versionStr)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Version not found: %v", err), http.StatusNotFound)
+		httputil.WriteNotFoundError(w, fmt.Sprintf("Version not found: %v", err))
 		return
 	}
 
@@ -177,7 +177,7 @@ func (s *Server) compileVersion(w http.ResponseWriter, r *http.Request) {
 	results, err := s.orchestrator.CompileAll(ctx, orchReq, req.Languages)
 	if err != nil {
 		// Partial success is OK - return what we have
-		http.Error(w, fmt.Sprintf("Compilation partially failed: %v", err), http.StatusInternalServerError)
+		httputil.WriteInternalError(w, fmt.Errorf("compilation partially failed: %w", err))
 	}
 
 	// Convert results to response
@@ -200,19 +200,19 @@ func (s *Server) compileVersion(w http.ResponseWriter, r *http.Request) {
 		Results: jobInfos,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	httputil.WriteSuccess(w, response)
 }
 
 // getCompilationJob returns the status of a compilation job
 func (s *Server) getCompilationJob(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := httputil.GetPathVars(r)
 	jobID := vars["jobId"]
 
 	// Check if orchestrator is available
 	if s.orchestrator == nil {
-		http.Error(w, "Code generation orchestrator not available", http.StatusServiceUnavailable)
+		httputil.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": "Code generation orchestrator not available",
+		})
 		return
 	}
 
@@ -220,7 +220,7 @@ func (s *Server) getCompilationJob(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	job, err := s.orchestrator.GetStatus(ctx, jobID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Job not found: %v", err), http.StatusNotFound)
+		httputil.WriteNotFoundError(w, fmt.Sprintf("Job not found: %v", err))
 		return
 	}
 
@@ -241,8 +241,7 @@ func (s *Server) getCompilationJob(w http.ResponseWriter, r *http.Request) {
 		jobInfo.S3Bucket = job.Result.S3Bucket
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(jobInfo)
+	httputil.WriteSuccess(w, jobInfo)
 }
 
 // Helper functions
