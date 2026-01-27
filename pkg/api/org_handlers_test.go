@@ -1041,6 +1041,242 @@ func BenchmarkCreateOrganization(b *testing.B) {
 	}
 }
 
+// TestListMembers_Success tests successful member listing
+func TestListMembers_Success(t *testing.T) {
+	service := &mockOrgService{
+		listMembersFunc: func(orgID int64) ([]*orgs.OrgMember, error) {
+			return []*orgs.OrgMember{
+				{UserID: 1, Role: auth.RoleAdmin},
+				{UserID: 2, Role: auth.RoleDeveloper},
+			}, nil
+		},
+	}
+	handlers := NewOrgHandlers(service)
+
+	req := httptest.NewRequest("GET", "/orgs/1/members", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.ListMembers(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var members []*orgs.OrgMember
+	err := json.Unmarshal(w.Body.Bytes(), &members)
+	require.NoError(t, err)
+	assert.Len(t, members, 2)
+}
+
+// TestListMembers_Error tests error from service
+func TestListMembers_Error(t *testing.T) {
+	service := &mockOrgService{
+		listMembersFunc: func(orgID int64) ([]*orgs.OrgMember, error) {
+			return nil, errors.New("database error")
+		},
+	}
+	handlers := NewOrgHandlers(service)
+
+	req := httptest.NewRequest("GET", "/orgs/1/members", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.ListMembers(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+// TestListMembers_InvalidID tests invalid organization ID
+func TestListMembers_InvalidID(t *testing.T) {
+	service := &mockOrgService{}
+	handlers := NewOrgHandlers(service)
+
+	req := httptest.NewRequest("GET", "/orgs/invalid/members", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "invalid"})
+	w := httptest.NewRecorder()
+
+	handlers.ListMembers(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// TestUpdateMember_Success tests successful member update
+func TestUpdateMember_Success(t *testing.T) {
+	service := &mockOrgService{
+		updateMemberFunc: func(orgID int64, userID int64, role auth.Role) error {
+			assert.Equal(t, int64(1), orgID)
+			assert.Equal(t, int64(2), userID)
+			assert.Equal(t, auth.RoleAdmin, role)
+			return nil
+		},
+	}
+	handlers := NewOrgHandlers(service)
+
+	reqBody, _ := json.Marshal(orgs.UpdateMemberRequest{
+		Role: auth.RoleAdmin,
+	})
+	req := httptest.NewRequest("PATCH", "/orgs/1/members/2", bytes.NewBuffer(reqBody))
+	req = mux.SetURLVars(req, map[string]string{"id": "1", "user_id": "2"})
+	w := httptest.NewRecorder()
+
+	handlers.UpdateMember(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+// TestUpdateMember_Error tests error from service
+func TestUpdateMember_Error(t *testing.T) {
+	service := &mockOrgService{
+		updateMemberFunc: func(orgID int64, userID int64, role auth.Role) error {
+			return errors.New("update failed")
+		},
+	}
+	handlers := NewOrgHandlers(service)
+
+	reqBody, _ := json.Marshal(orgs.UpdateMemberRequest{
+		Role: auth.RoleAdmin,
+	})
+	req := httptest.NewRequest("PATCH", "/orgs/1/members/2", bytes.NewBuffer(reqBody))
+	req = mux.SetURLVars(req, map[string]string{"id": "1", "user_id": "2"})
+	w := httptest.NewRecorder()
+
+	handlers.UpdateMember(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+// TestUpdateMember_InvalidJSON tests invalid JSON
+func TestUpdateMember_InvalidJSON(t *testing.T) {
+	service := &mockOrgService{}
+	handlers := NewOrgHandlers(service)
+
+	req := httptest.NewRequest("PATCH", "/orgs/1/members/2", bytes.NewBufferString("invalid"))
+	req = mux.SetURLVars(req, map[string]string{"id": "1", "user_id": "2"})
+	w := httptest.NewRecorder()
+
+	handlers.UpdateMember(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// TestRemoveMember_Success tests successful member removal
+func TestRemoveMember_Success(t *testing.T) {
+	service := &mockOrgService{
+		removeMemberFunc: func(orgID int64, userID int64) error {
+			assert.Equal(t, int64(1), orgID)
+			assert.Equal(t, int64(2), userID)
+			return nil
+		},
+	}
+	handlers := NewOrgHandlers(service)
+
+	req := httptest.NewRequest("DELETE", "/orgs/1/members/2", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "1", "user_id": "2"})
+	w := httptest.NewRecorder()
+
+	handlers.RemoveMember(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+// TestRemoveMember_Error tests error from service
+func TestRemoveMember_Error(t *testing.T) {
+	service := &mockOrgService{
+		removeMemberFunc: func(orgID int64, userID int64) error {
+			return errors.New("removal failed")
+		},
+	}
+	handlers := NewOrgHandlers(service)
+
+	req := httptest.NewRequest("DELETE", "/orgs/1/members/2", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "1", "user_id": "2"})
+	w := httptest.NewRecorder()
+
+	handlers.RemoveMember(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+// TestListInvitations_Success tests successful invitation listing
+func TestListInvitations_Success(t *testing.T) {
+	service := &mockOrgService{
+		listInvitationsFunc: func(orgID int64) ([]*orgs.OrgInvitation, error) {
+			return []*orgs.OrgInvitation{
+				{Email: "user1@example.com", Role: auth.RoleDeveloper},
+				{Email: "user2@example.com", Role: auth.RoleAdmin},
+			}, nil
+		},
+	}
+	handlers := NewOrgHandlers(service)
+
+	req := httptest.NewRequest("GET", "/orgs/1/invitations", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.ListInvitations(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var invitations []*orgs.OrgInvitation
+	err := json.Unmarshal(w.Body.Bytes(), &invitations)
+	require.NoError(t, err)
+	assert.Len(t, invitations, 2)
+}
+
+// TestListInvitations_Error tests error from service
+func TestListInvitations_Error(t *testing.T) {
+	service := &mockOrgService{
+		listInvitationsFunc: func(orgID int64) ([]*orgs.OrgInvitation, error) {
+			return nil, errors.New("database error")
+		},
+	}
+	handlers := NewOrgHandlers(service)
+
+	req := httptest.NewRequest("GET", "/orgs/1/invitations", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.ListInvitations(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+// TestRevokeInvitation_Success tests successful invitation revocation
+func TestRevokeInvitation_Success(t *testing.T) {
+	service := &mockOrgService{
+		revokeInvitationFunc: func(invitationID int64) error {
+			assert.Equal(t, int64(123), invitationID)
+			return nil
+		},
+	}
+	handlers := NewOrgHandlers(service)
+
+	req := httptest.NewRequest("DELETE", "/orgs/invitations/123", nil)
+	req = mux.SetURLVars(req, map[string]string{"invitation_id": "123"})
+	w := httptest.NewRecorder()
+
+	handlers.RevokeInvitation(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+// TestRevokeInvitation_Error tests error from service
+func TestRevokeInvitation_Error(t *testing.T) {
+	service := &mockOrgService{
+		revokeInvitationFunc: func(invitationID int64) error {
+			return errors.New("revocation failed")
+		},
+	}
+	handlers := NewOrgHandlers(service)
+
+	req := httptest.NewRequest("DELETE", "/orgs/invitations/123", nil)
+	req = mux.SetURLVars(req, map[string]string{"invitation_id": "123"})
+	w := httptest.NewRecorder()
+
+	handlers.RevokeInvitation(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
 func BenchmarkGetOrganization(b *testing.B) {
 	service := &mockOrgService{
 		getOrganizationFunc: func(id int64) (*orgs.Organization, error) {
