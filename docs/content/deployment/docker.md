@@ -30,7 +30,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:14-alpine
+    image: postgres:16-alpine
     environment:
       POSTGRES_DB: spoke
       POSTGRES_USER: spoke
@@ -112,7 +112,7 @@ Create `Dockerfile`:
 
 ```dockerfile
 # Build stage
-FROM golang:1.20-alpine AS builder
+FROM golang:1.21-alpine AS builder
 
 WORKDIR /build
 
@@ -210,7 +210,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:14-alpine
+    image: postgres:16-alpine
     environment:
       POSTGRES_DB: spoke
       POSTGRES_USER: spoke

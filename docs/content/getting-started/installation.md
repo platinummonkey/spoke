@@ -11,13 +11,13 @@ This guide covers detailed installation instructions for Spoke server, CLI, and 
 
 ### Server Requirements
 - **Operating System**: Linux, macOS, or Windows
-- **Go**: 1.16 or later (for building from source)
+- **Go**: 1.21 or later (for building from source)
 - **Memory**: Minimum 512MB RAM, 2GB+ recommended for production
 - **Storage**: Varies based on number of modules (10GB+ recommended)
 - **Network**: Port 8080 (default) or custom port
 
 ### Client Requirements
-- **Go**: 1.16+ (for building CLI from source)
+- **Go**: 1.21+ (for building CLI from source)
 - **protoc**: Protocol Buffers compiler
 - **Language Plugins**: Depends on target languages
 

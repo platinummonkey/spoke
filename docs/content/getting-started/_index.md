@@ -20,7 +20,7 @@ Welcome to Spoke! This section will help you get up and running quickly with the
 
 Before you begin, ensure you have:
 
-- Go 1.16 or later (for building from source)
+- Go 1.21 or later (for building from source)
 - Protocol Buffers compiler (`protoc`)
 - Language-specific protoc plugins (e.g., `protoc-gen-go` for Go)
 - Basic understanding of Protocol Buffers

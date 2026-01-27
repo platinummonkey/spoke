@@ -6,8 +6,6 @@ weight: 1
 
 # Spoke - Protobuf Schema Registry
 
-![Spoke Logo](/logos/logo_main.png)
-
 **Build Once. Connect Everywhere.**
 
 Spoke is a **Protobuf Schema Registry** that provides centralized storage, versioning, and pre-compilation of Protocol Buffer definitions. It acts as a hub for schema-driven development, enabling multiple services and distributed systems to share and synchronize their communication contracts.

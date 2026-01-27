@@ -3,6 +3,9 @@ languageCode = 'en-us'
 title = 'Spoke - Protobuf Schema Registry'
 theme = 'book'
 
+# Ensure all URLs include the baseURL prefix (important for GitHub Pages subpath)
+canonifyURLs = true
+
 # Book theme configuration
 [params]
   # Repository configuration (for "Edit this page" links)
@@ -52,43 +55,43 @@ theme = 'book'
   [[menu.main]]
     identifier = 'getting-started'
     name = 'Getting Started'
-    url = '/getting-started/'
+    url = 'getting-started/'
     weight = 1
 
   [[menu.main]]
     identifier = 'guides'
     name = 'Guides'
-    url = '/guides/'
+    url = 'guides/'
     weight = 2
 
   [[menu.main]]
     identifier = 'tutorials'
     name = 'Tutorials'
-    url = '/tutorials/'
+    url = 'tutorials/'
     weight = 3
 
   [[menu.main]]
     identifier = 'examples'
     name = 'Examples'
-    url = '/examples/'
+    url = 'examples/'
     weight = 4
 
   [[menu.main]]
     identifier = 'architecture'
     name = 'Architecture'
-    url = '/architecture/'
+    url = 'architecture/'
     weight = 5
 
   [[menu.main]]
     identifier = 'deployment'
     name = 'Deployment'
-    url = '/deployment/'
+    url = 'deployment/'
     weight = 6
 
   [[menu.main]]
     identifier = 'api'
     name = 'API Reference'
-    url = '/api/'
+    url = 'api/'
     weight = 7
 
 [outputs]
