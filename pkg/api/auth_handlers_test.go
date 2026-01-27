@@ -4,31 +4,25 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gorilla/mux"
-	_ "github.com/lib/pq"
 	"github.com/platinummonkey/spoke/pkg/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// setupTestDB creates a test database connection
-// Uses in-memory SQLite for testing (would use PostgreSQL in real tests)
-func setupTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-
-	// For now, skip tests that require database
-	// In production, this would connect to a test PostgreSQL database
-	t.Skip("Database tests require PostgreSQL test instance")
-	return nil
-}
-
 // TestNewAuthHandlers verifies handler initialization
 func TestNewAuthHandlers(t *testing.T) {
-	db := &sql.DB{} // Mock DB
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
 	handlers := NewAuthHandlers(db)
 
 	assert.NotNil(t, handlers)
@@ -817,4 +811,427 @@ func TestTokenExpiresAtValidation(t *testing.T) {
 	}
 	t.Skip("Requires PostgreSQL test database")
 	// Would test that expiration times are properly stored and enforced
+}
+
+// Comprehensive sqlmock-based tests
+
+func TestCreateUser_Success_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	now := time.Now()
+	mock.ExpectQuery("INSERT INTO users").
+		WithArgs("testuser", "test@example.com", false).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	mock.ExpectQuery("SELECT id, username, email, is_bot, is_active, created_at, updated_at FROM users").
+		WithArgs(int64(1)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "is_bot", "is_active", "created_at", "updated_at"}).
+			AddRow(1, "testuser", "test@example.com", false, true, now, now))
+
+	reqBody, _ := json.Marshal(map[string]interface{}{
+		"username": "testuser",
+		"email":    "test@example.com",
+		"is_bot":   false,
+	})
+	req := httptest.NewRequest("POST", "/auth/users", bytes.NewBuffer(reqBody))
+	w := httptest.NewRecorder()
+
+	handlers.createUser(w, req)
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCreateUser_InsertError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	mock.ExpectQuery("INSERT INTO users").
+		WithArgs("testuser", "test@example.com", false).
+		WillReturnError(errors.New("database error"))
+
+	reqBody, _ := json.Marshal(map[string]interface{}{
+		"username": "testuser",
+		"email":    "test@example.com",
+	})
+	req := httptest.NewRequest("POST", "/auth/users", bytes.NewBuffer(reqBody))
+	w := httptest.NewRecorder()
+
+	handlers.createUser(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetUser_Success_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	now := time.Now()
+	mock.ExpectQuery("SELECT id, username, email, is_bot, is_active, created_at, updated_at FROM users").
+		WithArgs("1").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "is_bot", "is_active", "created_at", "updated_at"}).
+			AddRow(1, "testuser", "test@example.com", false, true, now, now))
+
+	req := httptest.NewRequest("GET", "/auth/users/1", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.getUser(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+
+	var response auth.User
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, "testuser", response.Username)
+}
+
+func TestGetUser_NotFound_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	mock.ExpectQuery("SELECT id, username, email, is_bot, is_active, created_at, updated_at FROM users").
+		WithArgs("999").
+		WillReturnError(sql.ErrNoRows)
+
+	req := httptest.NewRequest("GET", "/auth/users/999", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "999"})
+	w := httptest.NewRecorder()
+
+	handlers.getUser(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUpdateUser_Success_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	email := "newemail@example.com"
+	mock.ExpectExec("UPDATE users").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	reqBody, _ := json.Marshal(map[string]interface{}{
+		"email": email,
+	})
+	req := httptest.NewRequest("PUT", "/auth/users/1", bytes.NewBuffer(reqBody))
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.updateUser(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDeleteUser_Success_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	mock.ExpectExec("UPDATE users SET is_active = false").
+		WithArgs("1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	req := httptest.NewRequest("DELETE", "/auth/users/1", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.deleteUser(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// Skip database tests for token handlers due to PostgreSQL array type complexity with sqlmock
+// These would work with real PostgreSQL integration tests
+
+// TestCreateToken_DatabaseError_WithSqlmock tests database error during token creation
+// Note: Skipped due to sqlmock complexity with PostgreSQL array types
+// This scenario would be tested in integration tests with real database
+func TestCreateToken_DatabaseError_WithSqlmock(t *testing.T) {
+	t.Skip("Requires PostgreSQL integration test due to array type complexity")
+}
+
+func TestListTokens_DatabaseError_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	mock.ExpectQuery(`SELECT .+ FROM api_tokens`).
+		WithArgs("1").
+		WillReturnError(errors.New("database error"))
+
+	req := httptest.NewRequest("GET", "/auth/tokens?user_id=1", nil)
+	w := httptest.NewRecorder()
+
+	handlers.listTokens(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetToken_NotFound_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	mock.ExpectQuery(`SELECT .+ FROM api_tokens WHERE`).
+		WithArgs("999").
+		WillReturnError(sql.ErrNoRows)
+
+	req := httptest.NewRequest("GET", "/auth/tokens/999", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "999"})
+	w := httptest.NewRecorder()
+
+	handlers.getToken(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRevokeToken_Success_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	mock.ExpectExec("UPDATE api_tokens SET revoked_at = NOW()").
+		WithArgs("1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	req := httptest.NewRequest("DELETE", "/auth/tokens/1", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.revokeToken(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCreateOrganization_Success_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	now := time.Now()
+	mock.ExpectQuery("INSERT INTO organizations").
+		WithArgs("test-org", "Test organization").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	mock.ExpectQuery("SELECT id, name, description, is_active, created_at, updated_at FROM organizations").
+		WithArgs(int64(1)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "description", "is_active", "created_at", "updated_at"}).
+			AddRow(1, "test-org", "Test organization", true, now, now))
+
+	reqBody, _ := json.Marshal(map[string]string{
+		"name":        "test-org",
+		"description": "Test organization",
+	})
+	req := httptest.NewRequest("POST", "/auth/organizations", bytes.NewBuffer(reqBody))
+	w := httptest.NewRecorder()
+
+	handlers.createOrganization(w, req)
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetOrganization_Success_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	now := time.Now()
+	mock.ExpectQuery("SELECT id, name, description, is_active, created_at, updated_at FROM organizations").
+		WithArgs("1").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "description", "is_active", "created_at", "updated_at"}).
+			AddRow(1, "test-org", "Test organization", true, now, now))
+
+	req := httptest.NewRequest("GET", "/auth/organizations/1", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.getOrganization(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAddOrganizationMember_InvalidRole_WithSqlmock(t *testing.T) {
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	reqBody, _ := json.Marshal(map[string]interface{}{
+		"user_id": 1,
+		"role":    "invalid_role",
+	})
+	req := httptest.NewRequest("POST", "/auth/organizations/1/members", bytes.NewBuffer(reqBody))
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.addOrganizationMember(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "invalid role")
+}
+
+func TestAddOrganizationMember_Success_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	mock.ExpectExec("INSERT INTO organization_members").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	reqBody, _ := json.Marshal(map[string]interface{}{
+		"user_id": 1,
+		"role":    "developer",
+	})
+	req := httptest.NewRequest("POST", "/auth/organizations/1/members", bytes.NewBuffer(reqBody))
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.addOrganizationMember(w, req)
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRemoveOrganizationMember_Success_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	mock.ExpectExec("DELETE FROM organization_members").
+		WithArgs("1", "2").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	req := httptest.NewRequest("DELETE", "/auth/organizations/1/members/2", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "1", "user_id": "2"})
+	w := httptest.NewRecorder()
+
+	handlers.removeOrganizationMember(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestListModulePermissions_Success_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	now := time.Now()
+	rows := sqlmock.NewRows([]string{"id", "organization_id", "permission", "granted_at", "name"}).
+		AddRow(1, 1, "read", now, "org1").
+		AddRow(2, 2, "write", now, "org2")
+
+	mock.ExpectQuery("SELECT mp.id, mp.organization_id, mp.permission, mp.granted_at, o.name FROM module_permissions").
+		WithArgs("test-module").
+		WillReturnRows(rows)
+
+	req := httptest.NewRequest("GET", "/auth/modules/test-module/permissions", nil)
+	req = mux.SetURLVars(req, map[string]string{"module_name": "test-module"})
+	w := httptest.NewRecorder()
+
+	handlers.listModulePermissions(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+
+	var response []map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Len(t, response, 2)
+}
+
+func TestGrantModulePermission_Success_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	mock.ExpectQuery("INSERT INTO module_permissions").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	reqBody, _ := json.Marshal(map[string]interface{}{
+		"organization_id": 1,
+		"permission":      "read",
+	})
+	req := httptest.NewRequest("POST", "/auth/modules/test-module/permissions", bytes.NewBuffer(reqBody))
+	req = mux.SetURLVars(req, map[string]string{"module_name": "test-module"})
+	w := httptest.NewRecorder()
+
+	handlers.grantModulePermission(w, req)
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+
+	var response map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, "granted", response["status"])
+}
+
+func TestRevokeModulePermission_Success_WithSqlmock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	handlers := NewAuthHandlers(db)
+
+	mock.ExpectExec("DELETE FROM module_permissions").
+		WithArgs("1").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	req := httptest.NewRequest("DELETE", "/auth/modules/test-module/permissions/1", nil)
+	req = mux.SetURLVars(req, map[string]string{"permission_id": "1"})
+	w := httptest.NewRecorder()
+
+	handlers.revokeModulePermission(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }
