@@ -10,23 +10,23 @@ import (
 func TestDefaultPlanPricing(t *testing.T) {
 	pricing := DefaultPlanPricing()
 
-	// Test free plan
-	freePlan := pricing[orgs.PlanFree]
-	assert.Equal(t, int64(0), freePlan.BasePriceCents)
-	assert.Equal(t, int64(1*1024*1024*1024), freePlan.IncludedStorage)
-	assert.Equal(t, 100, freePlan.IncludedCompileJobs)
+	// Test small plan (free tier)
+	smallPlan := pricing[orgs.QuotaTierSmall]
+	assert.Equal(t, int64(0), smallPlan.BasePriceCents)
+	assert.Equal(t, int64(1*1024*1024*1024), smallPlan.IncludedStorage)
+	assert.Equal(t, 100, smallPlan.IncludedCompileJobs)
 
-	// Test pro plan
-	proPlan := pricing[orgs.PlanPro]
-	assert.Equal(t, int64(4900), proPlan.BasePriceCents) // $49
-	assert.Equal(t, int64(10*1024*1024*1024), proPlan.IncludedStorage)
-	assert.Equal(t, 1000, proPlan.IncludedCompileJobs)
+	// Test medium plan ($49/month)
+	mediumPlan := pricing[orgs.QuotaTierMedium]
+	assert.Equal(t, int64(4900), mediumPlan.BasePriceCents) // $49
+	assert.Equal(t, int64(10*1024*1024*1024), mediumPlan.IncludedStorage)
+	assert.Equal(t, 1000, mediumPlan.IncludedCompileJobs)
 
-	// Test enterprise plan
-	entPlan := pricing[orgs.PlanEnterprise]
-	assert.Equal(t, int64(49900), entPlan.BasePriceCents) // $499
-	assert.Equal(t, int64(100*1024*1024*1024), entPlan.IncludedStorage)
-	assert.Equal(t, 10000, entPlan.IncludedCompileJobs)
+	// Test large plan ($499/month)
+	largePlan := pricing[orgs.QuotaTierLarge]
+	assert.Equal(t, int64(49900), largePlan.BasePriceCents) // $499
+	assert.Equal(t, int64(100*1024*1024*1024), largePlan.IncludedStorage)
+	assert.Equal(t, 10000, largePlan.IncludedCompileJobs)
 }
 
 func TestSubscriptionStatuses(t *testing.T) {
@@ -52,22 +52,22 @@ func TestPaymentMethodTypes(t *testing.T) {
 
 func TestPlanPricingOverages(t *testing.T) {
 	pricing := DefaultPlanPricing()
-	proPlan := pricing[orgs.PlanPro]
+	mediumPlan := pricing[orgs.QuotaTierMedium]
 
 	// Test storage overage calculation
-	includedStorage := proPlan.IncludedStorage
+	includedStorage := mediumPlan.IncludedStorage
 	usedStorage := includedStorage + 5*1024*1024*1024 // 5GB overage
 	overageGB := (usedStorage - includedStorage) / (1024 * 1024 * 1024)
-	overageCost := overageGB * proPlan.StoragePricePerGB
+	overageCost := overageGB * mediumPlan.StoragePricePerGB
 
 	assert.Equal(t, int64(5), overageGB)
 	assert.Equal(t, int64(2500), overageCost) // 5GB * $5/GB = $25
 
 	// Test compile job overage
-	includedJobs := proPlan.IncludedCompileJobs
+	includedJobs := mediumPlan.IncludedCompileJobs
 	usedJobs := includedJobs + 200
 	overageJobs := usedJobs - includedJobs
-	jobCost := int64(overageJobs) * proPlan.CompileJobPrice
+	jobCost := int64(overageJobs) * mediumPlan.CompileJobPrice
 
 	assert.Equal(t, 200, overageJobs)
 	assert.Equal(t, int64(1000), jobCost) // 200 jobs * $0.05/job = $10
@@ -75,9 +75,9 @@ func TestPlanPricingOverages(t *testing.T) {
 
 func TestBillCalculation(t *testing.T) {
 	pricing := DefaultPlanPricing()
-	proPlan := pricing[orgs.PlanPro]
+	mediumPlan := pricing[orgs.QuotaTierMedium]
 
-	baseCost := proPlan.BasePriceCents
+	baseCost := mediumPlan.BasePriceCents
 	storageOverage := int64(2500) // $25 for 5GB overage
 	jobOverage := int64(1000)     // $10 for 200 job overage
 	apiOverage := int64(100)      // $1 for 10k API request overage

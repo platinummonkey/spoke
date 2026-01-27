@@ -34,7 +34,10 @@ func NewOrchestrator(config *Config) (*DefaultOrchestrator, error) {
 	}
 
 	// Initialize language registry
-	langRegistry := languages.InitializeDefaultRegistry()
+	langRegistry, err := languages.InitializeDefaultRegistry()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize language registry: %w", err)
+	}
 
 	// Initialize Docker runner
 	dockerRunner, err := docker.NewDockerRunner()

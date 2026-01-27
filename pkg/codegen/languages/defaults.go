@@ -490,15 +490,14 @@ func getScalaLanguageSpec() *LanguageSpec {
 }
 
 // InitializeDefaultRegistry creates and populates a registry with default languages
-func InitializeDefaultRegistry() *Registry {
+func InitializeDefaultRegistry() (*Registry, error) {
 	registry := NewRegistry()
 
 	for _, spec := range GetDefaultLanguages() {
 		if err := registry.Register(spec); err != nil {
-			// This should never happen with valid default specs
-			panic("failed to register default language: " + err.Error())
+			return nil, err
 		}
 	}
 
-	return registry
+	return registry, nil
 }

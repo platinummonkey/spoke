@@ -163,7 +163,10 @@ func TestGetJavaLanguageSpec(t *testing.T) {
 }
 
 func TestInitializeDefaultRegistry(t *testing.T) {
-	registry := InitializeDefaultRegistry()
+	registry, err := InitializeDefaultRegistry()
+	if err != nil {
+		t.Fatalf("InitializeDefaultRegistry() failed: %v", err)
+	}
 
 	if registry == nil {
 		t.Fatal("expected non-nil registry")
