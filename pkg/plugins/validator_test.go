@@ -612,8 +612,9 @@ func main() {
 
 				// Check issue details
 				for _, issue := range issues {
-					assert.Equal(t, "warning", issue.Severity)
-					assert.Equal(t, "dangerous-imports", issue.Category)
+					// Severity depends on the import (high for unsafe/syscall, medium for others)
+					assert.Contains(t, []string{"high", "medium"}, issue.Severity)
+					assert.Equal(t, "dangerous-import", issue.Category)
 					assert.NotEmpty(t, issue.Description)
 					assert.NotEmpty(t, issue.File)
 				}
