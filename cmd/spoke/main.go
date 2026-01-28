@@ -19,6 +19,7 @@ import (
 	"github.com/platinummonkey/spoke/pkg/search"
 	"github.com/platinummonkey/spoke/pkg/storage"
 	"github.com/platinummonkey/spoke/pkg/storage/postgres"
+	"github.com/platinummonkey/spoke/pkg/swagger"
 )
 
 func main() {
@@ -109,6 +110,11 @@ func main() {
 	depHandlers := dependencies.NewDependencyHandlers(store)
 	server.RegisterRoutes(depHandlers)
 	logger.Info("Dependency routes registered")
+
+	// Register OpenAPI/Swagger documentation
+	swaggerHandlers := swagger.NewSwaggerHandlers()
+	server.RegisterRoutes(swaggerHandlers)
+	logger.Info("OpenAPI/Swagger documentation routes registered")
 
 	// Wrap with OpenTelemetry HTTP instrumentation
 	var handler http.Handler = server

@@ -1,0 +1,3261 @@
+openapi: 3.0.3
+info:
+  title: Spoke Protocol Registry API
+  description: |
+    RESTful API for the Spoke Protocol Registry - a centralized repository for Protocol Buffer definitions.
+
+    ## Authentication
+
+    Most endpoints require authentication using Bearer JWT tokens:
+    ```
+    Authorization: Bearer <token>
+    ```
+
+    ## Rate Limiting
+
+    API requests are rate-limited per organization:
+    - Free tier: 100 requests/hour
+    - Pro tier: 1000 requests/hour
+    - Enterprise: Custom limits
+
+    ## Response Format
+
+    All responses are JSON. Error responses follow this format:
+    ```json
+    {
+      "error": "Error message",
+      "message": "Detailed explanation",
+      "details": {
+        "field_name": "specific error"
+      }
+    }
+    ```
+  version: 2.0.0
+  contact:
+    name: Spoke API Support
+    url: https://spoke.dev/support
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: https://api.spoke.dev
+    description: Production server
+  - url: https://staging.api.spoke.dev
+    description: Staging server
+  - url: http://localhost:8080
+    description: Local development server
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Modules
+    description: Protocol module management
+  - name: Versions
+    description: Module version management
+  - name: Compilation
+    description: Code generation and compilation
+  - name: Validation
+    description: Protocol validation
+  - name: Compatibility
+    description: Compatibility checking
+  - name: Authentication
+    description: User and token management
+  - name: Organizations
+    description: Organization management
+  - name: Billing
+    description: Billing and subscription management
+  - name: Search
+    description: Search and discovery
+  - name: Analytics
+    description: Usage analytics and statistics
+  - name: User Features
+    description: Bookmarks and saved searches
+  - name: Plugin Verification
+    description: Plugin security verification
+
+paths:
+  # ============================================================================
+  # MODULES API
+  # ============================================================================
+
+  /modules:
+    get:
+      tags: [Modules]
+      summary: List all modules
+      description: Retrieve a list of all available protocol modules
+      operationId: listModules
+      security: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name, created_at, updated_at]
+            default: name
+      responses:
+        '200':
+          description: List of modules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Module'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [Modules]
+      summary: Create a new module
+      description: Create a new protocol module in the registry
+      operationId: createModule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  pattern: '^[a-z0-9_-]+$'
+                  description: Module name (lowercase, alphanumeric, dashes, underscores)
+                description:
+                  type: string
+                  maxLength: 500
+      responses:
+        '201':
+          description: Module created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Module'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Module already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /modules/{name}:
+    get:
+      tags: [Modules]
+      summary: Get module details
+      description: Retrieve detailed information about a specific module
+      operationId: getModule
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+      responses:
+        '200':
+          description: Module details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Module'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ============================================================================
+  # VERSIONS API
+  # ============================================================================
+
+  /modules/{name}/versions:
+    get:
+      tags: [Versions]
+      summary: List module versions
+      description: Get all versions for a specific module
+      operationId: listVersions
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+      responses:
+        '200':
+          description: List of versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Version'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [Versions]
+      summary: Create a new version
+      description: Create a new version for a module
+      operationId: createVersion
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, files]
+              properties:
+                version:
+                  type: string
+                  pattern: '^[0-9]+\.[0-9]+\.[0-9]+$'
+                  description: Semantic version (e.g., 1.0.0)
+                files:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/File'
+                dependencies:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      module:
+                        type: string
+                      version:
+                        type: string
+      responses:
+        '201':
+          description: Version created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Version'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Version already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /modules/{name}/versions/{version}:
+    get:
+      tags: [Versions]
+      summary: Get version details
+      description: Retrieve detailed information about a specific version
+      operationId: getVersion
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+        - $ref: '#/components/parameters/Version'
+      responses:
+        '200':
+          description: Version details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Version'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /modules/{name}/versions/{version}/files/{path}:
+    get:
+      tags: [Versions]
+      summary: Get a specific file
+      description: Retrieve the contents of a file from a version
+      operationId: getFile
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+        - $ref: '#/components/parameters/Version'
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+          description: File path within the version
+      responses:
+        '200':
+          description: File contents
+          content:
+            text/plain:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /modules/{name}/versions/{version}/download/{language}:
+    get:
+      tags: [Versions]
+      summary: Download compiled code
+      description: Download pre-compiled code for a specific language
+      operationId: downloadCompiled
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+        - $ref: '#/components/parameters/Version'
+        - $ref: '#/components/parameters/Language'
+      responses:
+        '200':
+          description: Compiled code archive
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ============================================================================
+  # COMPILATION API (v1)
+  # ============================================================================
+
+  /api/v1/languages:
+    post:
+      tags: [Compilation]
+      summary: List supported languages
+      description: Get a list of all supported compilation target languages
+      operationId: listLanguages
+      security: []
+      responses:
+        '200':
+          description: List of supported languages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LanguageInfo'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/languages/{id}:
+    get:
+      tags: [Compilation]
+      summary: Get language details
+      description: Get detailed information about a specific language
+      operationId: getLanguage
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [go, python, java, cpp, csharp, rust, typescript, javascript, dart, swift, kotlin, objc, ruby, php, scala]
+      responses:
+        '200':
+          description: Language details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LanguageInfo'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/modules/{name}/versions/{version}/compile:
+    post:
+      tags: [Compilation]
+      summary: Compile a version
+      description: Compile protocol definitions to target language(s)
+      operationId: compileVersion
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+        - $ref: '#/components/parameters/Version'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompileRequest'
+      responses:
+        '200':
+          description: Compilation job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Compilation validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/modules/{name}/versions/{version}/compile/{jobId}:
+    get:
+      tags: [Compilation]
+      summary: Get compilation job status
+      description: Check the status of a compilation job
+      operationId: getCompilationJob
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+        - $ref: '#/components/parameters/Version'
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompilationJobInfo'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/modules/{name}/versions/{version}/examples/{language}:
+    get:
+      tags: [Compilation]
+      summary: Get usage examples
+      description: Get code examples for using the compiled code
+      operationId: getExamples
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+        - $ref: '#/components/parameters/Version'
+        - $ref: '#/components/parameters/Language'
+      responses:
+        '200':
+          description: Code examples
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  language:
+                    type: string
+                  examples:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        title:
+                          type: string
+                        description:
+                          type: string
+                        code:
+                          type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/modules/{name}/diff:
+    post:
+      tags: [Compilation]
+      summary: Compare versions
+      description: Get a diff between two versions of a module
+      operationId: diffVersions
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from_version, to_version]
+              properties:
+                from_version:
+                  type: string
+                to_version:
+                  type: string
+      responses:
+        '200':
+          description: Version diff
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from_version:
+                    type: string
+                  to_version:
+                    type: string
+                  diff:
+                    type: string
+                  breaking_changes:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ============================================================================
+  # VALIDATION API
+  # ============================================================================
+
+  /validate:
+    post:
+      tags: [Validation]
+      summary: Validate protocol files
+      description: Validate protocol buffer files for syntax and semantic errors
+      operationId: validateFiles
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/File'
+      responses:
+        '200':
+          description: Validation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /modules/{name}/versions/{version}/validate:
+    get:
+      tags: [Validation]
+      summary: Validate a version
+      description: Validate all files in a specific version
+      operationId: validateVersion
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+        - $ref: '#/components/parameters/Version'
+      responses:
+        '200':
+          description: Validation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /normalize:
+    post:
+      tags: [Validation]
+      summary: Normalize protocol files
+      description: Format and normalize protocol buffer files
+      operationId: normalizeFiles
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/File'
+      responses:
+        '200':
+          description: Normalized files
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/File'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ============================================================================
+  # COMPATIBILITY API
+  # ============================================================================
+
+  /modules/{name}/compatibility:
+    post:
+      tags: [Compatibility]
+      summary: Check compatibility
+      description: Check backward/forward compatibility between versions
+      operationId: checkCompatibility
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from_version, to_version]
+              properties:
+                from_version:
+                  type: string
+                to_version:
+                  type: string
+                check_type:
+                  type: string
+                  enum: [backward, forward, full]
+                  default: backward
+      responses:
+        '200':
+          description: Compatibility results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompatibilityResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /modules/{name}/versions/{version}/compatibility:
+    get:
+      tags: [Compatibility]
+      summary: Get version compatibility info
+      description: Get compatibility information for a specific version
+      operationId: getVersionCompatibility
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+        - $ref: '#/components/parameters/Version'
+      responses:
+        '200':
+          description: Compatibility information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                  compatible_with:
+                    type: array
+                    items:
+                      type: string
+                  breaking_changes_from:
+                    type: array
+                    items:
+                      type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ============================================================================
+  # AUTHENTICATION API
+  # ============================================================================
+
+  /auth/users:
+    post:
+      tags: [Authentication]
+      summary: Create a user
+      description: Register a new user account
+      operationId: createUser
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username:
+                  type: string
+                  pattern: '^[a-zA-Z0-9_-]{3,32}$'
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                full_name:
+                  type: string
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /auth/users/{id}:
+    get:
+      tags: [Authentication]
+      summary: Get user details
+      description: Retrieve user information
+      operationId: getUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags: [Authentication]
+      summary: Update user
+      description: Update user information
+      operationId: updateUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                full_name:
+                  type: string
+                password:
+                  type: string
+                  minLength: 8
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags: [Authentication]
+      summary: Delete user
+      description: Soft delete a user account
+      operationId: deleteUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: User deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /auth/tokens:
+    get:
+      tags: [Authentication]
+      summary: List API tokens
+      description: List all API tokens for the authenticated user
+      operationId: listTokens
+      responses:
+        '200':
+          description: List of tokens
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/APIToken'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [Authentication]
+      summary: Create API token
+      description: Generate a new API token for authentication
+      operationId: createToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  description: Token name for identification
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                    enum: [read, write, delete, admin]
+                  description: Token permissions
+                expires_at:
+                  type: string
+                  format: date-time
+                  description: Optional expiration time
+      responses:
+        '201':
+          description: Token created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: The actual token value (only shown once)
+                  token_info:
+                    $ref: '#/components/schemas/APIToken'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /auth/tokens/{id}:
+    get:
+      tags: [Authentication]
+      summary: Get token details
+      description: Retrieve details about a specific API token
+      operationId: getToken
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Token details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIToken'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags: [Authentication]
+      summary: Revoke token
+      description: Revoke an API token
+      operationId: revokeToken
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Token revoked successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ============================================================================
+  # ORGANIZATIONS API
+  # ============================================================================
+
+  /orgs:
+    get:
+      tags: [Organizations]
+      summary: List organizations
+      description: List all organizations the user belongs to
+      operationId: listOrganizations
+      responses:
+        '200':
+          description: List of organizations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [Organizations]
+      summary: Create organization
+      description: Create a new organization
+      operationId: createOrganization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  pattern: '^[a-z0-9_-]+$'
+                display_name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '201':
+          description: Organization created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Organization already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /orgs/{id}:
+    get:
+      tags: [Organizations]
+      summary: Get organization
+      description: Get organization details
+      operationId: getOrganization
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: Organization details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags: [Organizations]
+      summary: Update organization
+      description: Update organization details
+      operationId: updateOrganization
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '200':
+          description: Organization updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags: [Organizations]
+      summary: Delete organization
+      description: Delete an organization
+      operationId: deleteOrganization
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '204':
+          description: Organization deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /orgs/{id}/members:
+    get:
+      tags: [Organizations]
+      summary: List members
+      description: List all members of an organization
+      operationId: listMembers
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: List of members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrganizationMember'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [Organizations]
+      summary: Add member
+      description: Add a member to the organization
+      operationId: addMember
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, role]
+              properties:
+                user_id:
+                  type: string
+                role:
+                  type: string
+                  enum: [admin, developer, viewer]
+      responses:
+        '201':
+          description: Member added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationMember'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Member already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /orgs/{id}/members/{user_id}:
+    put:
+      tags: [Organizations]
+      summary: Update member
+      description: Update member role
+      operationId: updateMember
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [admin, developer, viewer]
+      responses:
+        '200':
+          description: Member updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationMember'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags: [Organizations]
+      summary: Remove member
+      description: Remove a member from the organization
+      operationId: removeMember
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Member removed successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /orgs/{id}/invitations:
+    get:
+      tags: [Organizations]
+      summary: List invitations
+      description: List all pending invitations
+      operationId: listInvitations
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: List of invitations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invitation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [Organizations]
+      summary: Create invitation
+      description: Invite a user to join the organization
+      operationId: createInvitation
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, role]
+              properties:
+                email:
+                  type: string
+                  format: email
+                role:
+                  type: string
+                  enum: [admin, developer, viewer]
+      responses:
+        '201':
+          description: Invitation created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /orgs/{id}/invitations/{invitation_id}:
+    delete:
+      tags: [Organizations]
+      summary: Revoke invitation
+      description: Revoke a pending invitation
+      operationId: revokeInvitation
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: invitation_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Invitation revoked successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /invitations/{token}/accept:
+    post:
+      tags: [Organizations]
+      summary: Accept invitation
+      description: Accept an organization invitation
+      operationId: acceptInvitation
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invitation accepted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationMember'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /orgs/{id}/quotas:
+    get:
+      tags: [Organizations]
+      summary: Get quotas
+      description: Get organization quotas
+      operationId: getQuotas
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: Organization quotas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quotas'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags: [Organizations]
+      summary: Update quotas
+      description: Update organization quotas (admin only)
+      operationId: updateQuotas
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Quotas'
+      responses:
+        '200':
+          description: Quotas updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quotas'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /orgs/{id}/usage:
+    get:
+      tags: [Organizations]
+      summary: Get usage
+      description: Get current usage statistics
+      operationId: getUsage
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: Current usage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /orgs/{id}/usage/history:
+    get:
+      tags: [Organizations]
+      summary: Get usage history
+      description: Get historical usage data
+      operationId: getUsageHistory
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Usage history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UsageRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ============================================================================
+  # BILLING API
+  # ============================================================================
+
+  /orgs/{id}/subscription:
+    get:
+      tags: [Billing]
+      summary: Get subscription
+      description: Get organization subscription details
+      operationId: getSubscription
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: Subscription details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [Billing]
+      summary: Create subscription
+      description: Create a new subscription
+      operationId: createSubscription
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan:
+                  type: string
+                  enum: [free, pro, enterprise]
+                billing_period:
+                  type: string
+                  enum: [monthly, yearly]
+                  default: monthly
+                payment_method_id:
+                  type: string
+      responses:
+        '201':
+          description: Subscription created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags: [Billing]
+      summary: Update subscription
+      description: Update subscription plan or billing period
+      operationId: updateSubscription
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                plan:
+                  type: string
+                  enum: [free, pro, enterprise]
+                billing_period:
+                  type: string
+                  enum: [monthly, yearly]
+      responses:
+        '200':
+          description: Subscription updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /orgs/{id}/subscription/cancel:
+    post:
+      tags: [Billing]
+      summary: Cancel subscription
+      description: Cancel the subscription (effective at end of billing period)
+      operationId: cancelSubscription
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: Subscription cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /orgs/{id}/subscription/reactivate:
+    post:
+      tags: [Billing]
+      summary: Reactivate subscription
+      description: Reactivate a cancelled subscription
+      operationId: reactivateSubscription
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: Subscription reactivated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /orgs/{id}/invoices:
+    get:
+      tags: [Billing]
+      summary: List invoices
+      description: List all invoices for the organization
+      operationId: listInvoices
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invoice'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /invoices/{invoice_id}:
+    get:
+      tags: [Billing]
+      summary: Get invoice
+      description: Get invoice details
+      operationId: getInvoice
+      parameters:
+        - name: invoice_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invoice details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /orgs/{id}/invoices/generate:
+    post:
+      tags: [Billing]
+      summary: Generate invoice
+      description: Generate a new invoice for the current period
+      operationId: generateInvoice
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '201':
+          description: Invoice generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /orgs/{id}/payment-methods:
+    get:
+      tags: [Billing]
+      summary: List payment methods
+      description: List all payment methods for the organization
+      operationId: listPaymentMethods
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      responses:
+        '200':
+          description: List of payment methods
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentMethod'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [Billing]
+      summary: Add payment method
+      description: Add a new payment method
+      operationId: addPaymentMethod
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, token]
+              properties:
+                type:
+                  type: string
+                  enum: [card, bank_account]
+                token:
+                  type: string
+                  description: Payment provider token
+                set_as_default:
+                  type: boolean
+                  default: false
+      responses:
+        '201':
+          description: Payment method added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentMethod'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /orgs/{id}/payment-methods/{pm_id}/default:
+    put:
+      tags: [Billing]
+      summary: Set default payment method
+      description: Set a payment method as the default
+      operationId: setDefaultPaymentMethod
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: pm_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Default payment method set successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentMethod'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /orgs/{id}/payment-methods/{pm_id}:
+    delete:
+      tags: [Billing]
+      summary: Remove payment method
+      description: Remove a payment method
+      operationId: removePaymentMethod
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: pm_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Payment method removed successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /billing/webhook:
+    post:
+      tags: [Billing]
+      summary: Billing webhook
+      description: Webhook endpoint for payment provider callbacks
+      operationId: billingWebhook
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Payment provider webhook payload
+      responses:
+        '200':
+          description: Webhook processed successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ============================================================================
+  # SEARCH API (v2)
+  # ============================================================================
+
+  /api/v2/search:
+    get:
+      tags: [Search]
+      summary: Advanced search
+      description: Search modules with advanced filters
+      operationId: advancedSearch
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [module, message, service, enum]
+        - name: language
+          in: query
+          schema:
+            type: string
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [relevance, downloads, created_at, updated_at]
+            default: relevance
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SearchResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v2/search/suggestions:
+    get:
+      tags: [Search]
+      summary: Search suggestions
+      description: Get search query suggestions
+      operationId: searchSuggestions
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Partial search query
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 20
+      responses:
+        '200':
+          description: Suggestions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ============================================================================
+  # USER FEATURES API (v2)
+  # ============================================================================
+
+  /api/v2/saved-searches:
+    get:
+      tags: [User Features]
+      summary: List saved searches
+      description: List all saved searches for the authenticated user
+      operationId: listSavedSearches
+      responses:
+        '200':
+          description: List of saved searches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SavedSearch'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [User Features]
+      summary: Create saved search
+      description: Save a search query
+      operationId: createSavedSearch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, query]
+              properties:
+                name:
+                  type: string
+                query:
+                  type: string
+                filters:
+                  type: object
+      responses:
+        '201':
+          description: Saved search created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedSearch'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v2/saved-searches/{id}:
+    get:
+      tags: [User Features]
+      summary: Get saved search
+      description: Get details of a saved search
+      operationId: getSavedSearch
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Saved search details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedSearch'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags: [User Features]
+      summary: Update saved search
+      description: Update a saved search
+      operationId: updateSavedSearch
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                query:
+                  type: string
+                filters:
+                  type: object
+      responses:
+        '200':
+          description: Saved search updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedSearch'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags: [User Features]
+      summary: Delete saved search
+      description: Delete a saved search
+      operationId: deleteSavedSearch
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Saved search deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v2/bookmarks:
+    get:
+      tags: [User Features]
+      summary: List bookmarks
+      description: List all bookmarked modules
+      operationId: listBookmarks
+      responses:
+        '200':
+          description: List of bookmarks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Bookmark'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [User Features]
+      summary: Create bookmark
+      description: Bookmark a module
+      operationId: createBookmark
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [module_name]
+              properties:
+                module_name:
+                  type: string
+                notes:
+                  type: string
+      responses:
+        '201':
+          description: Bookmark created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bookmark'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Bookmark already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v2/bookmarks/{id}:
+    get:
+      tags: [User Features]
+      summary: Get bookmark
+      description: Get bookmark details
+      operationId: getBookmark
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Bookmark details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bookmark'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags: [User Features]
+      summary: Update bookmark
+      description: Update bookmark notes
+      operationId: updateBookmark
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+      responses:
+        '200':
+          description: Bookmark updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bookmark'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags: [User Features]
+      summary: Delete bookmark
+      description: Remove a bookmark
+      operationId: deleteBookmark
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Bookmark deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ============================================================================
+  # ANALYTICS API (v2)
+  # ============================================================================
+
+  /api/v2/analytics/overview:
+    get:
+      tags: [Analytics]
+      summary: Get analytics overview
+      description: Get overall analytics summary
+      operationId: getAnalyticsOverview
+      security: []
+      responses:
+        '200':
+          description: Analytics overview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_modules:
+                    type: integer
+                  total_downloads:
+                    type: integer
+                  total_users:
+                    type: integer
+                  popular_languages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        language:
+                          type: string
+                        count:
+                          type: integer
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v2/analytics/modules/popular:
+    get:
+      tags: [Analytics]
+      summary: Get popular modules
+      description: Get most popular modules by downloads
+      operationId: getPopularModules
+      security: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+      responses:
+        '200':
+          description: Popular modules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    module:
+                      $ref: '#/components/schemas/Module'
+                    download_count:
+                      type: integer
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v2/analytics/modules/trending:
+    get:
+      tags: [Analytics]
+      summary: Get trending modules
+      description: Get trending modules (recent download velocity)
+      operationId: getTrendingModules
+      security: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+      responses:
+        '200':
+          description: Trending modules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    module:
+                      $ref: '#/components/schemas/Module'
+                    trend_score:
+                      type: number
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v2/analytics/modules/{name}/stats:
+    get:
+      tags: [Analytics]
+      summary: Get module statistics
+      description: Get detailed statistics for a module
+      operationId: getModuleStats
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+      responses:
+        '200':
+          description: Module statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModuleStats'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v2/analytics/modules/{name}/health:
+    get:
+      tags: [Analytics]
+      summary: Get module health
+      description: Get health metrics for a module
+      operationId: getModuleHealth
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+      responses:
+        '200':
+          description: Module health metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModuleHealth'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ============================================================================
+  # PLUGIN VERIFICATION API (v1)
+  # ============================================================================
+
+  /api/v1/plugins/{id}/versions/{version}/verify:
+    post:
+      tags: [Plugin Verification]
+      summary: Submit plugin for verification
+      description: Submit a plugin version for security verification
+      operationId: submitVerification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Version'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                source_url:
+                  type: string
+                  format: uri
+                checksum:
+                  type: string
+      responses:
+        '201':
+          description: Verification submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginVerification'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/verifications/{id}:
+    get:
+      tags: [Plugin Verification]
+      summary: Get verification details
+      description: Get details of a verification request
+      operationId: getVerification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Verification details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginVerification'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/verifications:
+    get:
+      tags: [Plugin Verification]
+      summary: List verifications
+      description: List all verification requests (admin only)
+      operationId: listVerifications
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, in_progress, approved, rejected]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of verifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PluginVerification'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/verifications/{id}/approve:
+    post:
+      tags: [Plugin Verification]
+      summary: Approve verification
+      description: Approve a verification request (admin only)
+      operationId: approveVerification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+      responses:
+        '200':
+          description: Verification approved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginVerification'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/verifications/{id}/reject:
+    post:
+      tags: [Plugin Verification]
+      summary: Reject verification
+      description: Reject a verification request (admin only)
+      operationId: rejectVerification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Verification rejected successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginVerification'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/verifications/stats:
+    get:
+      tags: [Plugin Verification]
+      summary: Get verification statistics
+      description: Get verification statistics (admin only)
+      operationId: getVerificationStats
+      responses:
+        '200':
+          description: Verification statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  pending:
+                    type: integer
+                  approved:
+                    type: integer
+                  rejected:
+                    type: integer
+                  average_processing_time:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/plugins/{id}/security-score:
+    get:
+      tags: [Plugin Verification]
+      summary: Get plugin security score
+      description: Get security score and scan results for a plugin
+      operationId: getSecurityScore
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Security score
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plugin_id:
+                    type: string
+                  score:
+                    type: integer
+                    minimum: 0
+                    maximum: 100
+                  issues:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        severity:
+                          type: string
+                          enum: [critical, high, medium, low, info]
+                        description:
+                          type: string
+                  last_scanned:
+                    type: string
+                    format: date-time
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+# ==============================================================================
+# COMPONENTS
+# ==============================================================================
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token authentication via Authorization header
+
+  parameters:
+    ModuleName:
+      name: name
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[a-z0-9_-]+$'
+      description: Module name
+
+    Version:
+      name: version
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[0-9]+\.[0-9]+\.[0-9]+$'
+      description: Semantic version (e.g., 1.0.0)
+
+    Language:
+      name: language
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [go, python, java, cpp, csharp, rust, typescript, javascript, dart, swift, kotlin, objc, ruby, php, scala]
+      description: Target programming language
+
+    OrganizationId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Organization ID
+
+  schemas:
+    Module:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Version:
+      type: object
+      properties:
+        module_name:
+          type: string
+        version:
+          type: string
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/File'
+        dependencies:
+          type: array
+          items:
+            type: object
+            properties:
+              module:
+                type: string
+              version:
+                type: string
+        created_at:
+          type: string
+          format: date-time
+
+    File:
+      type: object
+      properties:
+        path:
+          type: string
+        content:
+          type: string
+
+    CompileRequest:
+      type: object
+      required: [languages]
+      properties:
+        languages:
+          type: array
+          items:
+            type: string
+            enum: [go, python, java, cpp, csharp, rust, typescript, javascript, dart, swift, kotlin, objc, ruby, php, scala]
+        include_grpc:
+          type: boolean
+          default: false
+        options:
+          type: object
+          additionalProperties: true
+
+    CompileResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CompilationJobInfo'
+
+    CompilationJobInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        language:
+          type: string
+        status:
+          type: string
+          enum: [pending, in_progress, completed, failed]
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        cache_hit:
+          type: boolean
+        error:
+          type: string
+        s3_bucket:
+          type: string
+        s3_key:
+          type: string
+
+    LanguageInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        display_name:
+          type: string
+        supports_grpc:
+          type: boolean
+        file_extensions:
+          type: array
+          items:
+            type: string
+        stability:
+          type: string
+          enum: [stable, beta, experimental]
+        plugin_version:
+          type: string
+        package_manager:
+          type: string
+
+    ValidationResult:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              file:
+                type: string
+              line:
+                type: integer
+              column:
+                type: integer
+              message:
+                type: string
+              severity:
+                type: string
+                enum: [error, warning, info]
+        warnings:
+          type: array
+          items:
+            type: object
+            properties:
+              file:
+                type: string
+              line:
+                type: integer
+              column:
+                type: integer
+              message:
+                type: string
+
+    CompatibilityResult:
+      type: object
+      properties:
+        compatible:
+          type: boolean
+        from_version:
+          type: string
+        to_version:
+          type: string
+        breaking_changes:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: [field_removed, field_renamed, type_changed, service_removed, method_removed]
+              description:
+                type: string
+              file:
+                type: string
+              location:
+                type: string
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        full_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    APIToken:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        token_prefix:
+          type: string
+          description: First 8 characters of token for identification
+        scopes:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+
+    Organization:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        display_name:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    OrganizationMember:
+      type: object
+      properties:
+        user_id:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, developer, viewer]
+        joined_at:
+          type: string
+          format: date-time
+
+    Invitation:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, developer, viewer]
+        token:
+          type: string
+        invited_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+
+    Quotas:
+      type: object
+      properties:
+        max_modules:
+          type: integer
+        max_versions_per_module:
+          type: integer
+        max_file_size_mb:
+          type: integer
+        max_compilation_jobs_per_hour:
+          type: integer
+        max_api_requests_per_hour:
+          type: integer
+
+    Usage:
+      type: object
+      properties:
+        modules:
+          type: integer
+        versions:
+          type: integer
+        storage_mb:
+          type: number
+        api_requests_this_hour:
+          type: integer
+        compilation_jobs_this_hour:
+          type: integer
+
+    UsageRecord:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        api_requests:
+          type: integer
+        compilation_jobs:
+          type: integer
+        downloads:
+          type: integer
+        storage_mb:
+          type: number
+
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+        organization_id:
+          type: string
+        plan:
+          type: string
+          enum: [free, pro, enterprise]
+        billing_period:
+          type: string
+          enum: [monthly, yearly]
+        status:
+          type: string
+          enum: [active, cancelled, past_due, trialing]
+        current_period_start:
+          type: string
+          format: date-time
+        current_period_end:
+          type: string
+          format: date-time
+        cancel_at_period_end:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: string
+        organization_id:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+          default: USD
+        status:
+          type: string
+          enum: [draft, open, paid, void, uncollectible]
+        period_start:
+          type: string
+          format: date-time
+        period_end:
+          type: string
+          format: date-time
+        pdf_url:
+          type: string
+          format: uri
+        created_at:
+          type: string
+          format: date-time
+        due_date:
+          type: string
+          format: date-time
+        paid_at:
+          type: string
+          format: date-time
+
+    PaymentMethod:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [card, bank_account]
+        last_four:
+          type: string
+        brand:
+          type: string
+        exp_month:
+          type: integer
+        exp_year:
+          type: integer
+        is_default:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    SearchResult:
+      type: object
+      properties:
+        module:
+          $ref: '#/components/schemas/Module'
+        score:
+          type: number
+        highlights:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+
+    SavedSearch:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        query:
+          type: string
+        filters:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Bookmark:
+      type: object
+      properties:
+        id:
+          type: string
+        module_name:
+          type: string
+        notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ModuleStats:
+      type: object
+      properties:
+        module_name:
+          type: string
+        total_downloads:
+          type: integer
+        downloads_last_30_days:
+          type: integer
+        total_versions:
+          type: integer
+        latest_version:
+          type: string
+        stars:
+          type: integer
+        forks:
+          type: integer
+
+    ModuleHealth:
+      type: object
+      properties:
+        module_name:
+          type: string
+        health_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        last_update_days_ago:
+          type: integer
+        has_documentation:
+          type: boolean
+        has_tests:
+          type: boolean
+        compilation_success_rate:
+          type: number
+        issues:
+          type: array
+          items:
+            type: string
+
+    PluginVerification:
+      type: object
+      properties:
+        id:
+          type: string
+        plugin_id:
+          type: string
+        version:
+          type: string
+        status:
+          type: string
+          enum: [pending, in_progress, approved, rejected]
+        submitted_by:
+          type: string
+        reviewed_by:
+          type: string
+        source_url:
+          type: string
+          format: uri
+        checksum:
+          type: string
+        notes:
+          type: string
+        rejection_reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        reviewed_at:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Unauthorized - authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

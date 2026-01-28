@@ -336,6 +336,23 @@ See [Deployment Guide](docs/deployment/DEPLOYMENT_GUIDE.md) for complete configu
 
 ## API Endpoints
 
+### OpenAPI / Swagger Documentation
+
+**Interactive API Documentation**: Browse and test all API endpoints at `http://localhost:8080/swagger-ui`
+
+The Spoke API includes a comprehensive OpenAPI 3.0 specification documenting 100+ endpoints:
+- **Swagger UI**: `http://localhost:8080/swagger-ui` (interactive documentation)
+- **OpenAPI Spec**: `http://localhost:8080/openapi.yaml` (YAML format)
+
+Features:
+- Try out API calls directly from your browser
+- View detailed request/response schemas
+- Explore 12 API groups: Modules, Compilation, Authentication, Organizations, Billing, Search, Analytics, and more
+- Generate client SDKs in 40+ languages
+- Breaking change detection with CI integration
+
+See [OpenAPI Guide](docs/openapi-guide.md) for client generation, validation, and tooling.
+
 ### Core Endpoints
 
 - `POST /modules` - Create a new module

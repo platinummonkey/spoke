@@ -1,0 +1,125 @@
+name: OpenAPI Validation
+
+on:
+  pull_request:
+    paths:
+      - 'openapi.yaml'
+      - 'pkg/swagger/**'
+      - 'pkg/api/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'openapi.yaml'
+      - 'pkg/swagger/**'
+      - 'pkg/api/**'
+
+jobs:
+  validate-spec:
+    name: Validate OpenAPI Specification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Spectral
+        run: npm install -g @stoplight/spectral-cli
+
+      - name: Validate OpenAPI spec
+        run: spectral lint openapi.yaml
+
+      - name: Check spec is valid YAML
+        run: |
+          if ! cat openapi.yaml | python3 -c "import yaml, sys; yaml.safe_load(sys.stdin)"; then
+            echo "OpenAPI spec is not valid YAML"
+            exit 1
+          fi
+
+  breaking-changes:
+    name: Check for Breaking Changes
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          path: base
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Install oasdiff
+        run: go install github.com/tufin/oasdiff@latest
+
+      - name: Check for breaking changes
+        run: |
+          if [ -f base/openapi.yaml ]; then
+            echo "Checking for breaking changes..."
+            oasdiff breaking base/openapi.yaml openapi.yaml || {
+              echo "Breaking changes detected in OpenAPI specification"
+              echo "Review the changes and ensure version is bumped appropriately"
+              exit 1
+            }
+          else
+            echo "No base openapi.yaml found, skipping breaking change check"
+          fi
+
+  generate-client:
+    name: Test Client Generation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Install oapi-codegen
+        run: go install github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@latest
+
+      - name: Generate Go client
+        run: |
+          mkdir -p /tmp/client
+          oapi-codegen -package spokeclient -generate types,client openapi.yaml > /tmp/client/spoke_client.go
+
+      - name: Verify generated client compiles
+        run: |
+          cd /tmp/client
+          go mod init test
+          go mod tidy
+          go build spoke_client.go
+
+  build-with-spec:
+    name: Build Server with OpenAPI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Build spoke server
+        run: make spoke-server
+
+      - name: Verify OpenAPI spec is embedded
+        run: |
+          if [ ! -f pkg/swagger/openapi.yaml ]; then
+            echo "OpenAPI spec not found in pkg/swagger/"
+            exit 1
+          fi
