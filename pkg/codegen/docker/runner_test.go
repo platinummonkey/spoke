@@ -258,3 +258,178 @@ func isDockerAvailable() bool {
 	runner.Close()
 	return true
 }
+
+func TestDockerRunner_Close(t *testing.T) {
+	if !isDockerAvailable() {
+		t.Skip("Docker is not available")
+	}
+
+	runner, err := NewDockerRunner()
+	require.NoError(t, err)
+
+	// Add some cleanup IDs
+	runner.cleanupIDs = []string{"fake-id"}
+
+	// Close should cleanup and close client
+	err = runner.Close()
+	assert.NoError(t, err)
+	assert.Len(t, runner.cleanupIDs, 0)
+}
+
+func TestDockerRunner_Close_NilClient(t *testing.T) {
+	runner := &DockerRunner{
+		client:     nil,
+		imageCache: make(map[string]bool),
+		cleanupIDs: []string{},
+	}
+
+	err := runner.Close()
+	assert.NoError(t, err)
+}
+
+func TestDockerRunner_PullImage_Cached(t *testing.T) {
+	if !isDockerAvailable() {
+		t.Skip("Docker is not available")
+	}
+
+	runner, err := NewDockerRunner()
+	require.NoError(t, err)
+	defer runner.Close()
+
+	// Manually set image as cached
+	runner.imageCache["alpine:latest"] = true
+
+	ctx := context.Background()
+	err = runner.PullImage(ctx, "alpine:latest")
+	assert.NoError(t, err)
+}
+
+func TestCreateContainer_Configuration(t *testing.T) {
+	if !isDockerAvailable() {
+		t.Skip("Docker is not available")
+	}
+
+	runner, err := NewDockerRunner()
+	require.NoError(t, err)
+	defer runner.Close()
+
+	// Pull a simple image first
+	ctx := context.Background()
+	err = runner.PullImage(ctx, "alpine:latest")
+	if err != nil {
+		t.Skipf("Cannot pull alpine image: %v", err)
+	}
+
+	// Create temporary directories
+	inputDir, err := os.MkdirTemp("", "test-input-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(inputDir)
+
+	outputDir, err := os.MkdirTemp("", "test-output-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(outputDir)
+
+	req := &ExecutionRequest{
+		Image:       "alpine",
+		Tag:         "latest",
+		MemoryLimit: 256 * 1024 * 1024,
+		CPULimit:    0.5,
+		Env: map[string]string{
+			"TEST_VAR": "test_value",
+		},
+		ProtoFiles: []codegen.ProtoFile{
+			{Path: "test.proto", Content: []byte("test")},
+		},
+	}
+
+	containerID, err := runner.createContainer(ctx, "alpine:latest", []string{"echo", "test"}, inputDir, outputDir, req)
+	require.NoError(t, err)
+	assert.NotEmpty(t, containerID)
+
+	// Add to cleanup list and cleanup
+	runner.cleanupIDs = append(runner.cleanupIDs, containerID)
+	err = runner.Cleanup(ctx)
+	assert.NoError(t, err)
+}
+
+func TestExecute_InvalidImageTag(t *testing.T) {
+	if !isDockerAvailable() {
+		t.Skip("Docker is not available")
+	}
+
+	runner, err := NewDockerRunner()
+	require.NoError(t, err)
+	defer runner.Close()
+
+	req := &ExecutionRequest{
+		Image: "nonexistent-image-12345",
+		Tag:   "invalid-tag-67890",
+		ProtoFiles: []codegen.ProtoFile{
+			{Path: "test.proto", Content: []byte("syntax = \"proto3\";")},
+		},
+		ProtocFlags: []string{"--go_out=/output"},
+		Timeout:     5 * time.Second,
+	}
+
+	ctx := context.Background()
+	result, err := runner.Execute(ctx, req)
+
+	// Should fail with image pull error
+	assert.Error(t, err)
+	assert.False(t, result.Success)
+	assert.NotNil(t, result.Error)
+}
+
+func TestExecute_SetDefaults(t *testing.T) {
+	if !isDockerAvailable() {
+		t.Skip("Docker is not available")
+	}
+
+	runner, err := NewDockerRunner()
+	require.NoError(t, err)
+	defer runner.Close()
+
+	// Request with no defaults set
+	req := &ExecutionRequest{
+		Image: "alpine",
+		Tag:   "latest",
+		ProtoFiles: []codegen.ProtoFile{
+			{Path: "test.proto", Content: []byte("syntax = \"proto3\";")},
+		},
+		ProtocFlags: []string{"--go_out=/output"},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// This will fail but we're testing that defaults are set
+	result, _ := runner.Execute(ctx, req)
+
+	// Check that defaults were applied by checking the result exists
+	assert.NotNil(t, result)
+	assert.Greater(t, result.Duration, time.Duration(0))
+}
+
+func TestExecute_EmptyProtoFiles(t *testing.T) {
+	if !isDockerAvailable() {
+		t.Skip("Docker is not available")
+	}
+
+	runner, err := NewDockerRunner()
+	require.NoError(t, err)
+	defer runner.Close()
+
+	req := &ExecutionRequest{
+		Image:       "alpine",
+		Tag:         "latest",
+		ProtoFiles:  []codegen.ProtoFile{},
+		ProtocFlags: []string{"--go_out=/output"},
+		Timeout:     5 * time.Second,
+	}
+
+	ctx := context.Background()
+	result, _ := runner.Execute(ctx, req)
+
+	// Should complete but likely fail or produce no files
+	assert.NotNil(t, result)
+}

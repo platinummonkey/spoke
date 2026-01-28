@@ -34,6 +34,7 @@ info:
   contact:
     name: Spoke API Support
     url: https://spoke.dev/support
+    email: support@spoke.dev
   license:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html
@@ -50,24 +51,24 @@ security:
   - BearerAuth: []
 
 tags:
-  - name: Modules
-    description: Protocol module management
-  - name: Versions
-    description: Module version management
-  - name: Compilation
-    description: Code generation and compilation
-  - name: Validation
-    description: Protocol validation
-  - name: Compatibility
-    description: Compatibility checking
   - name: Authentication
     description: User and token management
-  - name: Organizations
-    description: Organization management
   - name: Billing
     description: Billing and subscription management
+  - name: Compatibility
+    description: Compatibility checking
+  - name: Compilation
+    description: Code generation and compilation
+  - name: Modules
+    description: Protocol module management
+  - name: Organizations
+    description: Organization management
   - name: Search
     description: Search and discovery
+  - name: Validation
+    description: Protocol validation
+  - name: Versions
+    description: Module version management
   - name: Analytics
     description: Usage analytics and statistics
   - name: User Features
@@ -90,17 +91,20 @@ paths:
       parameters:
         - name: limit
           in: query
+          description: Maximum number of modules to return
           schema:
             type: integer
             default: 50
             maximum: 100
         - name: offset
           in: query
+          description: Number of modules to skip for pagination
           schema:
             type: integer
             default: 0
         - name: sort
           in: query
+          description: Field to sort modules by
           schema:
             type: string
             enum: [name, created_at, updated_at]
@@ -369,6 +373,7 @@ paths:
         - name: id
           in: path
           required: true
+          description: Programming language identifier
           schema:
             type: string
             enum: [go, python, java, cpp, csharp, rust, typescript, javascript, dart, swift, kotlin, objc, ruby, php, scala]
@@ -433,6 +438,7 @@ paths:
         - name: jobId
           in: path
           required: true
+          description: Unique identifier for the compilation job
           schema:
             type: string
       responses:
@@ -757,6 +763,7 @@ paths:
         - name: id
           in: path
           required: true
+          description: Unique identifier of the user
           schema:
             type: string
       responses:
@@ -784,6 +791,7 @@ paths:
         - name: id
           in: path
           required: true
+          description: Unique identifier of the user
           schema:
             type: string
       requestBody:
@@ -828,6 +836,7 @@ paths:
         - name: id
           in: path
           required: true
+          description: Unique identifier of the user
           schema:
             type: string
       responses:
