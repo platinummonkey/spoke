@@ -241,7 +241,7 @@ func (p *WorkerPool) worker(id int) {
 func Batch[T any](ctx context.Context, items []T, workers int, taskName string, timeout time.Duration,
 	fn func(context.Context, T) error) []error {
 
-	// Check if context is already cancelled
+	// Check if context is already canceled
 	select {
 	case <-ctx.Done():
 		return []error{ctx.Err()}
@@ -256,7 +256,7 @@ func Batch[T any](ctx context.Context, items []T, workers int, taskName string, 
 		// Check for context cancellation during submission
 		select {
 		case <-ctx.Done():
-			// Context cancelled during submission, return error
+			// Context canceled during submission, return error
 			return []error{ctx.Err()}
 		default:
 		}

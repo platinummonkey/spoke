@@ -1,27 +1,46 @@
 package api
 
 import (
+	"database/sql"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gorilla/mux"
 	"github.com/platinummonkey/spoke/pkg/analytics"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// setupMockAnalyticsDB creates a mock database for analytics testing
+func setupMockAnalyticsDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	return db, mock
+}
 
 // TestNewAnalyticsHandlers verifies handler initialization
 func TestNewAnalyticsHandlers(t *testing.T) {
-	service := &analytics.Service{}
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	service := analytics.NewService(db)
 	handlers := NewAnalyticsHandlers(service)
 
 	assert.NotNil(t, handlers)
 	assert.NotNil(t, handlers.service)
+
+	mock.ExpectClose()
 }
 
 // TestAnalyticsHandlers_RegisterRoutes verifies all routes are registered
 func TestAnalyticsHandlers_RegisterRoutes(t *testing.T) {
-	service := &analytics.Service{}
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	service := analytics.NewService(db)
 	handlers := NewAnalyticsHandlers(service)
 	router := mux.NewRouter()
 	handlers.RegisterRoutes(router)
@@ -45,41 +64,441 @@ func TestAnalyticsHandlers_RegisterRoutes(t *testing.T) {
 			assert.True(t, matched, "Route %s %s should be registered", tt.method, tt.path)
 		})
 	}
+
+	mock.ExpectClose()
 }
 
-// Note: Since analytics.Service requires database and doesn't expose an interface,
-// we can only test the HTTP handling layer (parameter parsing, error handling).
-// Full integration tests would require a test database.
+// TestGetOverview_Success tests successful overview retrieval
+func TestGetOverview_Success(t *testing.T) {
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
 
-// TestGetOverview_InvalidRequest tests overview endpoint
-func TestGetOverview_CallsService(t *testing.T) {
-	// This test verifies the handler structure but requires a real service
-	// In production, this would be an integration test with a test DB
-	t.Skip("Requires analytics.Service with database - integration test needed")
+	// Mock the database queries
+	mock.ExpectQuery("SELECT COUNT").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(100))
+	mock.ExpectQuery("SELECT COUNT").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(500))
+	mock.ExpectQuery("SELECT").
+		WillReturnRows(sqlmock.NewRows([]string{"downloads_24h", "downloads_7d", "downloads_30d"}).
+			AddRow(1000, 5000, 20000))
+	mock.ExpectQuery("SELECT").
+		WillReturnRows(sqlmock.NewRows([]string{"active_users_24h", "active_users_7d"}).
+			AddRow(50, 200))
+	mock.ExpectQuery("SELECT language").
+		WillReturnRows(sqlmock.NewRows([]string{"language"}).AddRow("protobuf"))
+	mock.ExpectQuery("SELECT AVG").
+		WillReturnRows(sqlmock.NewRows([]string{"avg"}).AddRow(150.5))
+	mock.ExpectQuery("SELECT").
+		WillReturnRows(sqlmock.NewRows([]string{"rate"}).AddRow(0.85))
+
+	service := analytics.NewService(db)
+	handlers := NewAnalyticsHandlers(service)
+
+	req := httptest.NewRequest("GET", "/api/v2/analytics/overview", nil)
+	w := httptest.NewRecorder()
+
+	handlers.getOverview(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response analytics.OverviewResponse
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Equal(t, int64(100), response.TotalModules)
+
+	mock.ExpectClose()
 }
 
-// TestGetPopularModules_InvalidLimit tests limit parameter validation
-func TestGetPopularModules_CallsService(t *testing.T) {
-	t.Skip("Requires analytics.Service with database - integration test needed")
+// TestGetOverview_DatabaseError tests error handling for overview endpoint
+func TestGetOverview_DatabaseError(t *testing.T) {
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	mock.ExpectQuery("SELECT").
+		WillReturnError(sql.ErrConnDone)
+
+	service := analytics.NewService(db)
+	handlers := NewAnalyticsHandlers(service)
+
+	req := httptest.NewRequest("GET", "/api/v2/analytics/overview", nil)
+	w := httptest.NewRecorder()
+
+	handlers.getOverview(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	mock.ExpectClose()
 }
 
-// TestGetTrendingModules_CallsService tests trending modules endpoint
-func TestGetTrendingModules_CallsService(t *testing.T) {
-	t.Skip("Requires analytics.Service with database - integration test needed")
+// TestGetPopularModules_Success tests successful popular modules retrieval
+func TestGetPopularModules_Success(t *testing.T) {
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	rows := sqlmock.NewRows([]string{"module_name", "total_downloads", "total_views", "active_days", "avg_daily_downloads"}).
+		AddRow("test-module-1", 1000, 2000, 30, 33.3).
+		AddRow("test-module-2", 800, 1600, 25, 32.0)
+
+	mock.ExpectQuery("SELECT").
+		WillReturnRows(rows)
+
+	service := analytics.NewService(db)
+	handlers := NewAnalyticsHandlers(service)
+
+	req := httptest.NewRequest("GET", "/api/v2/analytics/modules/popular?period=30d&limit=10", nil)
+	w := httptest.NewRecorder()
+
+	handlers.getPopularModules(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response []analytics.PopularModule
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Len(t, response, 2)
+	assert.Equal(t, "test-module-1", response[0].ModuleName)
+
+	mock.ExpectClose()
 }
 
-// TestGetModuleStats_CallsService tests module stats endpoint
-func TestGetModuleStats_CallsService(t *testing.T) {
-	t.Skip("Requires analytics.Service with database - integration test needed")
+// TestGetPopularModules_DefaultParameters tests default parameter handling
+func TestGetPopularModules_DefaultParameters(t *testing.T) {
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	mock.ExpectQuery("SELECT").
+		WillReturnRows(sqlmock.NewRows([]string{"module_name", "total_downloads", "total_views", "active_days", "avg_daily_downloads"}))
+
+	service := analytics.NewService(db)
+	handlers := NewAnalyticsHandlers(service)
+
+	req := httptest.NewRequest("GET", "/api/v2/analytics/modules/popular", nil)
+	w := httptest.NewRecorder()
+
+	handlers.getPopularModules(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	mock.ExpectClose()
 }
 
-// TestGetModuleHealth_CallsService tests module health endpoint
-func TestGetModuleHealth_CallsService(t *testing.T) {
-	t.Skip("Requires analytics.Service with database - integration test needed")
+// TestGetPopularModules_InvalidLimit tests invalid limit parameter
+func TestGetPopularModules_InvalidLimit(t *testing.T) {
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	service := analytics.NewService(db)
+	handlers := NewAnalyticsHandlers(service)
+
+	req := httptest.NewRequest("GET", "/api/v2/analytics/modules/popular?limit=invalid", nil)
+	w := httptest.NewRecorder()
+
+	handlers.getPopularModules(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	mock.ExpectClose()
 }
 
-// Note: Integration tests with real service would go here
-// These require a test database and are beyond unit test scope
+// TestGetPopularModules_LimitCapping tests that limit is capped at 100
+func TestGetPopularModules_LimitCapping(t *testing.T) {
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	mock.ExpectQuery("SELECT").
+		WithArgs(30, 100).
+		WillReturnRows(sqlmock.NewRows([]string{"module_name", "total_downloads", "total_views", "active_days", "avg_daily_downloads"}))
+
+	service := analytics.NewService(db)
+	handlers := NewAnalyticsHandlers(service)
+
+	req := httptest.NewRequest("GET", "/api/v2/analytics/modules/popular?limit=200", nil)
+	w := httptest.NewRecorder()
+
+	handlers.getPopularModules(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	mock.ExpectClose()
+}
+
+// TestGetPopularModules_DatabaseError tests error handling
+func TestGetPopularModules_DatabaseError(t *testing.T) {
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	mock.ExpectQuery("SELECT").
+		WillReturnError(sql.ErrConnDone)
+
+	service := analytics.NewService(db)
+	handlers := NewAnalyticsHandlers(service)
+
+	req := httptest.NewRequest("GET", "/api/v2/analytics/modules/popular", nil)
+	w := httptest.NewRecorder()
+
+	handlers.getPopularModules(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	mock.ExpectClose()
+}
+
+// TestGetTrendingModules_Success tests successful trending modules retrieval
+func TestGetTrendingModules_Success(t *testing.T) {
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	rows := sqlmock.NewRows([]string{"module_name", "current_downloads", "previous_downloads", "growth_rate"}).
+		AddRow("trending-module-1", 500, 100, 4.0).
+		AddRow("trending-module-2", 300, 150, 1.0)
+
+	mock.ExpectQuery("SELECT").
+		WillReturnRows(rows)
+
+	service := analytics.NewService(db)
+	handlers := NewAnalyticsHandlers(service)
+
+	req := httptest.NewRequest("GET", "/api/v2/analytics/modules/trending?limit=20", nil)
+	w := httptest.NewRecorder()
+
+	handlers.getTrendingModules(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response []analytics.TrendingModule
+	err := json.NewDecoder(w.Body).Decode(&response)
+	require.NoError(t, err)
+	assert.Len(t, response, 2)
+	assert.Equal(t, "trending-module-1", response[0].ModuleName)
+
+	mock.ExpectClose()
+}
+
+// TestGetTrendingModules_InvalidLimit tests invalid limit parameter
+func TestGetTrendingModules_InvalidLimit(t *testing.T) {
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	service := analytics.NewService(db)
+	handlers := NewAnalyticsHandlers(service)
+
+	req := httptest.NewRequest("GET", "/api/v2/analytics/modules/trending?limit=invalid", nil)
+	w := httptest.NewRecorder()
+
+	handlers.getTrendingModules(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	mock.ExpectClose()
+}
+
+// TestGetTrendingModules_LimitCapping tests that limit is capped at 50
+func TestGetTrendingModules_LimitCapping(t *testing.T) {
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	mock.ExpectQuery("SELECT").
+		WithArgs(50).
+		WillReturnRows(sqlmock.NewRows([]string{"module_name", "current_downloads", "previous_downloads", "growth_rate"}))
+
+	service := analytics.NewService(db)
+	handlers := NewAnalyticsHandlers(service)
+
+	req := httptest.NewRequest("GET", "/api/v2/analytics/modules/trending?limit=100", nil)
+	w := httptest.NewRecorder()
+
+	handlers.getTrendingModules(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	mock.ExpectClose()
+}
+
+// TestGetTrendingModules_DatabaseError tests error handling
+func TestGetTrendingModules_DatabaseError(t *testing.T) {
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	mock.ExpectQuery("SELECT").
+		WillReturnError(sql.ErrConnDone)
+
+	service := analytics.NewService(db)
+	handlers := NewAnalyticsHandlers(service)
+
+	req := httptest.NewRequest("GET", "/api/v2/analytics/modules/trending", nil)
+	w := httptest.NewRecorder()
+
+	handlers.getTrendingModules(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	mock.ExpectClose()
+}
+
+// TestGetModuleStats_Success tests module stats endpoint calls service correctly
+func TestGetModuleStats_Success(t *testing.T) {
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	// Mock all expected queries
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"v", "d", "u", "a"}).AddRow(1000, 500, 100, 120))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"date", "download_count"}))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"language", "count"}))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"version", "count"}))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"rate"}).AddRow(0.95))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"max"}))
+
+	service := analytics.NewService(db)
+	handlers := NewAnalyticsHandlers(service)
+
+	router := mux.NewRouter()
+	router.HandleFunc("/api/v2/analytics/modules/{name}/stats", handlers.getModuleStats)
+
+	req := httptest.NewRequest("GET", "/api/v2/analytics/modules/my-module/stats?period=7d", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	mock.ExpectClose()
+}
+
+// TestGetModuleStats_DefaultPeriod tests default period parameter
+func TestGetModuleStats_DefaultPeriod(t *testing.T) {
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	mock.ExpectQuery("SELECT").WithArgs("test", 30).
+		WillReturnRows(sqlmock.NewRows([]string{"v", "d", "u", "a"}).AddRow(0, 0, 0, nil))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"date", "download_count"}))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"language", "count"}))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"version", "count"}))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"rate"}).AddRow(0))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"max"}))
+
+	service := analytics.NewService(db)
+	handlers := NewAnalyticsHandlers(service)
+
+	router := mux.NewRouter()
+	router.HandleFunc("/api/v2/analytics/modules/{name}/stats", handlers.getModuleStats)
+
+	req := httptest.NewRequest("GET", "/api/v2/analytics/modules/test/stats", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	mock.ExpectClose()
+}
+
+// TestGetModuleStats_DatabaseError tests error handling
+func TestGetModuleStats_DatabaseError(t *testing.T) {
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	mock.ExpectQuery("SELECT").
+		WillReturnError(sql.ErrConnDone)
+
+	service := analytics.NewService(db)
+	handlers := NewAnalyticsHandlers(service)
+
+	router := mux.NewRouter()
+	router.HandleFunc("/api/v2/analytics/modules/{name}/stats", handlers.getModuleStats)
+
+	req := httptest.NewRequest("GET", "/api/v2/analytics/modules/test/stats", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	mock.ExpectClose()
+}
+
+// TestGetModuleHealth_Success tests successful module health retrieval
+func TestGetModuleHealth_Success(t *testing.T) {
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	// Mock all health calculation queries
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"mc", "ec", "sc", "fc", "mtc"}).AddRow(10, 5, 2, 50, 10))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"entity_name"}))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
+
+	service := analytics.NewService(db)
+	handlers := NewAnalyticsHandlers(service)
+
+	router := mux.NewRouter()
+	router.HandleFunc("/api/v2/analytics/modules/{name}/health", handlers.getModuleHealth)
+
+	req := httptest.NewRequest("GET", "/api/v2/analytics/modules/my-module/health?version=v1.0.0", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	mock.ExpectClose()
+}
+
+// TestGetModuleHealth_DefaultVersion tests default version handling
+func TestGetModuleHealth_DefaultVersion(t *testing.T) {
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	// Expect query for latest version
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow("v1.0.0"))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"mc", "ec", "sc", "fc", "mtc"}).AddRow(10, 5, 2, 50, 10))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"entity_name"}))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
+
+	service := analytics.NewService(db)
+	handlers := NewAnalyticsHandlers(service)
+
+	router := mux.NewRouter()
+	router.HandleFunc("/api/v2/analytics/modules/{name}/health", handlers.getModuleHealth)
+
+	req := httptest.NewRequest("GET", "/api/v2/analytics/modules/test/health", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	mock.ExpectClose()
+}
+
+// TestGetModuleHealth_DatabaseError tests error handling
+func TestGetModuleHealth_DatabaseError(t *testing.T) {
+	db, mock := setupMockAnalyticsDB(t)
+	defer db.Close()
+
+	mock.ExpectQuery("SELECT").
+		WillReturnError(sql.ErrNoRows)
+
+	service := analytics.NewService(db)
+	handlers := NewAnalyticsHandlers(service)
+
+	router := mux.NewRouter()
+	router.HandleFunc("/api/v2/analytics/modules/{name}/health", handlers.getModuleHealth)
+
+	req := httptest.NewRequest("GET", "/api/v2/analytics/modules/test/health?version=v1.0.0", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	mock.ExpectClose()
+}
 
 // TestAnalyticsHandlers_MethodNotAllowed tests that wrong methods are rejected
 func TestAnalyticsHandlers_MethodNotAllowed(t *testing.T) {
@@ -87,7 +506,6 @@ func TestAnalyticsHandlers_MethodNotAllowed(t *testing.T) {
 	router := mux.NewRouter()
 	handlers.RegisterRoutes(router)
 
-	// These endpoints should only accept GET
 	tests := []struct {
 		method string
 		path   string
@@ -105,49 +523,7 @@ func TestAnalyticsHandlers_MethodNotAllowed(t *testing.T) {
 
 			router.ServeHTTP(w, req)
 
-			// Should get 405 Method Not Allowed
 			assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 		})
-	}
-}
-
-// Benchmark tests for performance
-
-func BenchmarkGetOverview(b *testing.B) {
-	handlers := NewAnalyticsHandlers(nil)
-	router := mux.NewRouter()
-	handlers.RegisterRoutes(router)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("GET", "/api/v2/analytics/overview", nil)
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-	}
-}
-
-func BenchmarkGetPopularModules(b *testing.B) {
-	handlers := NewAnalyticsHandlers(nil)
-	router := mux.NewRouter()
-	handlers.RegisterRoutes(router)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("GET", "/api/v2/analytics/modules/popular?period=30d&limit=100", nil)
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-	}
-}
-
-func BenchmarkGetModuleStats(b *testing.B) {
-	handlers := NewAnalyticsHandlers(nil)
-	router := mux.NewRouter()
-	handlers.RegisterRoutes(router)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest("GET", "/api/v2/analytics/modules/test-module/stats?period=30d", nil)
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
 	}
 }
