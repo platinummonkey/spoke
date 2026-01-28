@@ -2,6 +2,7 @@ package cli
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -10,6 +11,10 @@ import (
 )
 
 func TestCompileCommand(t *testing.T) {
+	// Skip if protoc is not available
+	if _, err := exec.LookPath("protoc"); err != nil {
+		t.Skip("protoc not found in PATH, skipping compilation tests")
+	}
 	// Create test proto files
 	commonProto := `syntax = "proto3";
 package common;

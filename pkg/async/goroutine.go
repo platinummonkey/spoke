@@ -63,14 +63,15 @@ func SafeGoNoError(parentCtx context.Context, timeout time.Duration, taskName st
 // WorkerPool manages a pool of workers that process tasks from a channel.
 // Provides graceful shutdown and error collection.
 type WorkerPool struct {
-	workers   int
-	taskName  string
-	timeout   time.Duration
-	workCh    chan func(context.Context) error
-	doneCh    chan struct{}
-	errCh     chan error
-	ctx       context.Context
-	cancel    context.CancelFunc
+	workers      int
+	taskName     string
+	timeout      time.Duration
+	workCh       chan func(context.Context) error
+	doneCh       chan struct{}
+	errCh        chan error
+	ctx          context.Context
+	cancel       context.CancelFunc
+	shutdownOnce sync.Once
 }
 
 // NewWorkerPool creates a new worker pool.
@@ -117,10 +118,25 @@ func NewWorkerPool(ctx context.Context, workers int, taskName string, timeout ti
 // Submit adds a task to the worker pool.
 // Returns error if pool is shut down.
 func (p *WorkerPool) Submit(fn func(context.Context) error) error {
+	// Check if already shut down
+	select {
+	case <-p.doneCh:
+		return fmt.Errorf("worker pool shut down")
+	default:
+	}
+
+	// Try to submit work
+	defer func() {
+		if r := recover(); r != nil {
+			// Recovered from panic (likely closed channel)
+			// This happens if shutdown was called between the check above and the send below
+		}
+	}()
+
 	select {
 	case p.workCh <- fn:
 		return nil
-	case <-p.ctx.Done():
+	case <-p.doneCh:
 		return fmt.Errorf("worker pool shut down")
 	}
 }
@@ -128,24 +144,32 @@ func (p *WorkerPool) Submit(fn func(context.Context) error) error {
 // Shutdown gracefully shuts down the worker pool.
 // Waits up to timeout for workers to finish current tasks.
 func (p *WorkerPool) Shutdown(timeout time.Duration) error {
-	// Signal shutdown and close work channel
-	p.cancel()
+	var shutdownErr error
 
-	// Close work channel (may already be closed by Batch)
-	select {
-	case <-p.ctx.Done():
-		// Already canceled, don't close again
-	default:
-		close(p.workCh)
-	}
+	// Ensure shutdown only happens once
+	p.shutdownOnce.Do(func() {
+		// Close work channel so workers can drain remaining tasks
+		// Recover from panic if channel already closed (e.g., by Batch)
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					// Channel already closed, continue with shutdown
+				}
+			}()
+			close(p.workCh)
+		}()
 
-	// Wait for workers to finish with timeout
-	select {
-	case <-p.doneCh:
-		return nil
-	case <-time.After(timeout):
-		return fmt.Errorf("worker pool shutdown timed out after %v", timeout)
-	}
+		// Wait for workers to finish with timeout
+		select {
+		case <-p.doneCh:
+			p.cancel() // Cancel context after workers are done
+		case <-time.After(timeout):
+			p.cancel() // Force cancel on timeout
+			shutdownErr = fmt.Errorf("worker pool shutdown timed out after %v", timeout)
+		}
+	})
+
+	return shutdownErr
 }
 
 // Errors returns a channel that receives worker errors.
@@ -230,10 +254,13 @@ func Batch[T any](ctx context.Context, items []T, workers int, taskName string, 
 		}
 	}
 
-	// Wait for completion by closing work channel
-	pool.cancel()
+	// Wait for completion by closing work channel first
+	// This allows workers to drain all remaining tasks
 	close(pool.workCh)
 	<-pool.doneCh
+
+	// Cancel context after all work is done
+	pool.cancel()
 
 	// Collect errors
 	var errs []error

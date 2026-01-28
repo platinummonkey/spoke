@@ -103,10 +103,10 @@ func TestGetModuleStats(t *testing.T) {
 	moduleName := "user-service"
 	period := "30d"
 
-	// Mock aggregate totals query
-	mock.ExpectQuery("SELECT SUM\\(view_count\\), SUM\\(download_count\\), SUM\\(unique_users\\)").
-		WillReturnRows(sqlmock.NewRows([]string{"views", "downloads", "users"}).
-			AddRow(1000, 500, 50))
+	// Mock aggregate totals query with COALESCE and avg compilation time
+	mock.ExpectQuery("SELECT COALESCE\\(SUM\\(view_count\\), 0\\), COALESCE\\(SUM\\(download_count\\), 0\\), COALESCE\\(SUM\\(unique_users\\), 0\\), COALESCE\\(AVG\\(avg_compilation_duration_ms\\), 0\\)").
+		WillReturnRows(sqlmock.NewRows([]string{"views", "downloads", "users", "avg_compilation_ms"}).
+			AddRow(1000, 500, 50, 100))
 
 	// Mock time series query
 	mock.ExpectQuery("SELECT date, download_count FROM module_stats_daily").
@@ -120,6 +120,22 @@ func TestGetModuleStats(t *testing.T) {
 			AddRow("go", 300).
 			AddRow("python", 150).
 			AddRow("java", 50))
+
+	// Mock popular versions query
+	mock.ExpectQuery("SELECT version, COUNT\\(\\*\\) FROM download_events").
+		WillReturnRows(sqlmock.NewRows([]string{"version", "count"}).
+			AddRow("v1.0.0", 200).
+			AddRow("v1.1.0", 150))
+
+	// Mock compilation success rate query
+	mock.ExpectQuery("SELECT COALESCE\\(SUM\\(compilation_success_count\\)").
+		WillReturnRows(sqlmock.NewRows([]string{"rate"}).
+			AddRow(0.95))
+
+	// Mock last downloaded at query
+	mock.ExpectQuery("SELECT MAX\\(downloaded_at\\) FROM download_events").
+		WillReturnRows(sqlmock.NewRows([]string{"max"}).
+			AddRow(time.Date(2026, 1, 28, 0, 0, 0, 0, time.UTC)))
 
 	// Execute
 	stats, err := service.GetModuleStats(context.Background(), moduleName, period)
@@ -178,11 +194,11 @@ func TestGetPopularModules(t *testing.T) {
 
 	service := NewService(db)
 
-	// Mock popular modules query from materialized view
-	mock.ExpectQuery("SELECT module_name, total_views, total_downloads, active_days, avg_daily_downloads").
-		WillReturnRows(sqlmock.NewRows([]string{"module_name", "total_views", "total_downloads", "active_days", "avg_daily_downloads"}).
-			AddRow("common-types", 5000, 3000, 30, 100.0).
-			AddRow("user-service", 2000, 1000, 28, 35.7))
+	// Mock popular modules query with aggregation
+	mock.ExpectQuery("SELECT module_name, SUM\\(download_count\\) AS total_downloads, SUM\\(view_count\\) AS total_views, COUNT\\(DISTINCT date\\) AS active_days, AVG\\(download_count\\) AS avg_daily_downloads").
+		WillReturnRows(sqlmock.NewRows([]string{"module_name", "total_downloads", "total_views", "active_days", "avg_daily_downloads"}).
+			AddRow("common-types", 3000, 5000, 30, 100.0).
+			AddRow("user-service", 1000, 2000, 28, 35.7))
 
 	// Execute
 	modules, err := service.GetPopularModules(context.Background(), "30d", 10)

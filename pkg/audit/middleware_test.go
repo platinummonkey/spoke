@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,12 +12,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockLogger for testing
+// mockLogger for testing (thread-safe for async operations)
 type mockLogger struct {
+	mu     sync.Mutex
 	events []*AuditEvent
 }
 
 func (m *mockLogger) Log(ctx context.Context, event *AuditEvent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.events = append(m.events, event)
 	return nil
 }
@@ -54,12 +58,23 @@ func (m *mockLogger) LogHTTPRequest(ctx context.Context, r *http.Request, status
 		StatusCode: statusCode,
 		Metadata:   map[string]interface{}{"duration_ms": duration.Milliseconds()},
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.events = append(m.events, event)
 	return nil
 }
 
 func (m *mockLogger) Close() error {
 	return nil
+}
+
+// GetEvents returns a copy of events (thread-safe)
+func (m *mockLogger) GetEvents() []*AuditEvent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make([]*AuditEvent, len(m.events))
+	copy(result, m.events)
+	return result
 }
 
 func TestMiddleware_Handler(t *testing.T) {
