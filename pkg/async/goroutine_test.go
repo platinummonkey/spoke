@@ -66,7 +66,7 @@ func TestSafeGo_Timeout(t *testing.T) {
 		t.Error("Function did not start")
 	}
 	if completed.Load() {
-		t.Error("Function should have been cancelled by timeout")
+		t.Error("Function should have been canceled by timeout")
 	}
 }
 
@@ -113,7 +113,7 @@ func TestSafeGo_ContextCancellation(t *testing.T) {
 		t.Error("Function did not start")
 	}
 	if completed.Load() {
-		t.Error("Function should have been cancelled")
+		t.Error("Function should have been canceled")
 	}
 }
 

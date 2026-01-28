@@ -134,7 +134,7 @@ func (p *WorkerPool) Shutdown(timeout time.Duration) error {
 	// Close work channel (may already be closed by Batch)
 	select {
 	case <-p.ctx.Done():
-		// Already cancelled, don't close again
+		// Already canceled, don't close again
 	default:
 		close(p.workCh)
 	}

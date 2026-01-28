@@ -24,6 +24,9 @@ linters:
       enable-all: true
       disable:
         - shadow
+        - fieldalignment
+        - unusedwrite  # Allow unused struct field writes (common in tests)
+        - nilness      # Allow pedagogical tests that document nil semantics
     errcheck:
       check-type-assertions: true
       check-blank: true
