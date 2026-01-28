@@ -1,0 +1,437 @@
+// +build integration
+
+package api
+
+import (
+	"bytes"
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/gorilla/mux"
+	_ "github.com/lib/pq"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
+)
+
+// setupIntegrationTestDB creates a PostgreSQL test container and runs migrations
+func setupIntegrationTestDB(t *testing.T) (*sql.DB, func()) {
+	t.Helper()
+	ctx := context.Background()
+
+	// Check if Docker/Podman is available
+	provider, err := testcontainers.ProviderDocker.GetProvider()
+	if err != nil {
+		t.Skip("Docker/Podman not available, skipping integration tests")
+	}
+	defer provider.Close()
+
+	// Start PostgreSQL container
+	postgresContainer, err := postgres.Run(ctx,
+		"postgres:15-alpine",
+		postgres.WithDatabase("spoke_test"),
+		postgres.WithUsername("spoke"),
+		postgres.WithPassword("spoke_test_password"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(60*time.Second)),
+	)
+	if err != nil {
+		t.Skipf("Failed to start PostgreSQL container: %v", err)
+	}
+
+	// Get connection string
+	connStr, err := postgresContainer.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	// Connect to database
+	db, err := sql.Open("postgres", connStr)
+	require.NoError(t, err)
+
+	// Wait for connection
+	err = db.Ping()
+	require.NoError(t, err)
+
+	// Run migrations
+	err = runMigrations(db)
+	require.NoError(t, err, "Failed to run migrations")
+
+	// Cleanup function
+	cleanup := func() {
+		db.Close()
+		if err := postgresContainer.Terminate(ctx); err != nil {
+			t.Logf("Failed to terminate container: %v", err)
+		}
+	}
+
+	return db, cleanup
+}
+
+// runMigrations applies database migrations from the migrations directory
+func runMigrations(db *sql.DB) error {
+	// Get the migrations directory path
+	wd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	// Find migrations directory (go up until we find it)
+	migrationsDir := filepath.Join(wd, "..", "..", "migrations")
+	if _, err := os.Stat(migrationsDir); os.IsNotExist(err) {
+		// Try one more level up
+		migrationsDir = filepath.Join(wd, "..", "..", "..", "migrations")
+		if _, err := os.Stat(migrationsDir); os.IsNotExist(err) {
+			return fmt.Errorf("migrations directory not found")
+		}
+	}
+
+	// Read and apply key migration files
+	migrationFiles := []string{
+		"001_create_base_schema.up.sql",
+		"002_create_auth_schema.up.sql",
+	}
+
+	for _, filename := range migrationFiles {
+		migrationPath := filepath.Join(migrationsDir, filename)
+		content, err := os.ReadFile(migrationPath)
+		if err != nil {
+			return fmt.Errorf("failed to read migration %s: %w", filename, err)
+		}
+
+		_, err = db.Exec(string(content))
+		if err != nil {
+			return fmt.Errorf("failed to execute migration %s: %w", filename, err)
+		}
+	}
+
+	return nil
+}
+
+// TestIntegration_ModuleWorkflow tests the full module CRUD workflow
+func TestIntegration_ModuleWorkflow(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	db, cleanup := setupIntegrationTestDB(t)
+	defer cleanup()
+
+	// Use mock storage for module data (integration focus is on DB for auth/orgs)
+	mockStore := newMockStorage()
+	server := NewServer(mockStore, db)
+	router := mux.NewRouter()
+	server.setupRoutes()
+	server.router = router
+
+	// 1. Create a module
+	t.Run("CreateModule", func(t *testing.T) {
+		module := Module{
+			Name:        "test-module",
+			Description: "Test module for integration testing",
+		}
+		reqBody, _ := json.Marshal(module)
+
+		req := httptest.NewRequest("POST", "/modules", bytes.NewBuffer(reqBody))
+		w := httptest.NewRecorder()
+
+		server.createModule(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+
+		var response Module
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, "test-module", response.Name)
+		assert.Equal(t, "Test module for integration testing", response.Description)
+	})
+
+	// 2. Get the module
+	t.Run("GetModule", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/modules/test-module", nil)
+		req = mux.SetURLVars(req, map[string]string{"name": "test-module"})
+		w := httptest.NewRecorder()
+
+		server.getModule(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response struct {
+			*Module
+			Versions []*Version `json:"versions"`
+		}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, "test-module", response.Name)
+	})
+
+	// 3. Create a version
+	t.Run("CreateVersion", func(t *testing.T) {
+		version := Version{
+			ModuleName: "test-module",
+			Version:    "v1.0.0",
+			Files: []File{
+				{
+					Path:    "test.proto",
+					Content: "syntax = \"proto3\";\npackage test;\n\nmessage TestMessage {\n  string name = 1;\n}",
+				},
+			},
+		}
+		reqBody, _ := json.Marshal(version)
+
+		req := httptest.NewRequest("POST", "/modules/test-module/versions", bytes.NewBuffer(reqBody))
+		req = mux.SetURLVars(req, map[string]string{"name": "test-module"})
+		w := httptest.NewRecorder()
+
+		server.createVersion(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+
+		var response Version
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, "v1.0.0", response.Version)
+		assert.Len(t, response.Files, 1)
+	})
+
+	// 4. Get the version
+	t.Run("GetVersion", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/modules/test-module/versions/v1.0.0", nil)
+		req = mux.SetURLVars(req, map[string]string{
+			"name":    "test-module",
+			"version": "v1.0.0",
+		})
+		w := httptest.NewRecorder()
+
+		server.getVersion(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response Version
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, "v1.0.0", response.Version)
+		assert.Equal(t, "test-module", response.ModuleName)
+	})
+
+	// 5. List modules
+	t.Run("ListModules", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/modules", nil)
+		w := httptest.NewRecorder()
+
+		server.listModules(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response []*Module
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(t, len(response), 1)
+
+		// Find our test module
+		found := false
+		for _, m := range response {
+			if m.Name == "test-module" {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "test-module should be in the list")
+	})
+}
+
+// TestIntegration_AuthWorkflow tests authentication and authorization workflows
+func TestIntegration_AuthWorkflow(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	db, cleanup := setupIntegrationTestDB(t)
+	defer cleanup()
+
+	authHandlers := NewAuthHandlers(db)
+
+	// 1. Create a user
+	t.Run("CreateUser", func(t *testing.T) {
+		reqBody, _ := json.Marshal(map[string]interface{}{
+			"username": "testuser",
+			"email":    "testuser@example.com",
+		})
+
+		req := httptest.NewRequest("POST", "/auth/users", bytes.NewBuffer(reqBody))
+		w := httptest.NewRecorder()
+
+		authHandlers.createUser(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, "testuser", response["username"])
+		assert.NotZero(t, response["id"])
+	})
+
+	// 2. Get the user
+	t.Run("GetUser", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/auth/users/1", nil)
+		req = mux.SetURLVars(req, map[string]string{"id": "1"})
+		w := httptest.NewRecorder()
+
+		authHandlers.getUser(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, "testuser", response["username"])
+	})
+
+	// 3. Create an organization
+	t.Run("CreateOrganization", func(t *testing.T) {
+		reqBody, _ := json.Marshal(map[string]interface{}{
+			"name":         "test-org",
+			"display_name": "Test Org",
+			"description":  "Test organization",
+		})
+
+		req := httptest.NewRequest("POST", "/auth/organizations", bytes.NewBuffer(reqBody))
+		w := httptest.NewRecorder()
+
+		authHandlers.createOrganization(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, "test-org", response["name"])
+		assert.Equal(t, "Test Org", response["display_name"])
+	})
+
+	// 4. Get the organization
+	t.Run("GetOrganization", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/auth/organizations/1", nil)
+		req = mux.SetURLVars(req, map[string]string{"id": "1"})
+		w := httptest.NewRecorder()
+
+		authHandlers.getOrganization(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, "test-org", response["name"])
+	})
+}
+
+// TestIntegration_VersionDependencies tests version dependencies
+func TestIntegration_VersionDependencies(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	db, cleanup := setupIntegrationTestDB(t)
+	defer cleanup()
+
+	// Use mock storage for module/version data
+	mockStore := newMockStorage()
+	server := NewServer(mockStore, db)
+
+	// 1. Create base module
+	t.Run("CreateBaseModule", func(t *testing.T) {
+		module := Module{
+			Name:        "common",
+			Description: "Common types",
+		}
+		reqBody, _ := json.Marshal(module)
+
+		req := httptest.NewRequest("POST", "/modules", bytes.NewBuffer(reqBody))
+		w := httptest.NewRecorder()
+
+		server.createModule(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+	})
+
+	// 2. Create base version
+	t.Run("CreateBaseVersion", func(t *testing.T) {
+		version := Version{
+			ModuleName: "common",
+			Version:    "v1.0.0",
+			Files: []File{
+				{
+					Path:    "common.proto",
+					Content: "syntax = \"proto3\";\npackage common;\n\nmessage Timestamp { int64 seconds = 1; }",
+				},
+			},
+		}
+		reqBody, _ := json.Marshal(version)
+
+		req := httptest.NewRequest("POST", "/modules/common/versions", bytes.NewBuffer(reqBody))
+		req = mux.SetURLVars(req, map[string]string{"name": "common"})
+		w := httptest.NewRecorder()
+
+		server.createVersion(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+	})
+
+	// 3. Create dependent module
+	t.Run("CreateDependentModule", func(t *testing.T) {
+		module := Module{
+			Name:        "user-service",
+			Description: "User service",
+		}
+		reqBody, _ := json.Marshal(module)
+
+		req := httptest.NewRequest("POST", "/modules", bytes.NewBuffer(reqBody))
+		w := httptest.NewRecorder()
+
+		server.createModule(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+	})
+
+	// 4. Create version with dependency
+	t.Run("CreateVersionWithDependency", func(t *testing.T) {
+		version := Version{
+			ModuleName:   "user-service",
+			Version:      "v1.0.0",
+			Dependencies: []string{"common@v1.0.0"},
+			Files: []File{
+				{
+					Path:    "user.proto",
+					Content: "syntax = \"proto3\";\npackage user;\nimport \"common.proto\";\n\nmessage User { string name = 1; }",
+				},
+			},
+		}
+		reqBody, _ := json.Marshal(version)
+
+		req := httptest.NewRequest("POST", "/modules/user-service/versions", bytes.NewBuffer(reqBody))
+		req = mux.SetURLVars(req, map[string]string{"name": "user-service"})
+		w := httptest.NewRecorder()
+
+		server.createVersion(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+
+		var response Version
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Len(t, response.Dependencies, 1)
+		assert.Equal(t, "common@v1.0.0", response.Dependencies[0])
+	})
+}
