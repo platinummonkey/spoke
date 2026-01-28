@@ -1,56 +1,7 @@
-version: 2
-
-linters-settings:
-  govet:
-    enable-all: true
-    disable:
-      - shadow
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-  staticcheck:
-    checks: ["all", "-QF1001", "-QF1003", "-QF1012", "-SA1029", "-SA4031"]
-  gosimple:
-    checks: ["all"]
-  unused:
-    check-exported: false
-  ineffassign:
-    check-generated: false
-  gocyclo:
-    min-complexity: 15
-  dupl:
-    threshold: 100
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-  misspell:
-    locale: US
-  lll:
-    line-length: 140
-  gofmt:
-    simplify: true
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-    disabled-checks:
-      - dupImport
-      - ifElseChain
-      - octalLiteral
-      - whyNoLint
-  funlen:
-    lines: 100
-    statements: 50
-  godox:
-    keywords:
-      - FIXME
-      - BUG
+version: "2"
 
 linters:
-  disable-all: true
+  default: none
   enable:
     - govet
     - ineffassign
@@ -68,127 +19,170 @@ linters:
   # unused disabled - many helper functions kept for future use
   # gocyclo disabled - complexity is managed through code review
 
-issues:
-  exclude-use-default: false
-  exclude-rules:
-    # Test files
-    - path: _test\.go
-      linters:
-        - gocyclo
-        - funlen
-        - dupl
-        - goconst
-        - errcheck
-        - godox
-        - staticcheck
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        - shadow
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    staticcheck:
+      checks: ["all", "-QF1001", "-QF1003", "-QF1012", "-SA1029", "-SA4031"]
+    gocyclo:
+      min-complexity: 15
+    dupl:
+      threshold: 100
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    misspell:
+      locale: US
+    lll:
+      line-length: 140
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+      disabled-checks:
+        - dupImport
+        - ifElseChain
+        - octalLiteral
+        - whyNoLint
+    funlen:
+      lines: 100
+      statements: 50
+    godox:
+      keywords:
+        - FIXME
+        - BUG
 
-    # Command-line tools
-    - path: cmd/
-      linters:
-        - gocyclo
-        - godox
-        - unused
-        - dupl
+  exclusions:
+    presets: []  # Don't use default exclusions
+    rules:
+      # Test files
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - funlen
+          - dupl
+          - goconst
+          - errcheck
+          - godox
+          - staticcheck
 
-    # Example code (intentionally shows patterns, not production code)
-    - path: examples/
-      linters:
-        - godox
-        - unused
-        - errcheck
-        - dupl
+      # Command-line tools
+      - path: cmd/
+        linters:
+          - gocyclo
+          - godox
+          - unused
+          - dupl
 
-    # Audit integration examples (demo code)
-    - path: pkg/audit/.*example\.go
-      linters:
-        - godox
-        - unused
-        - errcheck
+      # Example code (intentionally shows patterns, not production code)
+      - path: examples/
+        linters:
+          - godox
+          - unused
+          - errcheck
+          - dupl
 
-    # Protobuf parser (complex state machine, some duplication acceptable)
-    - path: pkg/api/protobuf/
-      linters:
-        - dupl
-        - unused
-        - staticcheck
-        - gocyclo
+      # Audit integration examples (demo code)
+      - path: pkg/audit/.*example\.go
+        linters:
+          - godox
+          - unused
+          - errcheck
 
-    # Known safe patterns
-    - text: "weak cryptographic primitive"
-      linters:
-        - gosec
+      # Protobuf parser (complex state machine, some duplication acceptable)
+      - path: pkg/api/protobuf/
+        linters:
+          - dupl
+          - unused
+          - staticcheck
+          - gocyclo
 
-    # httputil functions handle errors internally
-    - text: "Error return value of `httputil.Write"
-      linters:
-        - errcheck
+      # Known safe patterns
+      - text: "weak cryptographic primitive"
+        linters:
+          - gosec
 
-    - text: "Error return value of `httputil.Parse"
-      linters:
-        - errcheck
+      # httputil functions handle errors internally
+      - text: "Error return value of `httputil.Write"
+        linters:
+          - errcheck
 
-    # Close calls in defer are commonly unchecked
-    - text: "Error return value of.*Close.*is not checked"
-      linters:
-        - errcheck
+      - text: "Error return value of `httputil.Parse"
+        linters:
+          - errcheck
 
-    # fmt.Fprint to response writers (error handled by HTTP layer)
-    - text: "Error return value of `fmt.Fprint"
-      linters:
-        - errcheck
+      # Close calls in defer are commonly unchecked
+      - text: "Error return value of.*Close.*is not checked"
+        linters:
+          - errcheck
 
-    - text: "Error return value of `fmt.Fprintf"
-      linters:
-        - errcheck
+      # fmt.Fprint to response writers (error handled by HTTP layer)
+      - text: "Error return value of `fmt.Fprint"
+        linters:
+          - errcheck
 
-    # Write to response writers (error handled by HTTP layer)
-    - text: "Error return value of.*Write.*is not checked"
-      linters:
-        - errcheck
+      - text: "Error return value of `fmt.Fprintf"
+        linters:
+          - errcheck
 
-    # os.RemoveAll in cleanup (best effort)
-    - text: "Error return value of `os.RemoveAll"
-      linters:
-        - errcheck
+      # Write to response writers (error handled by HTTP layer)
+      - text: "Error return value of.*Write.*is not checked"
+        linters:
+          - errcheck
 
-    # io.Copy in defer cleanup (best effort)
-    - text: "Error return value of `io.Copy"
-      linters:
-        - errcheck
+      # os.RemoveAll in cleanup (best effort)
+      - text: "Error return value of `os.RemoveAll"
+        linters:
+          - errcheck
 
-    # stdcopy.StdCopy in logging (best effort)
-    - text: "Error return value of `stdcopy.StdCopy"
-      linters:
-        - errcheck
+      # io.Copy in defer cleanup (best effort)
+      - text: "Error return value of `io.Copy"
+        linters:
+          - errcheck
 
-    # Quick Fix suggestions (QF codes) - optional style improvements
-    - text: "QF1001"
-      linters:
-        - staticcheck
+      # stdcopy.StdCopy in logging (best effort)
+      - text: "Error return value of `stdcopy.StdCopy"
+        linters:
+          - errcheck
 
-    - text: "QF1003"
-      linters:
-        - staticcheck
+      # Quick Fix suggestions (QF codes) - optional style improvements
+      - text: "QF1001"
+        linters:
+          - staticcheck
 
-    - text: "QF1012"
-      linters:
-        - staticcheck
+      - text: "QF1003"
+        linters:
+          - staticcheck
 
-    # Context key type warnings - accepted pattern in this codebase
-    - text: "SA1029"
-      linters:
-        - staticcheck
+      - text: "QF1012"
+        linters:
+          - staticcheck
 
-    # SA4031 related information (not an actual issue)
-    - text: "SA4031.*related information"
-      linters:
-        - staticcheck
+      # Context key type warnings - accepted pattern in this codebase
+      - text: "SA1029"
+        linters:
+          - staticcheck
+
+      # SA4031 related information (not an actual issue)
+      - text: "SA4031.*related information"
+        linters:
+          - staticcheck
+
+formatters:
+  settings:
+    gofmt:
+      simplify: true
 
 run:
   timeout: 5m
   tests: true
   build-tags:
     - integration
-
-output:
-  sort-results: true
