@@ -227,3 +227,126 @@ func TestCheckPerformanceAlerts_BelowThreshold(t *testing.T) {
 		t.Errorf("Unmet expectations: %v", err)
 	}
 }
+
+func TestCheckAllAlerts(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("Failed to create mock database: %v", err)
+	}
+	defer db.Close()
+
+	alerter := NewAlerter(db)
+
+	// Mock health alerts query - return 1 alert
+	mock.ExpectQuery("SELECT(.+)FROM modules m(.+)").
+		WillReturnRows(sqlmock.NewRows([]string{"module_name", "version", "health_score"}).
+			AddRow("unhealthy-module", "v1.0.0", 35.5))
+
+	// Mock performance alerts query - return 1 alert
+	mock.ExpectQuery("SELECT language, p95_duration_ms, compilation_count").
+		WillReturnRows(sqlmock.NewRows([]string{"language", "p95_duration_ms", "compilation_count"}).
+			AddRow("cpp", 8500, 234))
+
+	// Mock usage alerts query - return 1 alert
+	mock.ExpectQuery("SELECT(.+)FROM modules m(.+)").
+		WillReturnRows(sqlmock.NewRows([]string{"module_name", "unused_fields", "last_access_days"}).
+			AddRow("stale-module", 0, 100))
+
+	// Execute CheckAllAlerts
+	err = alerter.CheckAllAlerts(context.Background())
+
+	// CheckAllAlerts logs errors but doesn't return them, so it should always succeed
+	if err != nil {
+		t.Errorf("CheckAllAlerts returned error: %v", err)
+	}
+
+	// Verify all expectations met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("Unmet expectations: %v", err)
+	}
+}
+
+func TestCheckAllAlerts_WithErrors(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("Failed to create mock database: %v", err)
+	}
+	defer db.Close()
+
+	alerter := NewAlerter(db)
+
+	// Mock health alerts query to return error
+	mock.ExpectQuery("SELECT(.+)FROM modules m(.+)").
+		WillReturnError(context.DeadlineExceeded)
+
+	// Mock performance alerts query - return empty
+	mock.ExpectQuery("SELECT language, p95_duration_ms, compilation_count").
+		WillReturnRows(sqlmock.NewRows([]string{"language", "p95_duration_ms", "compilation_count"}))
+
+	// Mock usage alerts query - return empty
+	mock.ExpectQuery("SELECT(.+)FROM modules m(.+)LEFT JOIN download_events(.+)").
+		WillReturnRows(sqlmock.NewRows([]string{"module_name", "unused_fields", "last_access_days"}))
+
+	// Execute CheckAllAlerts - should not fail even if sub-checks fail
+	err = alerter.CheckAllAlerts(context.Background())
+	if err != nil {
+		t.Errorf("CheckAllAlerts should not return error, got: %v", err)
+	}
+
+	// Verify all expectations met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("Unmet expectations: %v", err)
+	}
+}
+
+func TestSendAlert(t *testing.T) {
+	db, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("Failed to create mock database: %v", err)
+	}
+	defer db.Close()
+
+	alerter := NewAlerter(db)
+
+	tests := []struct {
+		name  string
+		alert Alert
+	}{
+		{
+			name: "health alert",
+			alert: Alert{
+				Type:     "health",
+				Severity: "critical",
+				Title:    "Low Health Score",
+				Message:  "Module has low health score",
+			},
+		},
+		{
+			name: "performance alert",
+			alert: Alert{
+				Type:     "performance",
+				Severity: "warning",
+				Title:    "Slow Compilation",
+				Message:  "Compilation is taking too long",
+			},
+		},
+		{
+			name: "usage alert",
+			alert: Alert{
+				Type:     "usage",
+				Severity: "info",
+				Title:    "Low Usage",
+				Message:  "Language has low usage",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := alerter.SendAlert(tt.alert)
+			if err != nil {
+				t.Errorf("SendAlert returned unexpected error: %v", err)
+			}
+		})
+	}
+}
