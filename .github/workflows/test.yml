@@ -52,6 +52,8 @@ jobs:
         env:
           SPOKE_POSTGRES_URL: postgres://postgres:postgres@localhost:5432/spoke_test?sslmode=disable
           SPOKE_REDIS_URL: redis://localhost:6379/0
+          TEST_POSTGRES_PRIMARY: postgres://postgres:postgres@localhost:5432/spoke_test?sslmode=disable
+          TEST_REDIS_URL: redis://localhost:6379/0
         run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Check test coverage
@@ -76,6 +78,30 @@ jobs:
     name: Race Detector
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: spoke_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -90,6 +116,9 @@ jobs:
         run: go mod download
 
       - name: Run race detector on tests
+        env:
+          TEST_POSTGRES_PRIMARY: postgres://postgres:postgres@localhost:5432/spoke_test?sslmode=disable
+          TEST_REDIS_URL: redis://localhost:6379/0
         run: go test -race -short ./...
 
       - name: Build with race detector
@@ -110,9 +139,9 @@ jobs:
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v2.8.0
           args: --timeout=5m
 
   build:
