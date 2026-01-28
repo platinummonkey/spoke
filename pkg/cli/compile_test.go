@@ -72,7 +72,7 @@ message Order {
 			},
 			wantErr: false,
 			expectedFiles: []string{
-				"test/common.pb.go",
+				"go/test/common.pb.go",
 			},
 		},
 		{
@@ -85,9 +85,9 @@ message Order {
 			},
 			wantErr: false,
 			expectedFiles: []string{
-				"test/common/common.pb.go",
-				"test/user/user.pb.go",
-				"test/order/order.pb.go",
+				"go/test/common/common.pb.go",
+				"go/test/user/user.pb.go",
+				"go/test/order/order.pb.go",
 			},
 		},
 	}

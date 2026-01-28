@@ -512,12 +512,20 @@ func (v *Validator) isAllowedPermission(permission string) bool {
 
 func isValidPluginID(id string) bool {
 	// Plugin IDs must be lowercase alphanumeric with hyphens
-	matched, _ := regexp.MatchString(`^[a-z0-9][a-z0-9-]*[a-z0-9]$`, id)
+	// Single character IDs are allowed, or multi-character IDs that start and end with alphanumeric
+	matched, _ := regexp.MatchString(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`, id)
 	return matched
 }
 
 func isValidURL(url string) bool {
-	matched, _ := regexp.MatchString(`^https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`, url)
+	// Support http(s), ftp schemes
+	// Allow hostnames with or without TLD, IP addresses (IPv4/IPv6), and optional credentials
+	// Pattern breakdown:
+	// - Scheme: https?|ftp
+	// - Optional credentials: ([^@]+@)?
+	// - Host: hostname, IPv4, or IPv6 in brackets
+	// - Optional port, path, query, fragment
+	matched, _ := regexp.MatchString(`^(https?|ftp)://([^@/]+@)?([a-zA-Z0-9.-]+|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[[0-9a-fA-F:]+\])`, url)
 	return matched
 }
 

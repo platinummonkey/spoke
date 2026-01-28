@@ -241,11 +241,26 @@ func (p *WorkerPool) worker(id int) {
 func Batch[T any](ctx context.Context, items []T, workers int, taskName string, timeout time.Duration,
 	fn func(context.Context, T) error) []error {
 
+	// Check if context is already cancelled
+	select {
+	case <-ctx.Done():
+		return []error{ctx.Err()}
+	default:
+	}
+
 	pool := NewWorkerPool(ctx, workers, taskName, timeout)
 	defer pool.Shutdown(5 * time.Second)
 
 	// Submit all tasks
 	for _, item := range items {
+		// Check for context cancellation during submission
+		select {
+		case <-ctx.Done():
+			// Context cancelled during submission, return error
+			return []error{ctx.Err()}
+		default:
+		}
+
 		item := item // Capture loop variable
 		if err := pool.Submit(func(ctx context.Context) error {
 			return fn(ctx, item)

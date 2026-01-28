@@ -63,6 +63,11 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Install protoc-gen-go
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+
       - name: Run tests
         env:
           SPOKE_POSTGRES_URL: postgres://postgres:postgres@localhost:5432/spoke_test?sslmode=disable
@@ -147,6 +152,11 @@ jobs:
 
       - name: Download dependencies
         run: go mod download
+
+      - name: Install protoc-gen-go
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
 
       - name: Run race detector on tests
         env:
