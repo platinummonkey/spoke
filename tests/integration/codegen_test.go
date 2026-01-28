@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -68,10 +69,22 @@ service TestService {
 
 		result, err := orch.CompileSingle(ctx, req)
 		if err != nil {
+			// Skip test if Docker images are not available
+			if strings.Contains(err.Error(), "failed to pull docker image") || strings.Contains(err.Error(), "denied: requested access to the resource is denied") {
+				t.Logf("Skipping test - Docker images not available: %v", err)
+				t.Skip("Docker compilation images not available")
+				return
+			}
 			t.Fatalf("Compilation failed: %v", err)
 		}
 
 		if !result.Success {
+			// Also check result error for Docker image issues
+			if strings.Contains(result.Error, "failed to pull docker image") || strings.Contains(result.Error, "denied: requested access to the resource is denied") {
+				t.Logf("Skipping test - Docker images not available: %s", result.Error)
+				t.Skip("Docker compilation images not available")
+				return
+			}
 			t.Errorf("Expected successful compilation, got error: %s", result.Error)
 		}
 

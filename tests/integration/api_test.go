@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/platinummonkey/spoke/pkg/api"
@@ -141,9 +142,21 @@ message Test { string data = 1; }`,
 
 	server.ServeHTTP(w, req)
 
-	// May return 503 if orchestrator not available in test env
-	if w.Code != http.StatusOK && w.Code != http.StatusServiceUnavailable {
-		t.Errorf("Expected status 200 or 503, got %d: %s", w.Code, w.Body.String())
+	// May return 503 if orchestrator not available, or 500 if Docker images unavailable
+	if w.Code != http.StatusOK && w.Code != http.StatusServiceUnavailable && w.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status 200, 500, or 503, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// If 500, check if it's due to Docker image unavailability and skip
+	if w.Code == http.StatusInternalServerError {
+		body := w.Body.String()
+		if strings.Contains(body, "failed to pull docker image") || strings.Contains(body, "denied: requested access to the resource is denied") {
+			t.Logf("Skipping test - Docker images not available: %s", body)
+			t.Skip("Docker compilation images not available")
+			return
+		}
+		t.Errorf("Unexpected internal server error: %s", body)
+		return
 	}
 
 	if w.Code == http.StatusOK {

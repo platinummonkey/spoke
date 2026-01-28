@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -192,9 +193,18 @@ message TestMessage {
 	ctx := context.Background()
 	result, err := runner.Execute(ctx, req)
 
-	// If the image doesn't exist, skip the test
-	if err != nil && (err == ErrImagePullFailed || result.Error == ErrImagePullFailed) {
-		t.Skip("Compiler image not available")
+	// If the image doesn't exist or can't be pulled, skip the test
+	if err != nil {
+		errMsg := err.Error()
+		if err == ErrImagePullFailed || strings.Contains(errMsg, "failed to pull docker image") || strings.Contains(errMsg, "denied: requested access to the resource is denied") {
+			t.Skipf("Compiler image not available: %v", err)
+		}
+	}
+	if result != nil && result.Error != nil {
+		errMsg := result.Error.Error()
+		if result.Error == ErrImagePullFailed || strings.Contains(errMsg, "failed to pull docker image") || strings.Contains(errMsg, "denied: requested access to the resource is denied") {
+			t.Skipf("Compiler image not available: %v", result.Error)
+		}
 	}
 
 	require.NoError(t, err)
