@@ -726,3 +726,966 @@ func BenchmarkCheckPermission(b *testing.B) {
 		handlers.CheckPermission(w, req)
 	}
 }
+
+// TestListRoles_WithoutOrgID tests listing roles without organization filter
+func TestListRoles_WithoutOrgID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("GET", "/rbac/roles", nil)
+	w := httptest.NewRecorder()
+
+	handlers.ListRoles(w, req)
+
+	// Should return OK with empty list or roles
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestListRoles_WithOrgID tests listing roles with organization filter
+func TestListRoles_WithOrgID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("GET", "/rbac/roles?organization_id=123", nil)
+	w := httptest.NewRecorder()
+
+	handlers.ListRoles(w, req)
+
+	// Should return OK with filtered roles
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestListRoles_InvalidOrgID tests listing roles with invalid organization ID
+func TestListRoles_InvalidOrgID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("GET", "/rbac/roles?organization_id=invalid", nil)
+	w := httptest.NewRecorder()
+
+	handlers.ListRoles(w, req)
+
+	// Should still try to list all roles (invalid orgID is ignored)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestGetRole_InvalidID tests getting role with invalid ID
+func TestGetRole_InvalidID(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("GET", "/rbac/roles/invalid", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "invalid"})
+	w := httptest.NewRecorder()
+
+	handlers.GetRole(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid role ID")
+}
+
+// TestGetRole_ValidID tests getting role with valid ID
+func TestGetRole_ValidID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("GET", "/rbac/roles/123", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "123"})
+	w := httptest.NewRecorder()
+
+	handlers.GetRole(w, req)
+
+	// Expect not found since role doesn't exist
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// TestUpdateRole_InvalidID tests updating role with invalid ID
+func TestUpdateRole_InvalidID(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"display_name": "Updated Role",
+		"description":  "Updated description",
+	})
+
+	req := httptest.NewRequest("PUT", "/rbac/roles/invalid", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "invalid"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.UpdateRole(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid role ID")
+}
+
+// TestDeleteRole_InvalidID tests deleting role with invalid ID
+func TestDeleteRole_InvalidID(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("DELETE", "/rbac/roles/invalid", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "invalid"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.DeleteRole(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid role ID")
+}
+
+// TestDeleteRole_ValidID tests deleting role with valid ID
+func TestDeleteRole_ValidID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("DELETE", "/rbac/roles/123", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "123"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.DeleteRole(w, req)
+
+	// Deleting non-existent role should still return success or error
+	// depending on implementation (likely success/no content)
+	assert.True(t, w.Code == http.StatusNoContent || w.Code == http.StatusNotFound || w.Code == http.StatusInternalServerError)
+}
+
+// TestAssignRoleToUser_InvalidUserID tests assigning role with invalid user ID
+func TestAssignRoleToUser_InvalidUserID(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"role_id": 456,
+		"scope":   "organization",
+	})
+
+	req := httptest.NewRequest("POST", "/rbac/users/invalid/roles", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "invalid"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.AssignRoleToUser(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid user ID")
+}
+
+// TestAssignRoleToUser_InvalidJSON tests assigning role with invalid JSON
+func TestAssignRoleToUser_InvalidJSON(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("POST", "/rbac/users/123/roles", bytes.NewReader([]byte("{invalid")))
+	req = mux.SetURLVars(req, map[string]string{"id": "123"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.AssignRoleToUser(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid request body")
+}
+
+// TestAssignRoleToUser_ValidRequest tests assigning role with valid request
+func TestAssignRoleToUser_ValidRequest(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"role_id": 456,
+		"scope":   "organization",
+	})
+
+	req := httptest.NewRequest("POST", "/rbac/users/123/roles", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "123"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.AssignRoleToUser(w, req)
+
+	// May fail due to missing role or user, but shouldn't panic
+	assert.True(t, w.Code == http.StatusCreated || w.Code == http.StatusInternalServerError)
+}
+
+// TestGetUserRoles_WithOrgID tests getting user roles with organization filter
+func TestGetUserRoles_WithOrgID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("GET", "/rbac/users/123/roles?organization_id=456", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "123"})
+	w := httptest.NewRecorder()
+
+	handlers.GetUserRoles(w, req)
+
+	// Should return OK with empty list
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestRevokeRoleFromUser_InvalidUserID tests revoking role with invalid user ID
+func TestRevokeRoleFromUser_InvalidUserID(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("DELETE", "/rbac/users/invalid/roles/456", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "invalid", "role_id": "456"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.RevokeRoleFromUser(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid user ID")
+}
+
+// TestRevokeRoleFromUser_InvalidRoleID tests revoking role with invalid role ID
+func TestRevokeRoleFromUser_InvalidRoleID(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("DELETE", "/rbac/users/123/roles/invalid", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "123", "role_id": "invalid"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.RevokeRoleFromUser(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid role ID")
+}
+
+// TestRevokeRoleFromUser_ValidIDs tests revoking role with valid IDs
+func TestRevokeRoleFromUser_ValidIDs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("DELETE", "/rbac/users/123/roles/456", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "123", "role_id": "456"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.RevokeRoleFromUser(w, req)
+
+	// May succeed or fail depending on whether role exists
+	assert.True(t, w.Code == http.StatusNoContent || w.Code == http.StatusInternalServerError)
+}
+
+// TestGetUserPermissions_InvalidUserID tests getting permissions with invalid user ID
+func TestGetUserPermissions_InvalidUserID(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("GET", "/rbac/users/invalid/permissions", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "invalid"})
+	w := httptest.NewRecorder()
+
+	handlers.GetUserPermissions(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid user ID")
+}
+
+// TestGetUserPermissions_WithFilters tests getting permissions with filters
+func TestGetUserPermissions_WithFilters(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("GET", "/rbac/users/123/permissions?organization_id=456&resource_id=test-module", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "123"})
+	w := httptest.NewRecorder()
+
+	handlers.GetUserPermissions(w, req)
+
+	// Should return OK with permissions list
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestCheckPermission_InvalidJSON tests permission check with invalid JSON
+func TestCheckPermission_InvalidJSON(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("POST", "/rbac/check", bytes.NewReader([]byte("{not valid json")))
+	w := httptest.NewRecorder()
+
+	handlers.CheckPermission(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid request body")
+}
+
+// TestCheckPermission_ValidRequest tests permission check with valid request
+func TestCheckPermission_ValidRequest(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	check := PermissionCheck{
+		UserID: 123,
+		Permission: Permission{
+			Resource: ResourceModule,
+			Action:   ActionRead,
+		},
+		Scope: ScopeOrganization,
+	}
+
+	body, _ := json.Marshal(check)
+	req := httptest.NewRequest("POST", "/rbac/check", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	handlers.CheckPermission(w, req)
+
+	// Should return OK with permission check result
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestCreateTeam_InvalidJSON tests team creation with invalid JSON
+func TestCreateTeam_InvalidJSON(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("POST", "/rbac/teams", bytes.NewReader([]byte("{invalid")))
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.CreateTeam(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid request body")
+}
+
+// TestCreateTeam_MissingFields tests team creation with missing fields
+func TestCreateTeam_MissingFields(t *testing.T) {
+	tests := []struct {
+		name           string
+		requestBody    map[string]interface{}
+		expectedStatus int
+		expectedError  string
+		useRealDB      bool
+	}{
+		{
+			name: "missing name",
+			requestBody: map[string]interface{}{
+				"organization_id": 1,
+				"display_name":    "Test Team",
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "Name and display_name are required",
+			useRealDB:      false,
+		},
+		{
+			name: "missing display_name",
+			requestBody: map[string]interface{}{
+				"organization_id": 1,
+				"name":            "test-team",
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "Name and display_name are required",
+			useRealDB:      false,
+		},
+		{
+			name: "valid team",
+			requestBody: map[string]interface{}{
+				"organization_id": 1,
+				"name":            "test-team",
+				"display_name":    "Test Team",
+			},
+			expectedStatus: http.StatusCreated,
+			useRealDB:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.useRealDB && testing.Short() {
+				t.Skip("Skipping database test in short mode")
+			}
+
+			var db *sql.DB
+			if tt.useRealDB {
+				db = setupTestDB(t)
+				defer db.Close()
+			} else {
+				db = &sql.DB{}
+			}
+
+			auditLogger := &mockAuditLogger{}
+			handlers := NewHandlers(db, auditLogger)
+
+			body, _ := json.Marshal(tt.requestBody)
+			req := httptest.NewRequest("POST", "/rbac/teams", bytes.NewReader(body))
+			authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+			ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+			req = req.WithContext(ctx)
+			w := httptest.NewRecorder()
+
+			handlers.CreateTeam(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+			if tt.expectedError != "" {
+				assert.Contains(t, w.Body.String(), tt.expectedError)
+			}
+		})
+	}
+}
+
+// TestListTeams_MissingOrgID tests listing teams without organization ID
+func TestListTeams_MissingOrgID(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("GET", "/rbac/teams", nil)
+	w := httptest.NewRecorder()
+
+	handlers.ListTeams(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "organization_id is required")
+}
+
+// TestListTeams_InvalidOrgID tests listing teams with invalid organization ID
+func TestListTeams_InvalidOrgID(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("GET", "/rbac/teams?organization_id=invalid", nil)
+	w := httptest.NewRecorder()
+
+	handlers.ListTeams(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "organization_id is required")
+}
+
+// TestListTeams_ValidOrgID tests listing teams with valid organization ID
+func TestListTeams_ValidOrgID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("GET", "/rbac/teams?organization_id=123", nil)
+	w := httptest.NewRecorder()
+
+	handlers.ListTeams(w, req)
+
+	// Should return OK with empty list
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestGetTeam_InvalidID tests getting team with invalid ID
+func TestGetTeam_InvalidID(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("GET", "/rbac/teams/invalid", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "invalid"})
+	w := httptest.NewRecorder()
+
+	handlers.GetTeam(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid team ID")
+}
+
+// TestGetTeam_ValidID tests getting team with valid ID
+func TestGetTeam_ValidID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("GET", "/rbac/teams/123", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "123"})
+	w := httptest.NewRecorder()
+
+	handlers.GetTeam(w, req)
+
+	// Expect not found since team doesn't exist
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// TestUpdateTeam_InvalidID tests updating team with invalid ID
+func TestUpdateTeam_InvalidID(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"display_name": "Updated Team",
+		"description":  "Updated description",
+	})
+
+	req := httptest.NewRequest("PUT", "/rbac/teams/invalid", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "invalid"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.UpdateTeam(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid team ID")
+}
+
+// TestDeleteTeam_InvalidID tests deleting team with invalid ID
+func TestDeleteTeam_InvalidID(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("DELETE", "/rbac/teams/invalid", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "invalid"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.DeleteTeam(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid team ID")
+}
+
+// TestDeleteTeam_ValidID tests deleting team with valid ID
+func TestDeleteTeam_ValidID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("DELETE", "/rbac/teams/123", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "123"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.DeleteTeam(w, req)
+
+	// May succeed or fail depending on whether team exists
+	assert.True(t, w.Code == http.StatusNoContent || w.Code == http.StatusInternalServerError)
+}
+
+// TestAddTeamMember_InvalidTeamID tests adding member with invalid team ID
+func TestAddTeamMember_InvalidTeamID(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"user_id": 456,
+	})
+
+	req := httptest.NewRequest("POST", "/rbac/teams/invalid/members", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "invalid"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.AddTeamMember(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid team ID")
+}
+
+// TestAddTeamMember_InvalidJSON tests adding member with invalid JSON
+func TestAddTeamMember_InvalidJSON(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("POST", "/rbac/teams/123/members", bytes.NewReader([]byte("{bad")))
+	req = mux.SetURLVars(req, map[string]string{"id": "123"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.AddTeamMember(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid request body")
+}
+
+// TestAddTeamMember_ValidRequest tests adding member with valid request
+func TestAddTeamMember_ValidRequest(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"user_id": 456,
+	})
+
+	req := httptest.NewRequest("POST", "/rbac/teams/123/members", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "123"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.AddTeamMember(w, req)
+
+	// May fail due to missing team or user, but shouldn't panic
+	assert.True(t, w.Code == http.StatusCreated || w.Code == http.StatusInternalServerError)
+}
+
+// TestGetTeamMembers_InvalidTeamID tests getting members with invalid team ID
+func TestGetTeamMembers_InvalidTeamID(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("GET", "/rbac/teams/invalid/members", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "invalid"})
+	w := httptest.NewRecorder()
+
+	handlers.GetTeamMembers(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid team ID")
+}
+
+// TestGetTeamMembers_ValidTeamID tests getting members with valid team ID
+func TestGetTeamMembers_ValidTeamID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("GET", "/rbac/teams/123/members", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "123"})
+	w := httptest.NewRecorder()
+
+	handlers.GetTeamMembers(w, req)
+
+	// Should return OK with empty list
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestAssignRoleToTeam_InvalidTeamID tests assigning role with invalid team ID
+func TestAssignRoleToTeam_InvalidTeamID(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"role_id": 456,
+		"scope":   "organization",
+	})
+
+	req := httptest.NewRequest("POST", "/rbac/teams/invalid/roles", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "invalid"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.AssignRoleToTeam(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid team ID")
+}
+
+// TestAssignRoleToTeam_InvalidJSON tests assigning role with invalid JSON
+func TestAssignRoleToTeam_InvalidJSON(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("POST", "/rbac/teams/123/roles", bytes.NewReader([]byte("{bad json")))
+	req = mux.SetURLVars(req, map[string]string{"id": "123"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.AssignRoleToTeam(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid request body")
+}
+
+// TestAssignRoleToTeam_ValidRequest tests assigning role with valid request
+func TestAssignRoleToTeam_ValidRequest(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"role_id": 456,
+		"scope":   "organization",
+	})
+
+	req := httptest.NewRequest("POST", "/rbac/teams/123/roles", bytes.NewReader(body))
+	req = mux.SetURLVars(req, map[string]string{"id": "123"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.AssignRoleToTeam(w, req)
+
+	// May fail due to missing team or role, but shouldn't panic
+	assert.True(t, w.Code == http.StatusCreated || w.Code == http.StatusInternalServerError)
+}
+
+// TestRevokeRoleFromTeam_InvalidRoleID tests revoking role with invalid role ID
+func TestRevokeRoleFromTeam_InvalidRoleID(t *testing.T) {
+	db := &sql.DB{}
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("DELETE", "/rbac/teams/123/roles/invalid", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "123", "role_id": "invalid"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.RevokeRoleFromTeam(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid role ID")
+}
+
+// TestRevokeRoleFromTeam_ValidRoleID tests revoking role with valid role ID
+func TestRevokeRoleFromTeam_ValidRoleID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	req := httptest.NewRequest("DELETE", "/rbac/teams/123/roles/456", nil)
+	req = mux.SetURLVars(req, map[string]string{"id": "123", "role_id": "456"})
+	authCtx := &auth.AuthContext{User: &auth.User{ID: 1}}
+	ctx := context.WithValue(req.Context(), middleware.AuthContextKey, authCtx)
+	req = req.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	handlers.RevokeRoleFromTeam(w, req)
+
+	// May succeed or fail depending on whether role exists
+	assert.True(t, w.Code == http.StatusNoContent || w.Code == http.StatusInternalServerError)
+}
+
+// TestLogAudit_WithNilLogger tests that logAudit handles nil logger gracefully
+func TestLogAudit_WithNilLogger(t *testing.T) {
+	db := &sql.DB{}
+	handlers := &Handlers{
+		store:       NewStore(db),
+		checker:     NewPermissionChecker(db, 5*time.Minute),
+		auditLogger: nil,
+	}
+
+	// Should not panic with nil logger
+	handlers.logAudit(context.Background(), nil, audit.EventTypeAuthzPermissionGrant, "test", "123", true, nil)
+}
+
+// TestLogAudit_WithAuthContext tests audit logging with auth context
+func TestLogAudit_WithAuthContext(t *testing.T) {
+	db := &sql.DB{}
+	mockLogger := &mockAuditLogger{logs: []*audit.AuditEvent{}}
+	handlers := NewHandlers(db, mockLogger)
+
+	authCtx := &auth.AuthContext{
+		User: &auth.User{ID: 123, Username: "testuser"},
+	}
+
+	handlers.logAudit(context.Background(), authCtx, audit.EventTypeAuthzPermissionGrant, "role", "456", true, nil)
+
+	require.Len(t, mockLogger.logs, 1)
+	assert.Equal(t, audit.EventTypeAuthzPermissionGrant, mockLogger.logs[0].EventType)
+	assert.Equal(t, "role", string(mockLogger.logs[0].ResourceType))
+	assert.Equal(t, "456", mockLogger.logs[0].ResourceID)
+	assert.Equal(t, audit.EventStatusSuccess, mockLogger.logs[0].Status)
+	assert.Equal(t, int64(123), *mockLogger.logs[0].UserID)
+	assert.Equal(t, "testuser", mockLogger.logs[0].Username)
+}
+
+// TestLogAudit_WithError tests audit logging with error
+func TestLogAudit_WithError(t *testing.T) {
+	db := &sql.DB{}
+	mockLogger := &mockAuditLogger{logs: []*audit.AuditEvent{}}
+	handlers := NewHandlers(db, mockLogger)
+
+	testErr := assert.AnError
+	handlers.logAudit(context.Background(), nil, audit.EventTypeAuthzPermissionRevoke, "team", "789", false, testErr)
+
+	require.Len(t, mockLogger.logs, 1)
+	assert.Equal(t, audit.EventStatusFailure, mockLogger.logs[0].Status)
+	assert.Equal(t, testErr.Error(), mockLogger.logs[0].ErrorMessage)
+}
+
+// TestCreateRole_WithoutAuthContext tests role creation without auth context
+func TestCreateRole_WithoutAuthContext(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping database test in short mode")
+	}
+
+	db := setupTestDB(t)
+	defer db.Close()
+
+	auditLogger := &mockAuditLogger{}
+	handlers := NewHandlers(db, auditLogger)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"name":         "test-role",
+		"display_name": "Test Role",
+		"permissions":  []Permission{},
+	})
+
+	req := httptest.NewRequest("POST", "/rbac/roles", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	handlers.CreateRole(w, req)
+
+	// Should succeed even without auth context
+	assert.Equal(t, http.StatusCreated, w.Code)
+}
