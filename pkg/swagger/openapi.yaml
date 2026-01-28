@@ -270,7 +270,7 @@ paths:
       security: []
       parameters:
         - $ref: '#/components/parameters/ModuleName'
-        - $ref: '#/components/parameters/Version'
+        - $ref: '#/components/parameters/VersionParam'
       responses:
         '200':
           description: Version details
@@ -292,7 +292,7 @@ paths:
       security: []
       parameters:
         - $ref: '#/components/parameters/ModuleName'
-        - $ref: '#/components/parameters/Version'
+        - $ref: '#/components/parameters/VersionParam'
         - name: path
           in: path
           required: true
@@ -320,7 +320,7 @@ paths:
       security: []
       parameters:
         - $ref: '#/components/parameters/ModuleName'
-        - $ref: '#/components/parameters/Version'
+        - $ref: '#/components/parameters/VersionParam'
         - $ref: '#/components/parameters/Language'
       responses:
         '200':
@@ -392,7 +392,7 @@ paths:
       operationId: compileVersion
       parameters:
         - $ref: '#/components/parameters/ModuleName'
-        - $ref: '#/components/parameters/Version'
+        - $ref: '#/components/parameters/VersionParam'
       requestBody:
         required: true
         content:
@@ -429,7 +429,7 @@ paths:
       operationId: getCompilationJob
       parameters:
         - $ref: '#/components/parameters/ModuleName'
-        - $ref: '#/components/parameters/Version'
+        - $ref: '#/components/parameters/VersionParam'
         - name: jobId
           in: path
           required: true
@@ -456,7 +456,7 @@ paths:
       security: []
       parameters:
         - $ref: '#/components/parameters/ModuleName'
-        - $ref: '#/components/parameters/Version'
+        - $ref: '#/components/parameters/VersionParam'
         - $ref: '#/components/parameters/Language'
       responses:
         '200':
@@ -574,7 +574,7 @@ paths:
       security: []
       parameters:
         - $ref: '#/components/parameters/ModuleName'
-        - $ref: '#/components/parameters/Version'
+        - $ref: '#/components/parameters/VersionParam'
       responses:
         '200':
           description: Validation results
@@ -675,7 +675,7 @@ paths:
       security: []
       parameters:
         - $ref: '#/components/parameters/ModuleName'
-        - $ref: '#/components/parameters/Version'
+        - $ref: '#/components/parameters/VersionParam'
       responses:
         '200':
           description: Compatibility information
@@ -2392,7 +2392,7 @@ paths:
           required: true
           schema:
             type: string
-        - $ref: '#/components/parameters/Version'
+        - $ref: '#/components/parameters/VersionParam'
       requestBody:
         required: true
         content:
@@ -2659,7 +2659,7 @@ components:
         pattern: '^[a-z0-9_-]+$'
       description: Module name
 
-    Version:
+    VersionParam:
       name: version
       in: path
       required: true
