@@ -11,6 +11,10 @@ jobs:
     name: Go Tests
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+      pull-requests: write
+
     services:
       postgres:
         image: postgres:15
@@ -66,6 +70,13 @@ jobs:
           TEST_POSTGRES_PRIMARY: postgres://postgres:postgres@localhost:5432/spoke_test?sslmode=disable
           TEST_REDIS_URL: redis://localhost:6379/0
         run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Go test coverage check
+        uses: vladopajic/go-test-coverage@v2
+        with:
+          config: ./.testcoverage.yml
+          git-token: ${{ github.ref_name == 'main' && secrets.GITHUB_TOKEN || '' }}
+          git-branch: badges
 
       - name: Check test coverage
         run: |

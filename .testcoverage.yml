@@ -1,0 +1,40 @@
+# Test coverage configuration for go-test-coverage action
+# https://github.com/vladopajic/go-test-coverage
+
+profile: coverage.out
+
+# Generate badge file
+badge:
+  file-name: coverage.svg
+
+# Threshold percentages (0-100)
+threshold:
+  # Minimum coverage for each file
+  file: 60
+
+  # Minimum coverage for each package
+  package: 65
+
+  # Minimum total project coverage
+  total: 65
+
+# Paths to exclude from coverage analysis
+exclude:
+  paths:
+    - \.pb\.go$                  # Generated protobuf files
+    - \.pb\.gw\.go$              # Generated gRPC gateway files
+    - _gen\.go$                  # Other generated files
+    - ^cmd/                      # Main packages (hard to test)
+    - ^examples/                 # Example code
+    - /testdata/                 # Test fixtures
+    - _test\.go$                 # Test files themselves
+
+# Override thresholds for specific paths
+override:
+  # Allow lower coverage for generated code that slips through
+  - threshold: 0
+    path: ^pkg/api/protobuf/.*_gen\.go$
+
+  # Web UI and static assets (if any Go code)
+  - threshold: 0
+    path: ^web/
