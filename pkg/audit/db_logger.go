@@ -337,7 +337,6 @@ func (l *DBLogger) Search(ctx context.Context, filter SearchFilter) ([]*AuditEve
 	if filter.Offset > 0 {
 		query += fmt.Sprintf(" OFFSET $%d", argCount)
 		args = append(args, filter.Offset)
-		argCount++
 	}
 
 	rows, err := l.db.QueryContext(ctx, query, args...)
@@ -417,7 +416,6 @@ func (l *DBLogger) GetStats(ctx context.Context, startTime, endTime *time.Time) 
 	if endTime != nil {
 		whereClause += fmt.Sprintf(" AND timestamp <= $%d", argCount)
 		args = append(args, *endTime)
-		argCount++
 		if stats.TimeRange == nil {
 			stats.TimeRange = &TimeRange{}
 		}

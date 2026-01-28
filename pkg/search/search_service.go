@@ -303,7 +303,6 @@ func (s *SearchService) buildSearchQuery(q *ParsedQuery, limit, offset int) (str
 		queryBuilder.WriteString(fmt.Sprintf(`
 			AND v.version = $%d
 		`, argIndex))
-		argIndex++
 	}
 
 	// Add has-comment filter
@@ -411,7 +410,6 @@ func (s *SearchService) getTotalCount(ctx context.Context, q *ParsedQuery) (int,
 		queryBuilder.WriteString(fmt.Sprintf(`
 			AND v.version = $%d
 		`, argIndex))
-		argIndex++
 	}
 
 	// Add has-comment filter

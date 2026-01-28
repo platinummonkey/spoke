@@ -214,7 +214,7 @@ func (l *Loader) createBufAdapter(manifest *Manifest) (Plugin, error) {
 	l.mu.RUnlock()
 
 	if factory == nil {
-		return nil, fmt.Errorf("Buf plugin factory not configured (Buf plugin support disabled)")
+		return nil, fmt.Errorf("buf plugin factory not configured (Buf plugin support disabled)")
 	}
 
 	return factory(manifest)

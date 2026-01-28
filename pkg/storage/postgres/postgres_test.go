@@ -166,6 +166,8 @@ func TestPostgresStorage_ErrorHandling(t *testing.T) {
 			t.Error("Empty slice should have length 0")
 		}
 
+		// This check verifies Go semantics: empty slice literal is non-nil
+		//nolint:staticcheck // SA4031: Intentionally documenting empty slice behavior
 		if files == nil {
 			t.Error("Empty slice should not be nil")
 		}

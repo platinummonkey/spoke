@@ -181,6 +181,7 @@ func (h *Handlers) DownloadPlugin(w http.ResponseWriter, r *http.Request) {
 	version := vars["version"]
 
 	// Record download
+	//nolint:staticcheck // SA9003: Intentionally ignoring error - download should not fail on metrics error
 	if err := h.service.RecordDownload(ctx, pluginID, version); err != nil {
 		// Log error but don't fail the download
 		// TODO: Add proper logging

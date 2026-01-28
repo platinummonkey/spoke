@@ -214,9 +214,7 @@ func (h *AuthHandlers) createToken(w http.ResponseWriter, r *http.Request) {
 
 	// Convert scopes from []string to database array format
 	scopeStrings := make([]string, len(req.Scopes))
-	for i, s := range req.Scopes {
-		scopeStrings[i] = s
-	}
+	copy(scopeStrings, req.Scopes)
 
 	// Insert token into database
 	var tokenID int64

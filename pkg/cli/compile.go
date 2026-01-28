@@ -128,9 +128,8 @@ func runCompile(args []string) error {
 	}
 
 	// Parse proto files for spoke directives
-	var protoFileInfos []*ProtoFileInfo
 	var domainToPackageMap = make(map[string][]string) // domain -> list of packages
-	
+
 	for _, protoFile := range protoFiles {
 		info, err := parseProtoFileForSpokeDirectives(protoFile)
 		if err != nil {
@@ -138,8 +137,7 @@ func runCompile(args []string) error {
 			// Continue with compilation even if spoke directive parsing fails
 			info = &ProtoFileInfo{Path: protoFile}
 		}
-		protoFileInfos = append(protoFileInfos, info)
-		
+
 		// Group packages by domain
 		if info.Domain != "" && info.PackageName != "" {
 			domainToPackageMap[info.Domain] = append(domainToPackageMap[info.Domain], info.PackageName)

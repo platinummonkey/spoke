@@ -434,8 +434,7 @@ func TestOpenTelemetry(t *testing.T) {
 
 		tracer := otel.Tracer("test-tracer")
 
-		ctx := context.Background()
-		ctx, span := tracer.Start(ctx, "test-database-operation",
+		_, span := tracer.Start(context.Background(), "test-database-operation",
 			trace.WithAttributes(
 				attribute.String("db.system", "postgresql"),
 				attribute.String("db.operation", "SELECT"),
@@ -478,8 +477,7 @@ func TestOpenTelemetry(t *testing.T) {
 
 		tracer := otel.Tracer("test-tracer")
 
-		ctx := context.Background()
-		ctx, span := tracer.Start(ctx, "test-error-operation")
+		_, span := tracer.Start(context.Background(), "test-error-operation")
 
 		// Record an error
 		testErr := fmt.Errorf("test error")

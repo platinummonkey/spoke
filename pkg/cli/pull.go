@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -76,7 +75,7 @@ func runPull(args []string) error {
 			return fmt.Errorf("failed to create directory for %s: %w", file.Path, err)
 		}
 
-		if err := ioutil.WriteFile(filePath, []byte(file.Content), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte(file.Content), 0644); err != nil {
 			return fmt.Errorf("failed to write file %s: %w", file.Path, err)
 		}
 	}

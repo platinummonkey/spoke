@@ -60,6 +60,7 @@ func InitOTel(ctx context.Context, cfg OTelConfig, logger *Logger) (*OTelProvide
 
 	// Setup gRPC connection options
 	grpcOpts := []grpc.DialOption{
+		//nolint:staticcheck // SA1019: WithBlock deprecated but needed for OTEL collector connection
 		grpc.WithBlock(),
 	}
 	if cfg.Insecure {

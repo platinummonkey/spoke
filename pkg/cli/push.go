@@ -65,14 +65,12 @@ func getGitInfo(dir string) (api.SourceInfo, error) {
 		// Try running git rev-parse to find git repository
 		cmd := exec.Command("git", "rev-parse", "--show-toplevel")
 		cmd.Dir = dir
-		if output, err := cmd.Output(); err == nil {
-			// Found git repository
-			gitDir = filepath.Join(strings.TrimSpace(string(output)), ".git")
-		} else {
+		if _, err := cmd.Output(); err != nil {
 			// Not a git repository - return default values
 			fmt.Printf("Warning: Failed to get git information: %v\n", err)
 			return info, nil
 		}
+		// Found git repository - continue with git commands
 	}
 
 	// Get repository URL

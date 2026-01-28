@@ -93,6 +93,7 @@ func (s *DBStore) Cleanup(ctx context.Context, policy RetentionPolicy) (int64, e
 	cutoffDate := time.Now().AddDate(0, 0, -policy.RetentionDays)
 
 	// If archiving is enabled, we'd export and save the logs first
+	//nolint:staticcheck // SA9003: Empty branch is placeholder for future archiving feature
 	if policy.ArchiveEnabled {
 		// TODO: Implement archiving
 	}

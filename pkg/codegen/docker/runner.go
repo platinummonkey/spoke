@@ -187,7 +187,7 @@ func (r *DockerRunner) PullImage(ctx context.Context, imageRef string) error {
 	}
 
 	// Check if image exists locally
-	_, _, err := r.client.ImageInspectWithRaw(ctx, imageRef)
+	_, err := r.client.ImageInspect(ctx, imageRef)
 	if err == nil {
 		r.imageCache[imageRef] = true
 		return nil

@@ -92,7 +92,7 @@ func (c *MultiLevelCache) Get(ctx context.Context, key *codegen.CacheKey) (*code
 			}
 		} else if err != redis.Nil {
 			// Redis error (not just missing key)
-			return nil, fmt.Errorf("Redis error: %w", err)
+			return nil, fmt.Errorf("redis error: %w", err)
 		}
 	}
 
