@@ -92,6 +92,19 @@ override:
   - threshold: 8
     path: ^pkg/codegen
 
+  # Core codegen files with 0% coverage - tested via integration tests requiring Docker
+  - threshold: 0
+    path: ^pkg/codegen/packages\.go$
+
+  - threshold: 0
+    path: ^pkg/codegen/generator\.go$
+
+  - threshold: 0
+    path: ^pkg/codegen/docker\.go$
+
+  - threshold: 0
+    path: ^pkg/codegen/cache\.go$
+
   # Plugin registry - requires plugin binaries and filesystem integration
   - threshold: 0
     path: ^pkg/plugins/registry\.go$
