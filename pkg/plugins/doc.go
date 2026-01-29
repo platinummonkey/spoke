@@ -40,13 +40,14 @@
 //
 // Load plugin:
 //
-//	registry := plugins.NewRegistry()
-//	loader := plugins.NewLoader(registry)
+//	loader := plugins.NewLoader([]string{"/plugins"}, nil)
 //
-//	plugin, err := loader.LoadFromFile("/plugins/rust-gen.yaml")
+//	plugin, err := loader.LoadPlugin(ctx, "/plugins/rust-gen")
 //	if err != nil {
 //		log.Fatal(err)
 //	}
+//
+//	plugins.Register(plugin)
 //
 // Execute language plugin:
 //
