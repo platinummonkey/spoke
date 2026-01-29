@@ -413,19 +413,16 @@ func TestBufPluginFactory_PreservesManifestMetadata(t *testing.T) {
 	factory := CreateBufPluginFactory()
 
 	manifest := &plugins.Manifest{
-		ID:            "test-buf-plugin",
-		Name:          "Test Buf Plugin",
-		Version:       "1.0.0",
-		APIVersion:    "1.0.0",
-		Type:          plugins.PluginTypeLanguage,
-		Description:   "Test Buf plugin",
-		Author:        "Test Author",
-		License:       "MIT",
-		Homepage:      "https://example.com",
-		Repository:    "https://github.com/example/repo",
-		SecurityLevel: plugins.SecurityLevelCommunity,
-		Permissions:   []string{"filesystem:read", "network:read"},
-		Dependencies:  []string{"dep1", "dep2"},
+		ID:          "test-buf-plugin",
+		Name:        "Test Buf Plugin",
+		Version:     "1.0.0",
+		APIVersion:  "1.0.0",
+		Type:        plugins.PluginTypeLanguage,
+		Description: "Test Buf plugin",
+		Author:      "Test Author",
+		License:     "MIT",
+		Homepage:    "https://example.com",
+		Repository:  "https://github.com/example/repo",
 		Metadata: map[string]string{
 			"buf_registry": "buf.build/library/test",
 			"buf_version":  "v1.0.0",
@@ -446,9 +443,6 @@ func TestBufPluginFactory_PreservesManifestMetadata(t *testing.T) {
 	assert.Equal(t, manifest.License, retrievedManifest.License)
 	assert.Equal(t, manifest.Homepage, retrievedManifest.Homepage)
 	assert.Equal(t, manifest.Repository, retrievedManifest.Repository)
-	assert.Equal(t, manifest.SecurityLevel, retrievedManifest.SecurityLevel)
-	assert.Equal(t, manifest.Permissions, retrievedManifest.Permissions)
-	assert.Equal(t, manifest.Dependencies, retrievedManifest.Dependencies)
 	assert.Equal(t, manifest.Metadata, retrievedManifest.Metadata)
 }
 

@@ -16,13 +16,20 @@ import (
 	"github.com/platinummonkey/spoke/pkg/codegen/packages"
 )
 
+// CacheInterface defines the cache methods used by orchestrator
+type CacheInterface interface {
+	Get(ctx context.Context, key *codegen.CacheKey) (*codegen.CompilationResult, error)
+	Set(ctx context.Context, key *codegen.CacheKey, result *codegen.CompilationResult, ttl time.Duration) error
+	Close() error
+}
+
 // DefaultOrchestrator implements the Orchestrator interface
 type DefaultOrchestrator struct {
 	config           *Config
 	languageRegistry *languages.Registry
 	dockerRunner     docker.Runner
 	packageRegistry  *packages.Registry
-	cache            *cache.MemoryCache
+	cache            CacheInterface
 	artifactsManager artifacts.Manager
 	jobs             map[string]*codegen.CompilationJob
 	jobsMu           sync.RWMutex

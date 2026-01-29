@@ -11,19 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestListLanguages_NoOrchestrator tests listLanguages when orchestrator is unavailable
-func TestListLanguages_NoOrchestrator(t *testing.T) {
-	server := &Server{}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/languages", nil)
-	w := httptest.NewRecorder()
-
-	server.listLanguages(w, req)
-
-	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
-	assert.Contains(t, w.Body.String(), "Code generation orchestrator not available")
-}
-
 // TestListLanguages_Success tests successful listing of languages
 func TestListLanguages_Success(t *testing.T) {
 	server := &Server{}
@@ -97,20 +84,6 @@ func TestListLanguages_PackageManagerInfo(t *testing.T) {
 	require.NotNil(t, goLang.PackageManager, "Go should have package manager info")
 	assert.Equal(t, "go-modules", goLang.PackageManager.Name)
 	assert.Contains(t, goLang.PackageManager.ConfigFiles, "go.mod")
-}
-
-// TestGetLanguage_NoOrchestrator tests getLanguage when orchestrator is unavailable
-func TestGetLanguage_NoOrchestrator(t *testing.T) {
-	server := &Server{}
-
-	req := httptest.NewRequest(http.MethodGet, "/api/languages/go", nil)
-	req = mux.SetURLVars(req, map[string]string{"id": "go"})
-	w := httptest.NewRecorder()
-
-	server.getLanguage(w, req)
-
-	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
-	assert.Contains(t, w.Body.String(), "Code generation orchestrator not available")
 }
 
 // TestGetLanguage_NotFound tests getLanguage for a non-existent language

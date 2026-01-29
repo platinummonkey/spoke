@@ -140,7 +140,7 @@ func (m *mockArtifactsManager) Close() error {
 }
 
 // Helper to create orchestrator with mocks
-func newMockOrchestrator(t *testing.T, dockerRunner docker.Runner, cacheInstance cache.Cache, artifactsManager artifacts.Manager) *DefaultOrchestrator {
+func newMockOrchestrator(t *testing.T, dockerRunner docker.Runner, cacheInstance CacheInterface, artifactsManager artifacts.Manager) *DefaultOrchestrator {
 	langRegistry, err := languages.InitializeDefaultRegistry()
 	require.NoError(t, err)
 
