@@ -156,7 +156,7 @@ message TestMessage {
 package test;
 option go_package = "github.com/platinummonkey/spoke/test";
 
-message testMessage {
+message TestMessage {
     string id = 1;
     int32 value = 2;
 }`
@@ -277,7 +277,7 @@ func TestRunLintWithFailOnError(t *testing.T) {
 package test;
 option go_package = "github.com/platinummonkey/spoke/test";
 
-message testMessage {
+message TestMessage {
     string id = 1;
 }`
 
@@ -505,7 +505,7 @@ func TestLintGitHubOutputWithViolations(t *testing.T) {
 package test;
 option go_package = "github.com/platinummonkey/spoke/test";
 
-message testMessage {
+message TestMessage {
     string BadField = 1;
     int32 AnotherBad = 2;
 }`
@@ -527,7 +527,7 @@ func TestLintTextOutputWithViolations(t *testing.T) {
 package test;
 option go_package = "github.com/platinummonkey/spoke/test";
 
-message testMessage {
+message TestMessage {
     string BadField = 1;
 }`
 
@@ -547,7 +547,7 @@ func TestLintTextOutputVerboseWithViolations(t *testing.T) {
 package test;
 option go_package = "github.com/platinummonkey/spoke/test";
 
-message testMessage {
+message TestMessage {
     string id = 1;
 }`
 

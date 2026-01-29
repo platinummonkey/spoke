@@ -3,6 +3,7 @@ package plugins
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 
 // mockRunnerPlugin is a mock implementation of RunnerPlugin for testing
 type mockRunnerPlugin struct {
+	mu            sync.Mutex
 	manifest      *Manifest
 	loadError     error
 	unloadError   error
@@ -33,16 +35,22 @@ func (m *mockRunnerPlugin) Manifest() *Manifest {
 }
 
 func (m *mockRunnerPlugin) Load() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.loadCalled = true
 	return m.loadError
 }
 
 func (m *mockRunnerPlugin) Unload() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.unloadCalled = true
 	return m.unloadError
 }
 
 func (m *mockRunnerPlugin) Execute(ctx context.Context, req *ExecutionRequest) (*ExecutionResult, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.executeCalled = true
 	if m.executeError != nil {
 		return nil, m.executeError
@@ -789,11 +797,17 @@ func TestRunnerPlugin_ConcurrentExecutions(t *testing.T) {
 	plugin := newMockRunnerPlugin(manifest)
 	ctx := context.Background()
 
-	done := make(chan bool)
+	var wg sync.WaitGroup
 	numGoroutines := 10
 
+	// Collect errors and results to validate after goroutines complete
+	errors := make([]error, numGoroutines)
+	results := make([]*ExecutionResult, numGoroutines)
+
 	for i := 0; i < numGoroutines; i++ {
-		go func() {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
 			req := &ExecutionRequest{
 				Command:     []string{"echo", "concurrent"},
 				WorkingDir:  "/tmp",
@@ -802,15 +816,18 @@ func TestRunnerPlugin_ConcurrentExecutions(t *testing.T) {
 			}
 
 			result, err := plugin.Execute(ctx, req)
-			assert.NoError(t, err)
-			assert.NotNil(t, result)
-			done <- true
-		}()
+			errors[index] = err
+			results[index] = result
+		}(i)
 	}
 
 	// Wait for all goroutines to complete
+	wg.Wait()
+
+	// Now validate all results (thread-safe)
 	for i := 0; i < numGoroutines; i++ {
-		<-done
+		assert.NoError(t, errors[i])
+		assert.NotNil(t, results[i])
 	}
 }
 
