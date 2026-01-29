@@ -942,3 +942,4 @@ func createTarGz(sourceDir, archivePath string) error {
 	// For testing purposes, we'll just copy files directly since we're testing logic, not tar.gz format
 	return os.WriteFile(archivePath, []byte("fake-archive"), 0644)
 }
+

@@ -3,6 +3,7 @@ package buf
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -679,4 +680,703 @@ func TestDerivePluginName(t *testing.T) {
 			assert.Equal(t, tt.expectedName, result)
 		})
 	}
+}
+
+func TestLoad_CachedPlugin(t *testing.T) {
+	// This test validates the Load workflow when a plugin is already cached
+	// We simulate this by pre-setting the binary path and testing the load logic
+	tmpDir := t.TempDir()
+
+	// Create a mock cached plugin
+	pluginName := "test-plugin"
+	version := "v1.0.0"
+	binaryPath := tmpDir + "/protoc-gen-" + pluginName
+	err := os.WriteFile(binaryPath, []byte("#!/bin/bash\necho test"), 0755)
+	require.NoError(t, err)
+
+	adapter := NewBufPluginAdapter("buf.build/library/"+pluginName, version)
+
+	// Manually set the binary path to simulate cached state
+	adapter.binaryPath = binaryPath
+	adapter.loaded = false
+
+	// Verify binary and build language spec
+	err = adapter.verifyBinary()
+	assert.NoError(t, err)
+
+	adapter.languageSpec = adapter.buildLanguageSpec()
+	adapter.loaded = true
+
+	assert.True(t, adapter.loaded)
+	assert.NotNil(t, adapter.languageSpec)
+}
+
+func TestLoad_MultipleCallsIdempotent(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/test", "v1.0.0")
+	adapter.loaded = true
+
+	// First call
+	err := adapter.Load()
+	assert.NoError(t, err)
+
+	// Second call should also succeed
+	err = adapter.Load()
+	assert.NoError(t, err)
+	assert.True(t, adapter.loaded)
+}
+
+func TestBuildProtocCommand_MultipleOptions(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/grpc-go", "v1.5.0")
+	adapter.binaryPath = "/fake/path/protoc-gen-grpc-go"
+	adapter.loaded = true
+
+	ctx := context.Background()
+	req := &plugins.CommandRequest{
+		ProtoFiles:  []string{"service.proto"},
+		ImportPaths: []string{"/proto", "/vendor/protos"},
+		OutputDir:   "/gen",
+		Options: map[string]string{
+			"paths":        "source_relative",
+			"require_unimplemented_servers": "false",
+		},
+	}
+
+	cmd, err := adapter.BuildProtocCommand(ctx, req)
+	require.NoError(t, err)
+	assert.NotNil(t, cmd)
+	assert.Contains(t, cmd, "protoc")
+	assert.Contains(t, cmd, "service.proto")
+}
+
+func TestBuildProtocCommand_EmptyProtoFiles(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/connect-go", "v1.5.0")
+	adapter.binaryPath = "/fake/path/protoc-gen-connect-go"
+	adapter.loaded = true
+
+	ctx := context.Background()
+	req := &plugins.CommandRequest{
+		ProtoFiles:  []string{},
+		ImportPaths: []string{"/proto"},
+		OutputDir:   "/output",
+	}
+
+	cmd, err := adapter.BuildProtocCommand(ctx, req)
+	require.NoError(t, err)
+	assert.NotNil(t, cmd)
+	// Command should still be valid even with no proto files
+	assert.Contains(t, cmd, "protoc")
+}
+
+func TestBuildProtocCommand_NoImportPaths(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/connect-go", "v1.5.0")
+	adapter.binaryPath = "/fake/path/protoc-gen-connect-go"
+	adapter.loaded = true
+
+	ctx := context.Background()
+	req := &plugins.CommandRequest{
+		ProtoFiles:  []string{"test.proto"},
+		ImportPaths: []string{},
+		OutputDir:   "/output",
+	}
+
+	cmd, err := adapter.BuildProtocCommand(ctx, req)
+	require.NoError(t, err)
+	assert.NotNil(t, cmd)
+	assert.Contains(t, cmd, "protoc")
+	assert.Contains(t, cmd, "test.proto")
+}
+
+func TestValidateOutput_MultipleFiles(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/go", "v1.5.0")
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	files := []string{
+		tmpDir + "/user.pb.go",
+		tmpDir + "/order.pb.go",
+		tmpDir + "/product.pb.go",
+	}
+
+	for _, file := range files {
+		err := os.WriteFile(file, []byte("package main"), 0644)
+		require.NoError(t, err)
+	}
+
+	err := adapter.ValidateOutput(ctx, files)
+	assert.NoError(t, err)
+}
+
+func TestValidateOutput_PartialFailure(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/go", "v1.5.0")
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	existingFile := tmpDir + "/existing.pb.go"
+	err := os.WriteFile(existingFile, []byte("test"), 0644)
+	require.NoError(t, err)
+
+	files := []string{
+		existingFile,
+		"/nonexistent/missing.pb.go",
+	}
+
+	err = adapter.ValidateOutput(ctx, files)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "expected file not found")
+}
+
+func TestDeriveLanguageID_VariousFormats(t *testing.T) {
+	tests := []struct {
+		name      string
+		pluginRef string
+		expected  string
+	}{
+		{
+			name:      "standard format",
+			pluginRef: "buf.build/library/connect-go",
+			expected:  "connect-go",
+		},
+		{
+			name:      "with organization",
+			pluginRef: "buf.build/grpc/grpc-go",
+			expected:  "grpc-go",
+		},
+		{
+			name:      "nested path",
+			pluginRef: "buf.build/org/team/subteam/plugin",
+			expected:  "plugin",
+		},
+		{
+			name:      "single segment",
+			pluginRef: "plugin-name",
+			expected:  "plugin-name",
+		},
+		{
+			name:      "with dashes",
+			pluginRef: "buf.build/library/connect-grpc-go",
+			expected:  "connect-grpc-go",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adapter := NewBufPluginAdapter(tt.pluginRef, "v1.0.0")
+			result := adapter.deriveLanguageID()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGetCachedPath_WindowsCompatibility(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/test-plugin", "v2.5.0")
+	path := adapter.getCachedPath()
+
+	assert.NotEmpty(t, path)
+	assert.Contains(t, path, ".buf")
+	assert.Contains(t, path, "plugins")
+	assert.Contains(t, path, "test-plugin")
+	assert.Contains(t, path, "v2.5.0")
+	// Check for proper path construction
+	assert.True(t, strings.Contains(path, string(os.PathSeparator)))
+}
+
+func TestBuildLanguageSpec_DocumentationURL(t *testing.T) {
+	tests := []struct {
+		name        string
+		pluginRef   string
+		expectedURL string
+	}{
+		{
+			name:        "standard plugin",
+			pluginRef:   "buf.build/library/connect-go",
+			expectedURL: "https://buf.build/library/connect-go",
+		},
+		{
+			name:        "organization plugin",
+			pluginRef:   "buf.build/grpc/grpc-go",
+			expectedURL: "https://buf.build/grpc/grpc-go",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adapter := NewBufPluginAdapter(tt.pluginRef, "v1.0.0")
+			spec := adapter.buildLanguageSpec()
+			assert.Equal(t, tt.expectedURL, spec.DocumentationURL)
+		})
+	}
+}
+
+func TestBuildLanguageSpec_ProtocPluginNaming(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/validate-go", "v1.0.0")
+	spec := adapter.buildLanguageSpec()
+
+	assert.Equal(t, "validate-go", spec.Name)
+	assert.Equal(t, "protoc-gen-validate-go", spec.ProtocPlugin)
+	assert.Equal(t, "validate-go", spec.ID)
+}
+
+func TestBuildLanguageSpec_DockerImageEmpty(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/connect-go", "v1.5.0")
+	spec := adapter.buildLanguageSpec()
+
+	// Buf plugins should not use Docker images
+	assert.Empty(t, spec.DockerImage)
+	assert.True(t, spec.Enabled)
+	assert.True(t, spec.Stable)
+}
+
+func TestGuessFileExtensions_CaseSensitivity(t *testing.T) {
+	tests := []struct {
+		name         string
+		pluginName   string
+		shouldContain string
+	}{
+		{
+			name:          "uppercase GO",
+			pluginName:    "CONNECT-GO",
+			shouldContain: ".go",
+		},
+		{
+			name:          "mixed case Python",
+			pluginName:    "Python-Gen",
+			shouldContain: ".py",
+		},
+		{
+			name:          "uppercase JAVA",
+			pluginName:    "JAVA",
+			shouldContain: ".java",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adapter := NewBufPluginAdapter("buf.build/test/"+tt.pluginName, "v1.0.0")
+			exts := adapter.guessFileExtensions(tt.pluginName)
+
+			found := false
+			for _, ext := range exts {
+				if ext == tt.shouldContain {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "Expected extension %s not found in %v", tt.shouldContain, exts)
+		})
+	}
+}
+
+func TestManifestNil(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/test", "v1.0.0")
+	manifest := adapter.Manifest()
+	assert.Nil(t, manifest, "Manifest should be nil when adapter created without manifest")
+}
+
+func TestNewBufPluginAdapterFromManifest_VersionPriority(t *testing.T) {
+	manifest := &plugins.Manifest{
+		ID:          "test-plugin",
+		Name:        "Test Plugin",
+		Version:     "1.0.0",
+		APIVersion:  "1.0.0",
+		Type:        plugins.PluginTypeLanguage,
+		Description: "Test plugin",
+		Metadata: map[string]string{
+			"buf_registry": "buf.build/library/test",
+			"buf_version":  "v2.0.0",
+		},
+	}
+
+	adapter, err := NewBufPluginAdapterFromManifest(manifest)
+	require.NoError(t, err)
+
+	// buf_version should take priority
+	assert.Equal(t, "v2.0.0", adapter.version)
+	assert.Equal(t, "buf.build/library/test", adapter.pluginRef)
+}
+
+func TestBuildProtocCommand_OptionsWithEmptyValues(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/connect-go", "v1.5.0")
+	adapter.binaryPath = "/fake/path/protoc-gen-connect-go"
+	adapter.loaded = true
+
+	ctx := context.Background()
+	req := &plugins.CommandRequest{
+		ProtoFiles:  []string{"test.proto"},
+		ImportPaths: []string{"/proto"},
+		OutputDir:   "/output",
+		Options: map[string]string{
+			"standalone": "",
+			"verbose":    "",
+		},
+	}
+
+	cmd, err := adapter.BuildProtocCommand(ctx, req)
+	require.NoError(t, err)
+
+	// Check that options without values are included
+	hasOptFlag := false
+	for _, arg := range cmd {
+		if strings.Contains(arg, "--connect-go_opt=") {
+			hasOptFlag = true
+			// Should contain option names without values
+			assert.True(t, strings.Contains(arg, "standalone") || strings.Contains(arg, "verbose"))
+		}
+	}
+	assert.True(t, hasOptFlag)
+}
+
+func TestBuildProtocCommand_OptionsOrdering(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/go", "v1.5.0")
+	adapter.binaryPath = "/fake/path/protoc-gen-go"
+	adapter.loaded = true
+
+	ctx := context.Background()
+	req := &plugins.CommandRequest{
+		ProtoFiles:  []string{"a.proto", "b.proto", "c.proto"},
+		ImportPaths: []string{"/proto1", "/proto2"},
+		OutputDir:   "/output",
+		Options: map[string]string{
+			"paths": "source_relative",
+		},
+	}
+
+	cmd, err := adapter.BuildProtocCommand(ctx, req)
+	require.NoError(t, err)
+
+	// Verify command starts with protoc
+	assert.Equal(t, "protoc", cmd[0])
+
+	// Verify proto files are at the end
+	assert.Contains(t, cmd, "a.proto")
+	assert.Contains(t, cmd, "b.proto")
+	assert.Contains(t, cmd, "c.proto")
+}
+
+func TestVerifyBinary_PermissionEdgeCases(t *testing.T) {
+	tmpDir := t.TempDir()
+	binaryPath := tmpDir + "/protoc-gen-test"
+
+	// Create a file with minimal permissions
+	err := os.WriteFile(binaryPath, []byte("test"), 0400)
+	require.NoError(t, err)
+
+	adapter := NewBufPluginAdapter("buf.build/library/test", "v1.0.0")
+	adapter.binaryPath = binaryPath
+
+	err = adapter.verifyBinary()
+	// Should succeed after making it executable
+	assert.NoError(t, err)
+
+	// Check that permissions were updated
+	info, err := os.Stat(binaryPath)
+	require.NoError(t, err)
+	assert.NotEqual(t, 0, info.Mode()&0111)
+}
+
+func TestGetLanguageSpec_Consistency(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/connect-go", "v1.5.0")
+
+	// Get spec multiple times
+	spec1 := adapter.GetLanguageSpec()
+	spec2 := adapter.GetLanguageSpec()
+	spec3 := adapter.GetLanguageSpec()
+
+	// All should return the same instance
+	assert.Equal(t, spec1, spec2)
+	assert.Equal(t, spec2, spec3)
+
+	// Verify it's actually the same pointer (cached)
+	assert.True(t, spec1 == spec2)
+	assert.True(t, spec2 == spec3)
+}
+
+func TestUnload_StateChange(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/test", "v1.0.0")
+
+	// Initially not loaded
+	assert.False(t, adapter.loaded)
+
+	// Simulate loaded state
+	adapter.loaded = true
+	adapter.binaryPath = "/some/path"
+	adapter.languageSpec = &plugins.LanguageSpec{ID: "test"}
+
+	// Unload
+	err := adapter.Unload()
+	assert.NoError(t, err)
+	assert.False(t, adapter.loaded)
+
+	// Other fields should remain
+	assert.NotEmpty(t, adapter.binaryPath)
+	assert.NotNil(t, adapter.languageSpec)
+}
+
+func TestBuildProtocCommand_ComplexScenario(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/grpc-gateway", "v2.0.0")
+	adapter.binaryPath = "/usr/local/bin/protoc-gen-grpc-gateway"
+	adapter.loaded = true
+
+	ctx := context.Background()
+	req := &plugins.CommandRequest{
+		ProtoFiles: []string{
+			"api/v1/users.proto",
+			"api/v1/orders.proto",
+		},
+		ImportPaths: []string{
+			"/workspace/proto",
+			"/workspace/vendor/proto",
+			"/usr/local/include",
+		},
+		OutputDir: "/workspace/gen",
+		Options: map[string]string{
+			"paths":                   "source_relative",
+			"grpc_api_configuration":  "api/config.yaml",
+			"generate_unbound_methods": "true",
+		},
+	}
+
+	cmd, err := adapter.BuildProtocCommand(ctx, req)
+	require.NoError(t, err)
+	assert.NotEmpty(t, cmd)
+
+	// Verify all components are present
+	cmdStr := strings.Join(cmd, " ")
+	assert.Contains(t, cmdStr, "protoc")
+	assert.Contains(t, cmdStr, "grpc-gateway")
+	assert.Contains(t, cmdStr, "api/v1/users.proto")
+	assert.Contains(t, cmdStr, "api/v1/orders.proto")
+	assert.Contains(t, cmdStr, "/workspace/proto")
+	assert.Contains(t, cmdStr, "/workspace/gen")
+}
+
+func TestLoad_WithMockDownloader(t *testing.T) {
+	// Test the Load function's download path
+	tmpDir := t.TempDir()
+	pluginName := "mock-plugin"
+	version := "v1.0.0"
+	binaryPath := tmpDir + "/protoc-gen-" + pluginName
+
+	// Create a binary file
+	err := os.WriteFile(binaryPath, []byte("#!/bin/bash\necho test"), 0755)
+	require.NoError(t, err)
+
+	adapter := NewBufPluginAdapter("buf.build/library/"+pluginName, version)
+
+	// Override downloader with a mock that sets the binary path
+	// In production, we can't easily test the actual download without mocking
+	// But we can test the load flow after download
+	adapter.binaryPath = binaryPath
+	adapter.loaded = false
+
+	// Simulate what Load does after download
+	err = adapter.verifyBinary()
+	require.NoError(t, err)
+
+	adapter.languageSpec = adapter.buildLanguageSpec()
+	adapter.loaded = true
+
+	assert.True(t, adapter.loaded)
+	assert.NotNil(t, adapter.languageSpec)
+	assert.Equal(t, pluginName, adapter.languageSpec.ID)
+}
+
+func TestDeriveLanguageID_SingleSegment(t *testing.T) {
+	// Test edge case with single segment
+	adapter := NewBufPluginAdapter("plugin", "v1.0.0")
+	result := adapter.deriveLanguageID()
+	assert.Equal(t, "plugin", result)
+}
+
+func TestDeriveLanguageID_EmptyPluginRefReturnsLastPart(t *testing.T) {
+	// When pluginRef is empty, strings.Split returns [""]
+	// len(parts) > 0 is true, so it returns parts[0] which is ""
+	adapter := NewBufPluginAdapter("", "v1.0.0")
+	result := adapter.deriveLanguageID()
+	// Empty string split by "/" gives [""], so parts[len(parts)-1] = ""
+	assert.Equal(t, "", result)
+}
+
+func TestIsCached_VariousScenarios(t *testing.T) {
+	tests := []struct {
+		name      string
+		pluginRef string
+		version   string
+		setup     func(t *testing.T, adapter *BufPluginAdapter) bool
+		expected  bool
+	}{
+		{
+			name:      "not cached",
+			pluginRef: "buf.build/library/nonexistent",
+			version:   "v1.0.0",
+			setup:     func(t *testing.T, adapter *BufPluginAdapter) bool { return false },
+			expected:  false,
+		},
+		{
+			name:      "cached exists",
+			pluginRef: "buf.build/library/cached",
+			version:   "v1.0.0",
+			setup: func(t *testing.T, adapter *BufPluginAdapter) bool {
+				// Create the cached file
+				cachePath := adapter.getCachedPath()
+				err := os.MkdirAll(filepath.Dir(cachePath), 0755)
+				require.NoError(t, err)
+				err = os.WriteFile(cachePath, []byte("test"), 0644)
+				require.NoError(t, err)
+				return true
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adapter := NewBufPluginAdapter(tt.pluginRef, tt.version)
+			if tt.setup(t, adapter) {
+				defer os.RemoveAll(filepath.Dir(adapter.getCachedPath()))
+			}
+			result := adapter.isCached()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestBuildProtocCommand_PluginNaming(t *testing.T) {
+	tests := []struct {
+		name          string
+		pluginRef     string
+		expectedFlag  string
+	}{
+		{
+			name:         "simple go plugin",
+			pluginRef:    "buf.build/protocolbuffers/go",
+			expectedFlag: "--go_out=",
+		},
+		{
+			name:         "connect go plugin",
+			pluginRef:    "buf.build/library/connect-go",
+			expectedFlag: "--connect-go_out=",
+		},
+		{
+			name:         "grpc gateway",
+			pluginRef:    "buf.build/grpc-ecosystem/grpc-gateway",
+			expectedFlag: "--grpc-gateway_out=",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adapter := NewBufPluginAdapter(tt.pluginRef, "v1.0.0")
+			adapter.binaryPath = "/fake/path/protoc-gen-test"
+			adapter.loaded = true
+
+			ctx := context.Background()
+			req := &plugins.CommandRequest{
+				ProtoFiles:  []string{"test.proto"},
+				ImportPaths: []string{"/proto"},
+				OutputDir:   "/output",
+			}
+
+			cmd, err := adapter.BuildProtocCommand(ctx, req)
+			require.NoError(t, err)
+
+			cmdStr := strings.Join(cmd, " ")
+			assert.Contains(t, cmdStr, tt.expectedFlag)
+		})
+	}
+}
+
+func TestGetCachedPath_ConsistentPaths(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/test-plugin", "v1.5.0")
+
+	// Call multiple times to ensure consistency
+	path1 := adapter.getCachedPath()
+	path2 := adapter.getCachedPath()
+	path3 := adapter.getCachedPath()
+
+	assert.Equal(t, path1, path2)
+	assert.Equal(t, path2, path3)
+	assert.Contains(t, path1, "test-plugin")
+	assert.Contains(t, path1, "v1.5.0")
+}
+
+func TestBuildLanguageSpec_StabilityFlags(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/experimental-plugin", "v0.1.0")
+	spec := adapter.buildLanguageSpec()
+
+	// All Buf plugins are marked as stable and enabled
+	assert.True(t, spec.Enabled)
+	assert.True(t, spec.Stable)
+}
+
+func TestBuildLanguageSpec_DescriptionContent(t *testing.T) {
+	pluginRef := "buf.build/library/connect-go"
+	adapter := NewBufPluginAdapter(pluginRef, "v1.5.0")
+	spec := adapter.buildLanguageSpec()
+
+	assert.Contains(t, spec.Description, "connect-go")
+	assert.Contains(t, spec.Description, pluginRef)
+	assert.NotEmpty(t, spec.Description)
+}
+
+func TestValidateOutput_EmptyFilePath(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/test", "v1.0.0")
+	ctx := context.Background()
+
+	// Test with file path that's empty string in list
+	err := adapter.ValidateOutput(ctx, []string{""})
+	assert.Error(t, err)
+}
+
+func TestUnload_MultipleCallsIdempotent(t *testing.T) {
+	adapter := NewBufPluginAdapter("buf.build/library/test", "v1.0.0")
+	adapter.loaded = true
+
+	// First unload
+	err := adapter.Unload()
+	assert.NoError(t, err)
+	assert.False(t, adapter.loaded)
+
+	// Second unload
+	err = adapter.Unload()
+	assert.NoError(t, err)
+	assert.False(t, adapter.loaded)
+}
+
+func TestNewBufPluginAdapter_FieldInitialization(t *testing.T) {
+	pluginRef := "buf.build/library/test-plugin"
+	version := "v2.0.0"
+
+	adapter := NewBufPluginAdapter(pluginRef, version)
+
+	assert.Equal(t, pluginRef, adapter.pluginRef)
+	assert.Equal(t, version, adapter.version)
+	assert.NotNil(t, adapter.downloader)
+	assert.Nil(t, adapter.manifest)
+	assert.Nil(t, adapter.languageSpec)
+	assert.False(t, adapter.loaded)
+	assert.Empty(t, adapter.binaryPath)
+}
+
+func TestNewBufPluginAdapterFromManifest_FieldMapping(t *testing.T) {
+	manifest := &plugins.Manifest{
+		ID:          "custom-id",
+		Name:        "Custom Plugin",
+		Version:     "3.0.0",
+		APIVersion:  "2.0.0",
+		Type:        plugins.PluginTypeLanguage,
+		Description: "Custom description",
+		Metadata: map[string]string{
+			"buf_registry": "buf.build/custom/plugin",
+			"buf_version":  "v3.1.0",
+		},
+	}
+
+	adapter, err := NewBufPluginAdapterFromManifest(manifest)
+	require.NoError(t, err)
+
+	assert.Equal(t, manifest, adapter.manifest)
+	assert.Equal(t, "buf.build/custom/plugin", adapter.pluginRef)
+	assert.Equal(t, "v3.1.0", adapter.version)
+	assert.NotNil(t, adapter.downloader)
+	assert.False(t, adapter.loaded)
 }

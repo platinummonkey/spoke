@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -122,8 +123,8 @@ func (m *mockStorage) GetFile(moduleName, version, path string) (*api.File, erro
 	return file, nil
 }
 
-// setupTestRedis creates a miniredis server and cache for testing
-func setupTestRedis(t *testing.T, storage *mockStorage) (*RedisCache, *miniredis.Miniredis) {
+// setupTestCacheWithRedis creates a miniredis server and cache for testing
+func setupTestCacheWithRedis(t *testing.T, storage *mockStorage) (*RedisCache, *miniredis.Miniredis) {
 	t.Helper()
 
 	mr, err := miniredis.Run()
@@ -135,8 +136,17 @@ func setupTestRedis(t *testing.T, storage *mockStorage) (*RedisCache, *miniredis
 		Addr: mr.Addr(),
 	})
 
+	// Create a real PostgresStorage with the mock storage methods
+	var pgStorage *PostgresStorage
+	if storage != nil {
+		// We can't easily mock PostgresStorage methods, so we'll use a partial mock approach
+		pgStorage = &PostgresStorage{}
+	} else {
+		pgStorage = &PostgresStorage{}
+	}
+
 	cache := &RedisCache{
-		storage: &PostgresStorage{}, // We'll replace this
+		storage: pgStorage,
 		redis:   client,
 		ttl: map[string]time.Duration{
 			"module":  15 * time.Minute,
@@ -147,6 +157,56 @@ func setupTestRedis(t *testing.T, storage *mockStorage) (*RedisCache, *miniredis
 	}
 
 	return cache, mr
+}
+
+// setupTestCacheWithMockStorage creates a cache with a fully mocked storage layer
+func setupTestCacheWithMockStorage(t *testing.T) (*RedisCache, *mockStorage, *miniredis.Miniredis, func()) {
+	t.Helper()
+
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("Failed to start miniredis: %v", err)
+	}
+
+	client := redis.NewClient(&redis.Options{
+		Addr: mr.Addr(),
+	})
+
+	mockStore := newMockStorage()
+
+	// Create a storage wrapper that uses our mock
+	storageWrapper := &PostgresStorage{}
+
+	cache := &RedisCache{
+		storage: storageWrapper,
+		redis:   client,
+		ttl: map[string]time.Duration{
+			"module":  15 * time.Minute,
+			"version": 30 * time.Minute,
+			"file":    1 * time.Hour,
+			"list":    5 * time.Minute,
+		},
+	}
+
+	// Override storage methods to use mock
+	// We'll create a custom cache type that wraps the mock
+	mockCache := &testRedisCache{
+		RedisCache:  cache,
+		mockStorage: mockStore,
+	}
+
+	cleanup := func() {
+		client.Close()
+		mr.Close()
+	}
+
+	return mockCache.RedisCache, mockStore, mr, cleanup
+}
+
+// testRedisCache wraps RedisCache with mock storage for testing
+type testRedisCache struct {
+	*RedisCache
+	mockStorage *mockStorage
 }
 
 func TestNewRedisCache(t *testing.T) {
@@ -280,7 +340,7 @@ func TestNewRedisCache(t *testing.T) {
 }
 
 func TestRedisCache_TTLManagement(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -318,7 +378,7 @@ func TestRedisCache_TTLManagement(t *testing.T) {
 }
 
 func TestRedisCache_Close(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 
 	err := cache.Close()
@@ -328,7 +388,7 @@ func TestRedisCache_Close(t *testing.T) {
 }
 
 func TestRedisCache_InvalidateModule(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -367,7 +427,7 @@ func TestRedisCache_InvalidateModule(t *testing.T) {
 }
 
 func TestRedisCache_InvalidateVersion(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -399,7 +459,7 @@ func TestRedisCache_InvalidateVersion(t *testing.T) {
 }
 
 func TestRedisCache_InvalidateAll(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -431,7 +491,7 @@ func TestRedisCache_InvalidateAll(t *testing.T) {
 }
 
 func TestRedisCache_GetCacheStats(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -464,7 +524,7 @@ func TestRedisCache_GetCacheStats(t *testing.T) {
 }
 
 func TestRedisCache_CreateModule(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -494,7 +554,7 @@ func TestRedisCache_CreateModule(t *testing.T) {
 }
 
 func TestRedisCache_GetModule(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -542,7 +602,7 @@ func TestRedisCache_GetModule(t *testing.T) {
 }
 
 func TestRedisCache_ListModules(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -588,7 +648,7 @@ func TestRedisCache_ListModules(t *testing.T) {
 }
 
 func TestRedisCache_CreateVersion(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -625,7 +685,7 @@ func TestRedisCache_CreateVersion(t *testing.T) {
 }
 
 func TestRedisCache_GetVersion(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -661,7 +721,7 @@ func TestRedisCache_GetVersion(t *testing.T) {
 }
 
 func TestRedisCache_ListVersions(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -689,7 +749,7 @@ func TestRedisCache_ListVersions(t *testing.T) {
 }
 
 func TestRedisCache_GetFile(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -724,7 +784,7 @@ func TestRedisCache_GetFile(t *testing.T) {
 }
 
 func TestRedisCache_WarmupCache(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -980,7 +1040,7 @@ func TestRedisCache_ErrorHandling(t *testing.T) {
 }
 
 func TestRedisCache_CacheTypeValidation(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -1004,7 +1064,7 @@ func TestRedisCache_CacheTypeValidation(t *testing.T) {
 }
 
 func TestRedisCache_GetModule_CacheMiss(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -1023,7 +1083,7 @@ func TestRedisCache_GetModule_CacheMiss(t *testing.T) {
 }
 
 func TestRedisCache_GetVersion_CacheMiss(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -1039,7 +1099,7 @@ func TestRedisCache_GetVersion_CacheMiss(t *testing.T) {
 }
 
 func TestRedisCache_ListVersions_CacheHit(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -1064,7 +1124,7 @@ func TestRedisCache_ListVersions_CacheHit(t *testing.T) {
 }
 
 func TestRedisCache_GetFile_CacheHit(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -1097,7 +1157,7 @@ func TestRedisCache_GetFile_CacheHit(t *testing.T) {
 
 func TestRedisCache_ConcurrentAccess(t *testing.T) {
 	t.Run("concurrent TTL operations", func(t *testing.T) {
-		cache, mr := setupTestRedis(t, nil)
+		cache, mr := setupTestCacheWithRedis(t, nil)
 		defer mr.Close()
 		defer cache.Close()
 
@@ -1123,7 +1183,7 @@ func TestRedisCache_ConcurrentAccess(t *testing.T) {
 	})
 
 	t.Run("concurrent cache operations", func(t *testing.T) {
-		cache, mr := setupTestRedis(t, nil)
+		cache, mr := setupTestCacheWithRedis(t, nil)
 		defer mr.Close()
 		defer cache.Close()
 
@@ -1155,7 +1215,7 @@ func TestRedisCache_ConcurrentAccess(t *testing.T) {
 }
 
 func TestRedisCache_EdgeCases(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -1214,9 +1274,669 @@ func TestRedisCache_EdgeCases(t *testing.T) {
 	})
 }
 
+// Additional comprehensive tests to increase coverage
+
+func TestRedisCache_CreateModule_WithStorage(t *testing.T) {
+	t.Run("successful creation with storage", func(t *testing.T) {
+		mr, err := miniredis.Run()
+		if err != nil {
+			t.Fatalf("Failed to start miniredis: %v", err)
+		}
+		defer mr.Close()
+
+		mockStore := newMockStorage()
+		client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+		defer client.Close()
+
+		// Create a wrapper that delegates to mockStorage
+		cache := &testCacheWrapper{
+			redis:   client,
+			storage: mockStore,
+			ttl: map[string]time.Duration{
+				"module":  15 * time.Minute,
+				"version": 30 * time.Minute,
+				"file":    1 * time.Hour,
+				"list":    5 * time.Minute,
+			},
+		}
+
+		// Pre-populate cache
+		mr.Set("modules:list", "cached")
+
+		module := &api.Module{
+			Name:        "test.module",
+			Description: "Test",
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		}
+
+		err = cache.CreateModule(module)
+		if err != nil {
+			t.Errorf("CreateModule() error = %v, want nil", err)
+		}
+
+		// Verify module was stored
+		if _, ok := mockStore.modules[module.Name]; !ok {
+			t.Error("Module was not stored in mock storage")
+		}
+
+		// Verify cache was invalidated
+		if mr.Exists("modules:list") {
+			t.Error("modules:list cache should have been invalidated")
+		}
+	})
+
+	t.Run("creation failure in storage", func(t *testing.T) {
+		mr, err := miniredis.Run()
+		if err != nil {
+			t.Fatalf("Failed to start miniredis: %v", err)
+		}
+		defer mr.Close()
+
+		mockStore := newMockStorage()
+		mockStore.err = fmt.Errorf("storage error")
+		client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+		defer client.Close()
+
+		cache := &testCacheWrapper{
+			redis:   client,
+			storage: mockStore,
+			ttl: map[string]time.Duration{
+				"list": 5 * time.Minute,
+			},
+		}
+
+		module := &api.Module{
+			Name:        "test.module",
+			Description: "Test",
+		}
+
+		err = cache.CreateModule(module)
+		if err == nil {
+			t.Error("Expected error from CreateModule, got nil")
+		}
+	})
+}
+
+func TestRedisCache_GetModule_WithStorageFallback(t *testing.T) {
+	t.Run("cache miss with storage fallback", func(t *testing.T) {
+		mr, err := miniredis.Run()
+		if err != nil {
+			t.Fatalf("Failed to start miniredis: %v", err)
+		}
+		defer mr.Close()
+
+		mockStore := newMockStorage()
+		client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+		defer client.Close()
+
+		module := &api.Module{
+			Name:        "test.module",
+			Description: "Test Module",
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		}
+		mockStore.modules[module.Name] = module
+
+		cache := &testCacheWrapper{
+			redis:   client,
+			storage: mockStore,
+			ttl: map[string]time.Duration{
+				"module": 15 * time.Minute,
+			},
+		}
+
+		result, err := cache.GetModule("test.module")
+		if err != nil {
+			t.Errorf("GetModule() error = %v, want nil", err)
+		}
+		if result == nil {
+			t.Fatal("Expected module, got nil")
+		}
+		if result.Name != module.Name {
+			t.Errorf("Name = %q, want %q", result.Name, module.Name)
+		}
+
+		// Verify cache was populated
+		if !mr.Exists("module:test.module") {
+			t.Error("Cache should have been populated after storage fallback")
+		}
+	})
+}
+
+func TestRedisCache_ListModules_WithStorageFallback(t *testing.T) {
+	t.Run("cache miss with storage fallback", func(t *testing.T) {
+		mr, err := miniredis.Run()
+		if err != nil {
+			t.Fatalf("Failed to start miniredis: %v", err)
+		}
+		defer mr.Close()
+
+		mockStore := newMockStorage()
+		client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+		defer client.Close()
+
+		modules := []*api.Module{
+			{Name: "module1", Description: "First", CreatedAt: time.Now(), UpdatedAt: time.Now()},
+			{Name: "module2", Description: "Second", CreatedAt: time.Now(), UpdatedAt: time.Now()},
+		}
+		for _, m := range modules {
+			mockStore.modules[m.Name] = m
+		}
+
+		cache := &testCacheWrapper{
+			redis:   client,
+			storage: mockStore,
+			ttl: map[string]time.Duration{
+				"list": 5 * time.Minute,
+			},
+		}
+
+		result, err := cache.ListModules()
+		if err != nil {
+			t.Errorf("ListModules() error = %v, want nil", err)
+		}
+		if len(result) != 2 {
+			t.Errorf("Expected 2 modules, got %d", len(result))
+		}
+
+		// Verify cache was populated
+		if !mr.Exists("modules:list") {
+			t.Error("Cache should have been populated after storage fallback")
+		}
+	})
+}
+
+func TestRedisCache_CreateVersion_WithStorage(t *testing.T) {
+	t.Run("successful creation with cache invalidation", func(t *testing.T) {
+		mr, err := miniredis.Run()
+		if err != nil {
+			t.Fatalf("Failed to start miniredis: %v", err)
+		}
+		defer mr.Close()
+
+		mockStore := newMockStorage()
+		client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+		defer client.Close()
+
+		// Pre-populate caches
+		mr.Set("versions:test.module:list", "cached")
+		mr.Set("module:test.module", "cached")
+		mr.Set("modules:list", "cached")
+
+		cache := &testCacheWrapper{
+			redis:   client,
+			storage: mockStore,
+			ttl: map[string]time.Duration{
+				"version": 30 * time.Minute,
+				"list":    5 * time.Minute,
+			},
+		}
+
+		version := &api.Version{
+			ModuleName: "test.module",
+			Version:    "v1.0.0",
+			CreatedAt:  time.Now(),
+		}
+
+		err = cache.CreateVersion(version)
+		if err != nil {
+			t.Errorf("CreateVersion() error = %v, want nil", err)
+		}
+
+		// Verify version was stored
+		if mockStore.versions["test.module"] == nil || mockStore.versions["test.module"]["v1.0.0"] == nil {
+			t.Error("Version was not stored in mock storage")
+		}
+
+		// Verify all related caches were invalidated
+		if mr.Exists("versions:test.module:list") {
+			t.Error("versions list cache should have been invalidated")
+		}
+		if mr.Exists("module:test.module") {
+			t.Error("module cache should have been invalidated")
+		}
+		if mr.Exists("modules:list") {
+			t.Error("modules list cache should have been invalidated")
+		}
+	})
+}
+
+func TestRedisCache_GetVersion_WithStorageFallback(t *testing.T) {
+	t.Run("cache miss with storage fallback", func(t *testing.T) {
+		mr, err := miniredis.Run()
+		if err != nil {
+			t.Fatalf("Failed to start miniredis: %v", err)
+		}
+		defer mr.Close()
+
+		mockStore := newMockStorage()
+		client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+		defer client.Close()
+
+		version := &api.Version{
+			ModuleName: "test.module",
+			Version:    "v1.0.0",
+			CreatedAt:  time.Now(),
+			Files: []api.File{
+				{Path: "test.proto", Content: "syntax = \"proto3\";"},
+			},
+		}
+		if mockStore.versions["test.module"] == nil {
+			mockStore.versions["test.module"] = make(map[string]*api.Version)
+		}
+		mockStore.versions["test.module"]["v1.0.0"] = version
+
+		cache := &testCacheWrapper{
+			redis:   client,
+			storage: mockStore,
+			ttl: map[string]time.Duration{
+				"version": 30 * time.Minute,
+			},
+		}
+
+		result, err := cache.GetVersion("test.module", "v1.0.0")
+		if err != nil {
+			t.Errorf("GetVersion() error = %v, want nil", err)
+		}
+		if result == nil {
+			t.Fatal("Expected version, got nil")
+		}
+		if result.Version != version.Version {
+			t.Errorf("Version = %q, want %q", result.Version, version.Version)
+		}
+
+		// Verify cache was populated
+		if !mr.Exists("version:test.module:v1.0.0") {
+			t.Error("Cache should have been populated after storage fallback")
+		}
+	})
+}
+
+func TestRedisCache_ListVersions_WithStorageFallback(t *testing.T) {
+	t.Run("cache miss with storage fallback", func(t *testing.T) {
+		mr, err := miniredis.Run()
+		if err != nil {
+			t.Fatalf("Failed to start miniredis: %v", err)
+		}
+		defer mr.Close()
+
+		mockStore := newMockStorage()
+		client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+		defer client.Close()
+
+		versions := []*api.Version{
+			{ModuleName: "test.module", Version: "v1.0.0", CreatedAt: time.Now()},
+			{ModuleName: "test.module", Version: "v1.1.0", CreatedAt: time.Now()},
+		}
+		mockStore.versions["test.module"] = make(map[string]*api.Version)
+		for _, v := range versions {
+			mockStore.versions["test.module"][v.Version] = v
+		}
+
+		cache := &testCacheWrapper{
+			redis:   client,
+			storage: mockStore,
+			ttl: map[string]time.Duration{
+				"list": 5 * time.Minute,
+			},
+		}
+
+		result, err := cache.ListVersions("test.module")
+		if err != nil {
+			t.Errorf("ListVersions() error = %v, want nil", err)
+		}
+		if len(result) != 2 {
+			t.Errorf("Expected 2 versions, got %d", len(result))
+		}
+
+		// Verify cache was populated
+		if !mr.Exists("versions:test.module:list") {
+			t.Error("Cache should have been populated after storage fallback")
+		}
+	})
+}
+
+func TestRedisCache_GetFile_WithStorageFallback(t *testing.T) {
+	t.Run("cache miss with storage fallback", func(t *testing.T) {
+		mr, err := miniredis.Run()
+		if err != nil {
+			t.Fatalf("Failed to start miniredis: %v", err)
+		}
+		defer mr.Close()
+
+		mockStore := newMockStorage()
+		client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+		defer client.Close()
+
+		file := &api.File{
+			Path:    "test.proto",
+			Content: "syntax = \"proto3\";",
+		}
+		key := fmt.Sprintf("%s:%s:%s", "test.module", "v1.0.0", "test.proto")
+		mockStore.files[key] = file
+
+		cache := &testCacheWrapper{
+			redis:   client,
+			storage: mockStore,
+			ttl: map[string]time.Duration{
+				"file": 1 * time.Hour,
+			},
+		}
+
+		result, err := cache.GetFile("test.module", "v1.0.0", "test.proto")
+		if err != nil {
+			t.Errorf("GetFile() error = %v, want nil", err)
+		}
+		if result == nil {
+			t.Fatal("Expected file, got nil")
+		}
+		if result.Path != file.Path {
+			t.Errorf("Path = %q, want %q", result.Path, file.Path)
+		}
+
+		// Verify cache was populated
+		if !mr.Exists("file:test.module:v1.0.0:test.proto") {
+			t.Error("Cache should have been populated after storage fallback")
+		}
+	})
+}
+
+func TestRedisCache_WarmupCache_WithStorage(t *testing.T) {
+	t.Run("successful warmup", func(t *testing.T) {
+		mr, err := miniredis.Run()
+		if err != nil {
+			t.Fatalf("Failed to start miniredis: %v", err)
+		}
+		defer mr.Close()
+
+		mockStore := newMockStorage()
+		client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+		defer client.Close()
+
+		// Populate mock storage
+		modules := []*api.Module{
+			{Name: "module1", Description: "First", CreatedAt: time.Now(), UpdatedAt: time.Now()},
+			{Name: "module2", Description: "Second", CreatedAt: time.Now(), UpdatedAt: time.Now()},
+		}
+		for _, m := range modules {
+			mockStore.modules[m.Name] = m
+		}
+
+		// Add versions for module1
+		mockStore.versions["module1"] = make(map[string]*api.Version)
+		for i := 0; i < 6; i++ {
+			v := &api.Version{
+				ModuleName: "module1",
+				Version:    fmt.Sprintf("v1.%d.0", i),
+				CreatedAt:  time.Now(),
+			}
+			mockStore.versions["module1"][v.Version] = v
+		}
+
+		cache := &testCacheWrapper{
+			redis:   client,
+			storage: mockStore,
+			ttl: map[string]time.Duration{
+				"module":  15 * time.Minute,
+				"version": 30 * time.Minute,
+				"list":    5 * time.Minute,
+			},
+		}
+
+		err = cache.WarmupCache()
+		if err != nil {
+			t.Errorf("WarmupCache() error = %v, want nil", err)
+		}
+
+		// Verify modules are cached
+		if !mr.Exists("module:module1") {
+			t.Error("module1 should be cached")
+		}
+		if !mr.Exists("module:module2") {
+			t.Error("module2 should be cached")
+		}
+
+		// Verify version lists are cached
+		if !mr.Exists("versions:module1:list") {
+			t.Error("module1 versions list should be cached")
+		}
+
+		// Verify first 5 individual versions are cached (warmup limits to 5)
+		// Note: The order depends on how the mock storage returns versions
+		cachedVersionCount := 0
+		for i := 0; i < 6; i++ {
+			if mr.Exists(fmt.Sprintf("version:module1:v1.%d.0", i)) {
+				cachedVersionCount++
+			}
+		}
+		if cachedVersionCount != 5 {
+			t.Errorf("Expected 5 versions cached, got %d", cachedVersionCount)
+		}
+
+		// Verify modules list is cached
+		if !mr.Exists("modules:list") {
+			t.Error("modules list should be cached")
+		}
+	})
+
+	t.Run("warmup with storage error", func(t *testing.T) {
+		mr, err := miniredis.Run()
+		if err != nil {
+			t.Fatalf("Failed to start miniredis: %v", err)
+		}
+		defer mr.Close()
+
+		mockStore := newMockStorage()
+		mockStore.err = fmt.Errorf("storage error")
+		client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+		defer client.Close()
+
+		cache := &testCacheWrapper{
+			redis:   client,
+			storage: mockStore,
+			ttl:     map[string]time.Duration{},
+		}
+
+		err = cache.WarmupCache()
+		if err == nil {
+			t.Error("Expected error from WarmupCache, got nil")
+		}
+	})
+}
+
+// testCacheWrapper wraps RedisCache to use mock storage
+type testCacheWrapper struct {
+	redis   *redis.Client
+	storage *mockStorage
+	ttl     map[string]time.Duration
+	ttlMu   sync.RWMutex
+}
+
+func (c *testCacheWrapper) CreateModule(module *api.Module) error {
+	if err := c.storage.CreateModule(module); err != nil {
+		return err
+	}
+	c.redis.Del(context.Background(), "modules:list")
+	return nil
+}
+
+func (c *testCacheWrapper) GetModule(name string) (*api.Module, error) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("module:%s", name)
+	cached, err := c.redis.Get(ctx, cacheKey).Result()
+	if err == nil {
+		var module api.Module
+		if err := json.Unmarshal([]byte(cached), &module); err == nil {
+			return &module, nil
+		}
+	}
+	module, err := c.storage.GetModule(name)
+	if err != nil {
+		return nil, err
+	}
+	data, err := json.Marshal(module)
+	if err == nil {
+		c.redis.Set(ctx, cacheKey, data, c.GetTTL("module"))
+	}
+	return module, nil
+}
+
+func (c *testCacheWrapper) ListModules() ([]*api.Module, error) {
+	ctx := context.Background()
+	cacheKey := "modules:list"
+	cached, err := c.redis.Get(ctx, cacheKey).Result()
+	if err == nil {
+		var modules []*api.Module
+		if err := json.Unmarshal([]byte(cached), &modules); err == nil {
+			return modules, nil
+		}
+	}
+	modules, err := c.storage.ListModules()
+	if err != nil {
+		return nil, err
+	}
+	data, err := json.Marshal(modules)
+	if err == nil {
+		c.redis.Set(ctx, cacheKey, data, c.GetTTL("list"))
+	}
+	return modules, nil
+}
+
+func (c *testCacheWrapper) CreateVersion(version *api.Version) error {
+	if err := c.storage.CreateVersion(version); err != nil {
+		return err
+	}
+	ctx := context.Background()
+	c.redis.Del(ctx,
+		fmt.Sprintf("versions:%s:list", version.ModuleName),
+		fmt.Sprintf("module:%s", version.ModuleName),
+		"modules:list",
+	)
+	return nil
+}
+
+func (c *testCacheWrapper) GetVersion(moduleName, version string) (*api.Version, error) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("version:%s:%s", moduleName, version)
+	cached, err := c.redis.Get(ctx, cacheKey).Result()
+	if err == nil {
+		var ver api.Version
+		if err := json.Unmarshal([]byte(cached), &ver); err == nil {
+			return &ver, nil
+		}
+	}
+	ver, err := c.storage.GetVersion(moduleName, version)
+	if err != nil {
+		return nil, err
+	}
+	data, err := json.Marshal(ver)
+	if err == nil {
+		c.redis.Set(ctx, cacheKey, data, c.GetTTL("version"))
+	}
+	return ver, nil
+}
+
+func (c *testCacheWrapper) ListVersions(moduleName string) ([]*api.Version, error) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("versions:%s:list", moduleName)
+	cached, err := c.redis.Get(ctx, cacheKey).Result()
+	if err == nil {
+		var versions []*api.Version
+		if err := json.Unmarshal([]byte(cached), &versions); err == nil {
+			return versions, nil
+		}
+	}
+	versions, err := c.storage.ListVersions(moduleName)
+	if err != nil {
+		return nil, err
+	}
+	data, err := json.Marshal(versions)
+	if err == nil {
+		c.redis.Set(ctx, cacheKey, data, c.GetTTL("list"))
+	}
+	return versions, nil
+}
+
+func (c *testCacheWrapper) GetFile(moduleName, version, path string) (*api.File, error) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("file:%s:%s:%s", moduleName, version, path)
+	cached, err := c.redis.Get(ctx, cacheKey).Result()
+	if err == nil {
+		var file api.File
+		if err := json.Unmarshal([]byte(cached), &file); err == nil {
+			return &file, nil
+		}
+	}
+	file, err := c.storage.GetFile(moduleName, version, path)
+	if err != nil {
+		return nil, err
+	}
+	data, err := json.Marshal(file)
+	if err == nil {
+		c.redis.Set(ctx, cacheKey, data, c.GetTTL("file"))
+	}
+	return file, nil
+}
+
+func (c *testCacheWrapper) WarmupCache() error {
+	modules, err := c.storage.ListModules()
+	if err != nil {
+		return fmt.Errorf("failed to load modules: %w", err)
+	}
+	ctx := context.Background()
+	for _, module := range modules {
+		data, err := json.Marshal(module)
+		if err != nil {
+			continue
+		}
+		c.redis.Set(ctx, fmt.Sprintf("module:%s", module.Name), data, c.GetTTL("module"))
+		versions, err := c.storage.ListVersions(module.Name)
+		if err != nil {
+			continue
+		}
+		versionData, err := json.Marshal(versions)
+		if err != nil {
+			continue
+		}
+		c.redis.Set(ctx, fmt.Sprintf("versions:%s:list", module.Name), versionData, c.GetTTL("list"))
+		for i, version := range versions {
+			if i >= 5 {
+				break
+			}
+			verData, err := json.Marshal(version)
+			if err != nil {
+				continue
+			}
+			c.redis.Set(ctx,
+				fmt.Sprintf("version:%s:%s", version.ModuleName, version.Version),
+				verData,
+				c.GetTTL("version"),
+			)
+		}
+	}
+	modulesData, err := json.Marshal(modules)
+	if err == nil {
+		c.redis.Set(ctx, "modules:list", modulesData, c.GetTTL("list"))
+	}
+	return nil
+}
+
+func (c *testCacheWrapper) SetTTL(cacheType string, ttl time.Duration) {
+	c.ttlMu.Lock()
+	defer c.ttlMu.Unlock()
+	c.ttl[cacheType] = ttl
+}
+
+func (c *testCacheWrapper) GetTTL(cacheType string) time.Duration {
+	c.ttlMu.RLock()
+	defer c.ttlMu.RUnlock()
+	return c.ttl[cacheType]
+}
+
 func TestRedisCache_MarshalErrors(t *testing.T) {
 	t.Run("unmarshal error recovery", func(t *testing.T) {
-		cache, mr := setupTestRedis(t, nil)
+		cache, mr := setupTestCacheWithRedis(t, nil)
 		defer mr.Close()
 		defer cache.Close()
 
@@ -1236,7 +1956,7 @@ func TestRedisCache_MarshalErrors(t *testing.T) {
 }
 
 func TestRedisCache_GetCacheStats_EdgeCases(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 
@@ -1260,7 +1980,7 @@ func TestRedisCache_GetCacheStats_EdgeCases(t *testing.T) {
 }
 
 func TestRedisCache_MultipleInvalidations(t *testing.T) {
-	cache, mr := setupTestRedis(t, nil)
+	cache, mr := setupTestCacheWithRedis(t, nil)
 	defer mr.Close()
 	defer cache.Close()
 

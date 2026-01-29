@@ -1,0 +1,2014 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>plugins: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/platinummonkey/spoke/pkg/plugins/basic_language_plugin.go (98.4%)</option>
+				
+				<option value="file1">github.com/platinummonkey/spoke/pkg/plugins/loader.go (0.0%)</option>
+				
+				<option value="file2">github.com/platinummonkey/spoke/pkg/plugins/manifest.go (0.0%)</option>
+				
+				<option value="file3">github.com/platinummonkey/spoke/pkg/plugins/registry.go (0.0%)</option>
+				
+				<option value="file4">github.com/platinummonkey/spoke/pkg/plugins/validator.go (0.0%)</option>
+				
+				<option value="file5">github.com/platinummonkey/spoke/pkg/plugins/verification.go (0.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package plugins
+
+import (
+        "context"
+        "fmt"
+        "os"
+        "path/filepath"
+        "strings"
+
+        "gopkg.in/yaml.v3"
+)
+
+// BasicLanguagePlugin is a simple file-based language plugin implementation
+// This is used when native Go plugins are not available or for YAML-only plugins
+type BasicLanguagePlugin struct {
+        manifest     *Manifest
+        pluginDir    string
+        languageSpec *LanguageSpec
+}
+
+// NewBasicLanguagePlugin creates a new basic language plugin
+func NewBasicLanguagePlugin(manifest *Manifest, pluginDir string) *BasicLanguagePlugin <span class="cov8" title="1">{
+        return &amp;BasicLanguagePlugin{
+                manifest:  manifest,
+                pluginDir: pluginDir,
+        }
+}</span>
+
+// Manifest returns the plugin manifest
+func (p *BasicLanguagePlugin) Manifest() *Manifest <span class="cov8" title="1">{
+        return p.manifest
+}</span>
+
+// Load initializes the plugin
+func (p *BasicLanguagePlugin) Load() error <span class="cov8" title="1">{
+        // Load language spec from manifest or separate file
+        if err := p.loadLanguageSpec(); err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("failed to load language spec: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// Unload cleans up plugin resources
+func (p *BasicLanguagePlugin) Unload() error <span class="cov8" title="1">{
+        // No resources to clean up for basic plugin
+        return nil
+}</span>
+
+// GetLanguageSpec returns the language specification
+func (p *BasicLanguagePlugin) GetLanguageSpec() *LanguageSpec <span class="cov8" title="1">{
+        return p.languageSpec
+}</span>
+
+// BuildProtocCommand builds a protoc command for this language
+func (p *BasicLanguagePlugin) BuildProtocCommand(ctx context.Context, req *CommandRequest) ([]string, error) <span class="cov8" title="1">{
+        if p.languageSpec == nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("language spec not loaded")
+        }</span>
+
+        <span class="cov8" title="1">cmd := []string{"protoc"}
+
+        // Add import paths
+        for _, path := range req.ImportPaths </span><span class="cov8" title="1">{
+                cmd = append(cmd, "--proto_path="+path)
+        }</span>
+
+        // Add plugin path if specified
+        <span class="cov8" title="1">if req.PluginPath != "" </span><span class="cov8" title="1">{
+                pluginName := p.languageSpec.ProtocPlugin
+                if pluginName == "" </span><span class="cov8" title="1">{
+                        pluginName = p.languageSpec.ID
+                }</span>
+                <span class="cov8" title="1">cmd = append(cmd, fmt.Sprintf("--plugin=protoc-gen-%s=%s", pluginName, req.PluginPath))</span>
+        }
+
+        // Add output flag
+        <span class="cov8" title="1">outputFlag := fmt.Sprintf("--%s_out=%s", p.languageSpec.ID, req.OutputDir)
+        cmd = append(cmd, outputFlag)
+
+        // Add custom options if provided
+        if len(req.Options) &gt; 0 </span><span class="cov8" title="1">{
+                var opts []string
+                for key, value := range req.Options </span><span class="cov8" title="1">{
+                        if value == "" </span><span class="cov8" title="1">{
+                                opts = append(opts, key)
+                        }</span> else<span class="cov8" title="1"> {
+                                opts = append(opts, fmt.Sprintf("%s=%s", key, value))
+                        }</span>
+                }
+                <span class="cov8" title="1">if len(opts) &gt; 0 </span><span class="cov8" title="1">{
+                        optFlag := fmt.Sprintf("--%s_opt=%s", p.languageSpec.ID, strings.Join(opts, ","))
+                        cmd = append(cmd, optFlag)
+                }</span>
+        }
+
+        // Add proto files
+        <span class="cov8" title="1">cmd = append(cmd, req.ProtoFiles...)
+
+        return cmd, nil</span>
+}
+
+// ValidateOutput validates that the expected output files were generated
+func (p *BasicLanguagePlugin) ValidateOutput(ctx context.Context, files []string) error <span class="cov8" title="1">{
+        if p.languageSpec == nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("language spec not loaded")
+        }</span>
+
+        <span class="cov8" title="1">if len(files) == 0 </span><span class="cov8" title="1">{
+                return fmt.Errorf("no files generated")
+        }</span>
+
+        // Check that files have expected extensions
+        <span class="cov8" title="1">for _, file := range files </span><span class="cov8" title="1">{
+                hasValidExt := false
+                for _, ext := range p.languageSpec.FileExtensions </span><span class="cov8" title="1">{
+                        if strings.HasSuffix(file, ext) </span><span class="cov8" title="1">{
+                                hasValidExt = true
+                                break</span>
+                        }
+                }
+
+                <span class="cov8" title="1">if !hasValidExt </span><span class="cov8" title="1">{
+                        return fmt.Errorf("unexpected file extension: %s (expected: %v)",
+                                file, p.languageSpec.FileExtensions)
+                }</span>
+        }
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// loadLanguageSpec loads the language specification from the manifest or a separate file
+func (p *BasicLanguagePlugin) loadLanguageSpec() error <span class="cov8" title="1">{
+        // Try to load from a separate language_spec.yaml file first
+        specPath := filepath.Join(p.pluginDir, "language_spec.yaml")
+        if _, err := os.Stat(specPath); err == nil </span><span class="cov8" title="1">{
+                data, err := os.ReadFile(specPath)
+                if err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to read language spec file: %w", err)
+                }</span>
+
+                <span class="cov8" title="1">var spec LanguageSpec
+                if err := yaml.Unmarshal(data, &amp;spec); err != nil </span><span class="cov8" title="1">{
+                        return fmt.Errorf("failed to parse language spec: %w", err)
+                }</span>
+
+                <span class="cov8" title="1">p.languageSpec = &amp;spec
+                return nil</span>
+        }
+
+        // Otherwise, try to extract from manifest metadata
+        <span class="cov8" title="1">if specData, ok := p.manifest.Metadata["language_spec"]; ok </span><span class="cov8" title="1">{
+                var spec LanguageSpec
+                if err := yaml.Unmarshal([]byte(specData), &amp;spec); err != nil </span><span class="cov8" title="1">{
+                        return fmt.Errorf("failed to parse language spec from manifest: %w", err)
+                }</span>
+
+                <span class="cov8" title="1">p.languageSpec = &amp;spec
+                return nil</span>
+        }
+
+        // As a last resort, create a basic spec from manifest
+        <span class="cov8" title="1">p.languageSpec = &amp;LanguageSpec{
+                ID:          p.manifest.ID,
+                Name:        p.manifest.Name,
+                DisplayName: p.manifest.Name,
+                Enabled:     true,
+                Stable:      p.manifest.SecurityLevel == SecurityLevelOfficial || p.manifest.SecurityLevel == SecurityLevelVerified,
+                Description: p.manifest.Description,
+        }
+
+        return nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package plugins
+
+import (
+        "context"
+        "fmt"
+        "os"
+        "path/filepath"
+        "sync"
+
+        "github.com/sirupsen/logrus"
+)
+
+const (
+        // CurrentSDKAPIVersion is the current version of the Plugin SDK API
+        CurrentSDKAPIVersion = "1.0.0"
+)
+
+// BufPluginFactory is a function that creates a Buf plugin from a manifest
+type BufPluginFactory func(*Manifest) (Plugin, error)
+
+// Loader discovers and loads plugins from filesystem directories
+type Loader struct {
+        pluginDirs       []string
+        loadedPlugins    map[string]Plugin
+        bufPluginFactory BufPluginFactory
+        mu               sync.RWMutex
+        log              *logrus.Logger
+}
+
+// NewLoader creates a new plugin loader
+func NewLoader(dirs []string, log *logrus.Logger) *Loader <span class="cov0" title="0">{
+        if log == nil </span><span class="cov0" title="0">{
+                log = logrus.New()
+        }</span>
+
+        <span class="cov0" title="0">return &amp;Loader{
+                pluginDirs:       dirs,
+                loadedPlugins:    make(map[string]Plugin),
+                bufPluginFactory: nil, // Can be set later with SetBufPluginFactory
+                log:              log,
+        }</span>
+}
+
+// SetBufPluginFactory sets the factory function for creating Buf plugins
+func (l *Loader) SetBufPluginFactory(factory BufPluginFactory) <span class="cov0" title="0">{
+        l.mu.Lock()
+        defer l.mu.Unlock()
+        l.bufPluginFactory = factory
+}</span>
+
+// DiscoverPlugins scans plugin directories and returns discovered plugins
+func (l *Loader) DiscoverPlugins(ctx context.Context) ([]Plugin, error) <span class="cov0" title="0">{
+        var plugins []Plugin
+
+        for _, dir := range l.pluginDirs </span><span class="cov0" title="0">{
+                if _, err := os.Stat(dir); os.IsNotExist(err) </span><span class="cov0" title="0">{
+                        l.log.Debugf("Plugin directory does not exist: %s", dir)
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">entries, err := os.ReadDir(dir)
+                if err != nil </span><span class="cov0" title="0">{
+                        l.log.Warnf("Failed to read plugin directory %s: %v", dir, err)
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">for _, entry := range entries </span><span class="cov0" title="0">{
+                        if !entry.IsDir() </span><span class="cov0" title="0">{
+                                continue</span>
+                        }
+
+                        <span class="cov0" title="0">pluginDir := filepath.Join(dir, entry.Name())
+                        plugin, err := l.loadPluginFromDir(ctx, pluginDir)
+                        if err != nil </span><span class="cov0" title="0">{
+                                l.log.Warnf("Failed to load plugin from %s: %v", pluginDir, err)
+                                continue</span>
+                        }
+
+                        <span class="cov0" title="0">plugins = append(plugins, plugin)</span>
+                }
+        }
+
+        <span class="cov0" title="0">return plugins, nil</span>
+}
+
+// LoadPlugin loads a single plugin from a path
+func (l *Loader) LoadPlugin(ctx context.Context, path string) (Plugin, error) <span class="cov0" title="0">{
+        return l.loadPluginFromDir(ctx, path)
+}</span>
+
+// UnloadPlugin unloads a plugin by ID
+func (l *Loader) UnloadPlugin(ctx context.Context, id string) error <span class="cov0" title="0">{
+        l.mu.Lock()
+        defer l.mu.Unlock()
+
+        plugin, exists := l.loadedPlugins[id]
+        if !exists </span><span class="cov0" title="0">{
+                return fmt.Errorf("plugin not loaded: %s", id)
+        }</span>
+
+        <span class="cov0" title="0">if err := plugin.Unload(); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to unload plugin: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">delete(l.loadedPlugins, id)
+        return nil</span>
+}
+
+// GetLoadedPlugin returns a loaded plugin by ID
+func (l *Loader) GetLoadedPlugin(id string) (Plugin, bool) <span class="cov0" title="0">{
+        l.mu.RLock()
+        defer l.mu.RUnlock()
+
+        plugin, exists := l.loadedPlugins[id]
+        return plugin, exists
+}</span>
+
+// ListLoadedPlugins returns all loaded plugins
+func (l *Loader) ListLoadedPlugins() []Plugin <span class="cov0" title="0">{
+        l.mu.RLock()
+        defer l.mu.RUnlock()
+
+        plugins := make([]Plugin, 0, len(l.loadedPlugins))
+        for _, plugin := range l.loadedPlugins </span><span class="cov0" title="0">{
+                plugins = append(plugins, plugin)
+        }</span>
+
+        <span class="cov0" title="0">return plugins</span>
+}
+
+// loadPluginFromDir loads a plugin from a directory
+func (l *Loader) loadPluginFromDir(ctx context.Context, pluginDir string) (Plugin, error) <span class="cov0" title="0">{
+        // Load manifest
+        manifest, err := LoadManifestFromDir(pluginDir)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to load manifest: %w", err)
+        }</span>
+
+        // Validate manifest
+        <span class="cov0" title="0">if validationErrors := ValidateManifest(manifest); len(validationErrors) &gt; 0 </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("manifest validation failed: %v", validationErrors)
+        }</span>
+
+        // Check API version compatibility
+        <span class="cov0" title="0">if !IsCompatibleAPIVersion(manifest.APIVersion, CurrentSDKAPIVersion) </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("incompatible API version: plugin requires %s, SDK is %s",
+                        manifest.APIVersion, CurrentSDKAPIVersion)
+        }</span>
+
+        // Load plugin based on type
+        <span class="cov0" title="0">var plugin Plugin
+
+        switch manifest.Type </span>{
+        case PluginTypeLanguage:<span class="cov0" title="0">
+                plugin, err = l.loadLanguagePlugin(ctx, pluginDir, manifest)</span>
+        case PluginTypeValidator:<span class="cov0" title="0">
+                plugin, err = l.loadValidatorPlugin(ctx, pluginDir, manifest)</span>
+        case PluginTypeRunner:<span class="cov0" title="0">
+                plugin, err = l.loadRunnerPlugin(ctx, pluginDir, manifest)</span>
+        default:<span class="cov0" title="0">
+                return nil, fmt.Errorf("unsupported plugin type: %s", manifest.Type)</span>
+        }
+
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to load plugin: %w", err)
+        }</span>
+
+        // Load the plugin
+        <span class="cov0" title="0">if err := plugin.Load(); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("plugin load failed: %w", err)
+        }</span>
+
+        // Store in loaded plugins map
+        <span class="cov0" title="0">l.mu.Lock()
+        l.loadedPlugins[manifest.ID] = plugin
+        l.mu.Unlock()
+
+        l.log.Infof("Loaded plugin: %s v%s (type: %s)", manifest.Name, manifest.Version, manifest.Type)
+
+        return plugin, nil</span>
+}
+
+// loadLanguagePlugin loads a language plugin
+func (l *Loader) loadLanguagePlugin(ctx context.Context, pluginDir string, manifest *Manifest) (Plugin, error) <span class="cov0" title="0">{
+        // Check if this is a Buf plugin
+        if isBufPlugin(manifest) </span><span class="cov0" title="0">{
+                return l.loadBufPlugin(ctx, manifest)
+        }</span>
+
+        // Otherwise, create a basic language plugin wrapper
+        <span class="cov0" title="0">return NewBasicLanguagePlugin(manifest, pluginDir), nil</span>
+}
+
+// loadBufPlugin loads a Buf plugin
+func (l *Loader) loadBufPlugin(ctx context.Context, manifest *Manifest) (Plugin, error) <span class="cov0" title="0">{
+        bufAdapter, err := l.createBufAdapter(manifest)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to create Buf plugin adapter: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return bufAdapter, nil</span>
+}
+
+// isBufPlugin checks if a manifest describes a Buf plugin
+func isBufPlugin(manifest *Manifest) bool <span class="cov0" title="0">{
+        _, hasBufRegistry := manifest.Metadata["buf_registry"]
+        return hasBufRegistry
+}</span>
+
+// createBufAdapter creates a Buf plugin adapter using the factory
+func (l *Loader) createBufAdapter(manifest *Manifest) (Plugin, error) <span class="cov0" title="0">{
+        l.mu.RLock()
+        factory := l.bufPluginFactory
+        l.mu.RUnlock()
+
+        if factory == nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("buf plugin factory not configured (Buf plugin support disabled)")
+        }</span>
+
+        <span class="cov0" title="0">return factory(manifest)</span>
+}
+
+// loadValidatorPlugin loads a validator plugin
+func (l *Loader) loadValidatorPlugin(ctx context.Context, pluginDir string, manifest *Manifest) (Plugin, error) <span class="cov0" title="0">{
+        // For now, return error - will implement in later phases
+        return nil, fmt.Errorf("validator plugins not yet implemented")
+}</span>
+
+// loadRunnerPlugin loads a runner plugin
+func (l *Loader) loadRunnerPlugin(ctx context.Context, pluginDir string, manifest *Manifest) (Plugin, error) <span class="cov0" title="0">{
+        // For now, return error - will implement in later phases
+        return nil, fmt.Errorf("runner plugins not yet implemented")
+}</span>
+
+// GetDefaultPluginDirectories returns the default plugin search directories
+func GetDefaultPluginDirectories() []string <span class="cov0" title="0">{
+        homeDir, err := os.UserHomeDir()
+        if err != nil </span><span class="cov0" title="0">{
+                homeDir = "/tmp"
+        }</span>
+
+        <span class="cov0" title="0">return []string{
+                filepath.Join(homeDir, ".spoke", "plugins"),
+                "/etc/spoke/plugins",
+                "./plugins", // Current directory
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package plugins
+
+import (
+        "fmt"
+        "os"
+        "path/filepath"
+        "regexp"
+
+        "gopkg.in/yaml.v3"
+)
+
+var semverRegex = regexp.MustCompile(`^v?(\d+)\.(\d+)\.(\d+)(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$`)
+
+// LoadManifest loads and parses a plugin manifest from a file
+func LoadManifest(path string) (*Manifest, error) <span class="cov0" title="0">{
+        data, err := os.ReadFile(path)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to read manifest: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">var manifest Manifest
+        if err := yaml.Unmarshal(data, &amp;manifest); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to parse manifest: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return &amp;manifest, nil</span>
+}
+
+// LoadManifestFromDir loads a plugin manifest from a directory (looks for plugin.yaml)
+func LoadManifestFromDir(dir string) (*Manifest, error) <span class="cov0" title="0">{
+        manifestPath := filepath.Join(dir, "plugin.yaml")
+        return LoadManifest(manifestPath)
+}</span>
+
+// SaveManifest saves a plugin manifest to a file
+func SaveManifest(manifest *Manifest, path string) error <span class="cov0" title="0">{
+        data, err := yaml.Marshal(manifest)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to marshal manifest: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">if err := os.WriteFile(path, data, 0644); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to write manifest: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+// ValidateManifest performs basic validation on a plugin manifest
+func ValidateManifest(manifest *Manifest) []ValidationError <span class="cov0" title="0">{
+        var errors []ValidationError
+
+        // Required fields
+        if manifest.ID == "" </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:   "id",
+                        Message: "Plugin ID is required",
+                })
+        }</span>
+
+        <span class="cov0" title="0">if manifest.Name == "" </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:   "name",
+                        Message: "Plugin name is required",
+                })
+        }</span>
+
+        <span class="cov0" title="0">if manifest.Version == "" </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:   "version",
+                        Message: "Version is required",
+                })
+        }</span>
+
+        <span class="cov0" title="0">if manifest.APIVersion == "" </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:   "api_version",
+                        Message: "API version is required",
+                })
+        }</span>
+
+        <span class="cov0" title="0">if manifest.Type == "" </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:   "type",
+                        Message: "Plugin type is required",
+                })
+        }</span>
+
+        // Validate semver format
+        <span class="cov0" title="0">if manifest.Version != "" &amp;&amp; !isValidSemver(manifest.Version) </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:   "version",
+                        Message: fmt.Sprintf("Invalid semver format: %s", manifest.Version),
+                })
+        }</span>
+
+        <span class="cov0" title="0">if manifest.APIVersion != "" &amp;&amp; !isValidSemver(manifest.APIVersion) </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:   "api_version",
+                        Message: fmt.Sprintf("Invalid semver format: %s", manifest.APIVersion),
+                })
+        }</span>
+
+        // Validate plugin type
+        <span class="cov0" title="0">validTypes := map[PluginType]bool{
+                PluginTypeLanguage:  true,
+                PluginTypeValidator: true,
+                PluginTypeGenerator: true,
+                PluginTypeRunner:    true,
+                PluginTypeTransform: true,
+        }
+
+        if !validTypes[manifest.Type] </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:   "type",
+                        Message: fmt.Sprintf("Invalid plugin type: %s", manifest.Type),
+                })
+        }</span>
+
+        // Validate security level
+        <span class="cov0" title="0">validSecurityLevels := map[SecurityLevel]bool{
+                SecurityLevelOfficial:  true,
+                SecurityLevelVerified:  true,
+                SecurityLevelCommunity: true,
+        }
+
+        if manifest.SecurityLevel != "" &amp;&amp; !validSecurityLevels[manifest.SecurityLevel] </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:   "security_level",
+                        Message: fmt.Sprintf("Invalid security level: %s", manifest.SecurityLevel),
+                })
+        }</span>
+
+        // Validate permissions
+        <span class="cov0" title="0">allowedPermissions := map[string]bool{
+                "filesystem:read":  true,
+                "filesystem:write": true,
+                "network:read":     true,
+                "network:write":    true,
+                "process:exec":     true,
+                "env:read":         true,
+        }
+
+        for _, perm := range manifest.Permissions </span><span class="cov0" title="0">{
+                if !allowedPermissions[perm] </span><span class="cov0" title="0">{
+                        errors = append(errors, ValidationError{
+                                Field:   "permissions",
+                                Message: fmt.Sprintf("Unknown permission: %s", perm),
+                        })
+                }</span>
+        }
+
+        <span class="cov0" title="0">return errors</span>
+}
+
+// isValidSemver checks if a version string follows semantic versioning
+func isValidSemver(version string) bool <span class="cov0" title="0">{
+        return semverRegex.MatchString(version)
+}</span>
+
+// IsCompatibleAPIVersion checks if a plugin's API version is compatible with the current SDK
+func IsCompatibleAPIVersion(pluginAPIVersion, sdkAPIVersion string) bool <span class="cov0" title="0">{
+        // For now, we only check major version compatibility
+        // v1.x.x is compatible with v1.y.z
+        pluginMajor := extractMajorVersion(pluginAPIVersion)
+        sdkMajor := extractMajorVersion(sdkAPIVersion)
+
+        return pluginMajor == sdkMajor
+}</span>
+
+func extractMajorVersion(version string) string <span class="cov0" title="0">{
+        matches := semverRegex.FindStringSubmatch(version)
+        if len(matches) &gt; 1 </span><span class="cov0" title="0">{
+                return matches[1]
+        }</span>
+        <span class="cov0" title="0">return "0"</span>
+}
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package plugins
+
+import (
+        "fmt"
+        "sync"
+)
+
+// Registry manages loaded plugins
+type Registry struct {
+        plugins map[string]Plugin
+        mu      sync.RWMutex
+}
+
+// NewRegistry creates a new plugin registry
+func NewRegistry() *Registry <span class="cov0" title="0">{
+        return &amp;Registry{
+                plugins: make(map[string]Plugin),
+        }
+}</span>
+
+// Register adds a plugin to the registry
+func (r *Registry) Register(plugin Plugin) error <span class="cov0" title="0">{
+        if plugin == nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("cannot register nil plugin")
+        }</span>
+
+        <span class="cov0" title="0">manifest := plugin.Manifest()
+        if manifest == nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("plugin has nil manifest")
+        }</span>
+
+        <span class="cov0" title="0">r.mu.Lock()
+        defer r.mu.Unlock()
+
+        if _, exists := r.plugins[manifest.ID]; exists </span><span class="cov0" title="0">{
+                return fmt.Errorf("plugin already registered: %s", manifest.ID)
+        }</span>
+
+        <span class="cov0" title="0">r.plugins[manifest.ID] = plugin
+        return nil</span>
+}
+
+// Unregister removes a plugin from the registry
+func (r *Registry) Unregister(id string) error <span class="cov0" title="0">{
+        r.mu.Lock()
+        defer r.mu.Unlock()
+
+        if _, exists := r.plugins[id]; !exists </span><span class="cov0" title="0">{
+                return fmt.Errorf("plugin not found: %s", id)
+        }</span>
+
+        <span class="cov0" title="0">delete(r.plugins, id)
+        return nil</span>
+}
+
+// Get retrieves a plugin by ID
+func (r *Registry) Get(id string) (Plugin, error) <span class="cov0" title="0">{
+        r.mu.RLock()
+        defer r.mu.RUnlock()
+
+        plugin, exists := r.plugins[id]
+        if !exists </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("plugin not found: %s", id)
+        }</span>
+
+        <span class="cov0" title="0">return plugin, nil</span>
+}
+
+// Has checks if a plugin is registered
+func (r *Registry) Has(id string) bool <span class="cov0" title="0">{
+        r.mu.RLock()
+        defer r.mu.RUnlock()
+
+        _, exists := r.plugins[id]
+        return exists
+}</span>
+
+// List returns all registered plugins
+func (r *Registry) List() []Plugin <span class="cov0" title="0">{
+        r.mu.RLock()
+        defer r.mu.RUnlock()
+
+        plugins := make([]Plugin, 0, len(r.plugins))
+        for _, plugin := range r.plugins </span><span class="cov0" title="0">{
+                plugins = append(plugins, plugin)
+        }</span>
+
+        <span class="cov0" title="0">return plugins</span>
+}
+
+// ListByType returns all plugins of a specific type
+func (r *Registry) ListByType(t PluginType) []Plugin <span class="cov0" title="0">{
+        r.mu.RLock()
+        defer r.mu.RUnlock()
+
+        var plugins []Plugin
+        for _, plugin := range r.plugins </span><span class="cov0" title="0">{
+                if plugin.Manifest().Type == t </span><span class="cov0" title="0">{
+                        plugins = append(plugins, plugin)
+                }</span>
+        }
+
+        <span class="cov0" title="0">return plugins</span>
+}
+
+// Count returns the number of registered plugins
+func (r *Registry) Count() int <span class="cov0" title="0">{
+        r.mu.RLock()
+        defer r.mu.RUnlock()
+
+        return len(r.plugins)
+}</span>
+
+// Clear removes all plugins from the registry
+func (r *Registry) Clear() <span class="cov0" title="0">{
+        r.mu.Lock()
+        defer r.mu.Unlock()
+
+        r.plugins = make(map[string]Plugin)
+}</span>
+
+// GetLanguagePlugins returns all language plugins
+func (r *Registry) GetLanguagePlugins() []LanguagePlugin <span class="cov0" title="0">{
+        r.mu.RLock()
+        defer r.mu.RUnlock()
+
+        var plugins []LanguagePlugin
+        for _, plugin := range r.plugins </span><span class="cov0" title="0">{
+                if langPlugin, ok := plugin.(LanguagePlugin); ok </span><span class="cov0" title="0">{
+                        plugins = append(plugins, langPlugin)
+                }</span>
+        }
+
+        <span class="cov0" title="0">return plugins</span>
+}
+
+// GetValidatorPlugins returns all validator plugins
+func (r *Registry) GetValidatorPlugins() []ValidatorPlugin <span class="cov0" title="0">{
+        r.mu.RLock()
+        defer r.mu.RUnlock()
+
+        var plugins []ValidatorPlugin
+        for _, plugin := range r.plugins </span><span class="cov0" title="0">{
+                if valPlugin, ok := plugin.(ValidatorPlugin); ok </span><span class="cov0" title="0">{
+                        plugins = append(plugins, valPlugin)
+                }</span>
+        }
+
+        <span class="cov0" title="0">return plugins</span>
+}
+
+// GetRunnerPlugins returns all runner plugins
+func (r *Registry) GetRunnerPlugins() []RunnerPlugin <span class="cov0" title="0">{
+        r.mu.RLock()
+        defer r.mu.RUnlock()
+
+        var plugins []RunnerPlugin
+        for _, plugin := range r.plugins </span><span class="cov0" title="0">{
+                if runPlugin, ok := plugin.(RunnerPlugin); ok </span><span class="cov0" title="0">{
+                        plugins = append(plugins, runPlugin)
+                }</span>
+        }
+
+        <span class="cov0" title="0">return plugins</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package plugins
+
+import (
+        "bytes"
+        "context"
+        "encoding/json"
+        "fmt"
+        "os"
+        "os/exec"
+        "path/filepath"
+        "regexp"
+        "strings"
+        "time"
+
+        "github.com/sirupsen/logrus"
+)
+
+// Validator performs security validation and scanning on plugins
+type Validator struct {
+        allowedPermissions map[string]bool
+        dangerousImports   []string
+        logger             *logrus.Logger
+        gosecPath          string // Path to gosec binary
+}
+
+// NewValidator creates a new plugin validator
+func NewValidator(logger *logrus.Logger) *Validator <span class="cov0" title="0">{
+        // Default allowed permissions
+        allowedPerms := map[string]bool{
+                "filesystem:read":  true,
+                "filesystem:write": true,
+                "network:read":     true,
+                "network:write":    true,
+                "process:exec":     true,
+                "env:read":         true,
+        }
+
+        // Dangerous Go imports that require scrutiny
+        dangerousImports := []string{
+                "os/exec",      // Command execution
+                "syscall",      // Low-level system calls
+                "unsafe",       // Unsafe pointer operations
+                "plugin",       // Dynamic loading
+                "net/http",     // Network access (can be dangerous)
+                "database/sql", // Database access
+                "crypto/md5",   // Weak cryptography
+                "crypto/sha1",  // Weak cryptography
+                "math/rand",    // Non-cryptographic random (if used for security)
+        }
+
+        return &amp;Validator{
+                allowedPermissions: allowedPerms,
+                dangerousImports:   dangerousImports,
+                logger:             logger,
+                gosecPath:          findGosecPath(),
+        }
+}</span>
+
+// ValidateManifest validates a plugin manifest for correctness and safety
+func (v *Validator) ValidateManifest(manifest *Manifest) []ValidationError <span class="cov0" title="0">{
+        var errors []ValidationError
+
+        // Required fields
+        if manifest.ID == "" </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:    "id",
+                        Message:  "Plugin ID is required",
+                        Severity: "error",
+                })
+        }</span> else<span class="cov0" title="0"> if !isValidPluginID(manifest.ID) </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:    "id",
+                        Message:  "Plugin ID must be lowercase alphanumeric with hyphens (e.g., 'rust-language')",
+                        Severity: "error",
+                })
+        }</span>
+
+        <span class="cov0" title="0">if manifest.Name == "" </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:    "name",
+                        Message:  "Plugin name is required",
+                        Severity: "error",
+                })
+        }</span>
+
+        <span class="cov0" title="0">if manifest.Version == "" </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:    "version",
+                        Message:  "Version is required",
+                        Severity: "error",
+                })
+        }</span> else<span class="cov0" title="0"> if !isValidSemver(manifest.Version) </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:    "version",
+                        Message:  "Version must be valid semantic version (e.g., '1.0.0')",
+                        Severity: "error",
+                })
+        }</span>
+
+        <span class="cov0" title="0">if manifest.APIVersion == "" </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:    "api_version",
+                        Message:  "API version is required",
+                        Severity: "error",
+                })
+        }</span>
+
+        <span class="cov0" title="0">if manifest.Author == "" </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:    "author",
+                        Message:  "Author is required",
+                        Severity: "warning",
+                })
+        }</span>
+
+        <span class="cov0" title="0">if manifest.License == "" </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:    "license",
+                        Message:  "License should be specified",
+                        Severity: "warning",
+                })
+        }</span>
+
+        // Validate plugin type
+        <span class="cov0" title="0">validTypes := map[PluginType]bool{
+                PluginTypeLanguage:  true,
+                PluginTypeValidator: true,
+                PluginTypeGenerator: true,
+                PluginTypeRunner:    true,
+                PluginTypeTransform: true,
+        }
+        if !validTypes[manifest.Type] </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:    "type",
+                        Message:  fmt.Sprintf("Invalid plugin type: %s", manifest.Type),
+                        Severity: "error",
+                })
+        }</span>
+
+        // Validate security level
+        <span class="cov0" title="0">validSecurityLevels := map[SecurityLevel]bool{
+                SecurityLevelOfficial:  true,
+                SecurityLevelVerified:  true,
+                SecurityLevelCommunity: true,
+        }
+        if !validSecurityLevels[manifest.SecurityLevel] </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:    "security_level",
+                        Message:  fmt.Sprintf("Invalid security level: %s", manifest.SecurityLevel),
+                        Severity: "error",
+                })
+        }</span>
+
+        // Validate permissions
+        <span class="cov0" title="0">for _, perm := range manifest.Permissions </span><span class="cov0" title="0">{
+                if !v.isAllowedPermission(perm) </span><span class="cov0" title="0">{
+                        errors = append(errors, ValidationError{
+                                Field:    "permissions",
+                                Message:  fmt.Sprintf("Unknown or dangerous permission: %s", perm),
+                                Severity: "error",
+                        })
+                }</span>
+        }
+
+        // Check for suspicious patterns in metadata
+        <span class="cov0" title="0">if manifest.Repository != "" &amp;&amp; !isValidURL(manifest.Repository) </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:    "repository",
+                        Message:  "Repository URL appears invalid",
+                        Severity: "warning",
+                })
+        }</span>
+
+        <span class="cov0" title="0">if manifest.Homepage != "" &amp;&amp; !isValidURL(manifest.Homepage) </span><span class="cov0" title="0">{
+                errors = append(errors, ValidationError{
+                        Field:    "homepage",
+                        Message:  "Homepage URL appears invalid",
+                        Severity: "warning",
+                })
+        }</span>
+
+        <span class="cov0" title="0">return errors</span>
+}
+
+// ScanForSecurityIssues performs comprehensive security scanning on plugin code
+func (v *Validator) ScanForSecurityIssues(ctx context.Context, pluginPath string) ([]SecurityIssue, error) <span class="cov0" title="0">{
+        startTime := time.Now()
+        var allIssues []SecurityIssue
+
+        v.logger.Infof("Starting security scan for plugin at %s", pluginPath)
+
+        // 1. Check for dangerous imports
+        importIssues, err := v.checkDangerousImports(pluginPath)
+        if err != nil </span><span class="cov0" title="0">{
+                v.logger.Warnf("Import check failed: %v", err)
+        }</span> else<span class="cov0" title="0"> {
+                allIssues = append(allIssues, importIssues...)
+        }</span>
+
+        // 2. Run gosec security scanner
+        <span class="cov0" title="0">if v.gosecPath != "" </span><span class="cov0" title="0">{
+                gosecIssues, err := v.runGosec(ctx, pluginPath)
+                if err != nil </span><span class="cov0" title="0">{
+                        v.logger.Warnf("Gosec scan failed: %v", err)
+                }</span> else<span class="cov0" title="0"> {
+                        allIssues = append(allIssues, gosecIssues...)
+                }</span>
+        } else<span class="cov0" title="0"> {
+                v.logger.Warn("Gosec not found, skipping static analysis")
+                allIssues = append(allIssues, SecurityIssue{
+                        Severity:    "warning",
+                        Category:    "scan-incomplete",
+                        Description: "Gosec security scanner not available, static analysis incomplete",
+                })
+        }</span>
+
+        // 3. Check for hardcoded secrets (basic pattern matching)
+        <span class="cov0" title="0">secretIssues, err := v.checkHardcodedSecrets(pluginPath)
+        if err != nil </span><span class="cov0" title="0">{
+                v.logger.Warnf("Secret check failed: %v", err)
+        }</span> else<span class="cov0" title="0"> {
+                allIssues = append(allIssues, secretIssues...)
+        }</span>
+
+        // 4. Check for suspicious file operations
+        <span class="cov0" title="0">fileOpIssues, err := v.checkSuspiciousFileOperations(pluginPath)
+        if err != nil </span><span class="cov0" title="0">{
+                v.logger.Warnf("File operation check failed: %v", err)
+        }</span> else<span class="cov0" title="0"> {
+                allIssues = append(allIssues, fileOpIssues...)
+        }</span>
+
+        <span class="cov0" title="0">v.logger.Infof("Security scan completed in %v, found %d issues", time.Since(startTime), len(allIssues))
+        return allIssues, nil</span>
+}
+
+// checkDangerousImports scans for potentially dangerous Go imports
+func (v *Validator) checkDangerousImports(pluginPath string) ([]SecurityIssue, error) <span class="cov0" title="0">{
+        var issues []SecurityIssue
+        foundImports := make(map[string][]string) // import -&gt; []files
+
+        err := filepath.Walk(pluginPath, func(path string, info os.FileInfo, err error) error </span><span class="cov0" title="0">{
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov0" title="0">if info.IsDir() || filepath.Ext(path) != ".go" </span><span class="cov0" title="0">{
+                        return nil
+                }</span>
+
+                <span class="cov0" title="0">content, err := os.ReadFile(path)
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov0" title="0">for _, dangerousImport := range v.dangerousImports </span><span class="cov0" title="0">{
+                        // Check for both quoted and unquoted imports
+                        patterns := []string{
+                                fmt.Sprintf(`import\s+"%s"`, dangerousImport),
+                                fmt.Sprintf(`import\s+\(\s*[^)]*"%s"[^)]*\)`, dangerousImport),
+                        }
+
+                        for _, pattern := range patterns </span><span class="cov0" title="0">{
+                                matched, _ := regexp.Match(pattern, content)
+                                if matched </span><span class="cov0" title="0">{
+                                        relPath, _ := filepath.Rel(pluginPath, path)
+                                        foundImports[dangerousImport] = append(foundImports[dangerousImport], relPath)
+                                }</span>
+                        }
+                }
+
+                <span class="cov0" title="0">return nil</span>
+        })
+
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to walk plugin directory: %w", err)
+        }</span>
+
+        // Generate issues for each dangerous import
+        <span class="cov0" title="0">for imp, files := range foundImports </span><span class="cov0" title="0">{
+                severity := "medium"
+                recommendation := fmt.Sprintf("Review usage of %s package for security implications", imp)
+
+                // Escalate severity for particularly dangerous imports
+                if imp == "unsafe" || imp == "syscall" </span><span class="cov0" title="0">{
+                        severity = "high"
+                        recommendation = fmt.Sprintf("Usage of %s requires careful security review. Ensure no unsafe operations are performed.", imp)
+                }</span> else<span class="cov0" title="0"> if imp == "os/exec" </span><span class="cov0" title="0">{
+                        severity = "high"
+                        recommendation = "Command execution via os/exec can be dangerous. Ensure input validation and no shell injection vulnerabilities."
+                }</span> else<span class="cov0" title="0"> if imp == "crypto/md5" || imp == "crypto/sha1" </span><span class="cov0" title="0">{
+                        severity = "medium"
+                        recommendation = fmt.Sprintf("%s is cryptographically weak. Use SHA-256 or stronger algorithms.", imp)
+                }</span>
+
+                <span class="cov0" title="0">issues = append(issues, SecurityIssue{
+                        Severity:       severity,
+                        Category:       "dangerous-import",
+                        Description:    fmt.Sprintf("Plugin imports potentially dangerous package: %s (found in %d file(s))", imp, len(files)),
+                        File:           files[0], // Report first file
+                        Recommendation: recommendation,
+                })</span>
+        }
+
+        <span class="cov0" title="0">return issues, nil</span>
+}
+
+// runGosec executes the gosec security scanner on the plugin
+func (v *Validator) runGosec(ctx context.Context, pluginPath string) ([]SecurityIssue, error) <span class="cov0" title="0">{
+        if v.gosecPath == "" </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("gosec not available")
+        }</span>
+
+        // Create temporary file for gosec output
+        <span class="cov0" title="0">tmpFile, err := os.CreateTemp("", "gosec-*.json")
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to create temp file: %w", err)
+        }</span>
+        <span class="cov0" title="0">defer os.Remove(tmpFile.Name())
+        tmpFile.Close()
+
+        // Run gosec with JSON output
+        cmd := exec.CommandContext(ctx, v.gosecPath,
+                "-fmt=json",
+                "-out="+tmpFile.Name(),
+                "-no-fail", // Don't fail on findings
+                pluginPath+"/...",
+        )
+
+        var stderr bytes.Buffer
+        cmd.Stderr = &amp;stderr
+
+        if err := cmd.Run(); err != nil </span><span class="cov0" title="0">{
+                // Gosec returns non-zero on findings, which is expected
+                if exitErr, ok := err.(*exec.ExitError); ok </span><span class="cov0" title="0">{
+                        // Exit code 1 means findings were detected, which is OK
+                        if exitErr.ExitCode() != 1 </span><span class="cov0" title="0">{
+                                return nil, fmt.Errorf("gosec failed: %s", stderr.String())
+                        }</span>
+                }
+        }
+
+        // Parse gosec JSON output
+        <span class="cov0" title="0">content, err := os.ReadFile(tmpFile.Name())
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to read gosec output: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">var gosecReport struct {
+                Issues []struct {
+                        Severity   string `json:"severity"`
+                        Confidence string `json:"confidence"`
+                        RuleID     string `json:"rule_id"`
+                        Details    string `json:"details"`
+                        File       string `json:"file"`
+                        Line       string `json:"line"`
+                        Column     string `json:"column"`
+                        CWE        struct {
+                                ID string `json:"id"`
+                        } `json:"cwe"`
+                } `json:"Issues"`
+        }
+
+        if err := json.Unmarshal(content, &amp;gosecReport); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to parse gosec output: %w", err)
+        }</span>
+
+        // Convert gosec issues to SecurityIssue format
+        <span class="cov0" title="0">var issues []SecurityIssue
+        for _, gosecIssue := range gosecReport.Issues </span><span class="cov0" title="0">{
+                // Map gosec severity to our severity levels
+                severity := strings.ToLower(gosecIssue.Severity)
+                if severity == "high" &amp;&amp; gosecIssue.Confidence == "HIGH" </span><span class="cov0" title="0">{
+                        severity = "critical"
+                }</span>
+
+                <span class="cov0" title="0">relPath, _ := filepath.Rel(pluginPath, gosecIssue.File)
+
+                issues = append(issues, SecurityIssue{
+                        Severity:    severity,
+                        Category:    gosecIssue.RuleID,
+                        Description: gosecIssue.Details,
+                        File:        relPath,
+                        Line:        parseLineNumber(gosecIssue.Line),
+                        CWEID:       gosecIssue.CWE.ID,
+                })</span>
+        }
+
+        <span class="cov0" title="0">return issues, nil</span>
+}
+
+// checkHardcodedSecrets looks for hardcoded API keys, tokens, passwords
+func (v *Validator) checkHardcodedSecrets(pluginPath string) ([]SecurityIssue, error) <span class="cov0" title="0">{
+        var issues []SecurityIssue
+
+        // Common secret patterns
+        secretPatterns := []struct {
+                name    string
+                pattern *regexp.Regexp
+        }{
+                {"API Key", regexp.MustCompile(`(?i)(api[_-]?key|apikey)\s*[:=]\s*["']([a-zA-Z0-9]{20,})["']`)},
+                {"Password", regexp.MustCompile(`(?i)(password|passwd|pwd)\s*[:=]\s*["']([^"']{8,})["']`)},
+                {"Token", regexp.MustCompile(`(?i)(token|auth[_-]?token)\s*[:=]\s*["']([a-zA-Z0-9]{20,})["']`)},
+                {"AWS Key", regexp.MustCompile(`AKIA[0-9A-Z]{16}`)},
+                {"Private Key", regexp.MustCompile(`-----BEGIN (RSA |EC )?PRIVATE KEY-----`)},
+        }
+
+        err := filepath.Walk(pluginPath, func(path string, info os.FileInfo, err error) error </span><span class="cov0" title="0">{
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov0" title="0">if info.IsDir() || filepath.Ext(path) != ".go" </span><span class="cov0" title="0">{
+                        return nil
+                }</span>
+
+                <span class="cov0" title="0">content, err := os.ReadFile(path)
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov0" title="0">for _, secret := range secretPatterns </span><span class="cov0" title="0">{
+                        matches := secret.pattern.FindAll(content, -1)
+                        if len(matches) &gt; 0 </span><span class="cov0" title="0">{
+                                relPath, _ := filepath.Rel(pluginPath, path)
+                                issues = append(issues, SecurityIssue{
+                                        Severity:       "high",
+                                        Category:       "hardcoded-secret",
+                                        Description:    fmt.Sprintf("Potential hardcoded %s detected", secret.name),
+                                        File:           relPath,
+                                        Recommendation: "Remove hardcoded secrets. Use environment variables or secure configuration.",
+                                        CWEID:          "CWE-798",
+                                })
+                        }</span>
+                }
+
+                <span class="cov0" title="0">return nil</span>
+        })
+
+        <span class="cov0" title="0">return issues, err</span>
+}
+
+// checkSuspiciousFileOperations looks for risky file operations
+func (v *Validator) checkSuspiciousFileOperations(pluginPath string) ([]SecurityIssue, error) <span class="cov0" title="0">{
+        var issues []SecurityIssue
+
+        suspiciousPatterns := []struct {
+                name        string
+                pattern     *regexp.Regexp
+                severity    string
+                description string
+        }{
+                {
+                        "Path Traversal",
+                        regexp.MustCompile(`\.\./`),
+                        "medium",
+                        "Potential path traversal vulnerability detected",
+                },
+                {
+                        "Dangerous File Write",
+                        regexp.MustCompile(`(?i)os\.WriteFile.*(/etc/|/usr/|/sys/|C:\\Windows)`),
+                        "high",
+                        "Writing to system directories detected",
+                },
+                {
+                        "Shell Command",
+                        regexp.MustCompile(`(?i)(sh\s+-c|bash\s+-c|cmd\.exe)`),
+                        "high",
+                        "Shell command execution detected - potential command injection",
+                },
+        }
+
+        err := filepath.Walk(pluginPath, func(path string, info os.FileInfo, err error) error </span><span class="cov0" title="0">{
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov0" title="0">if info.IsDir() || filepath.Ext(path) != ".go" </span><span class="cov0" title="0">{
+                        return nil
+                }</span>
+
+                <span class="cov0" title="0">content, err := os.ReadFile(path)
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov0" title="0">for _, pattern := range suspiciousPatterns </span><span class="cov0" title="0">{
+                        if pattern.pattern.Match(content) </span><span class="cov0" title="0">{
+                                relPath, _ := filepath.Rel(pluginPath, path)
+                                issues = append(issues, SecurityIssue{
+                                        Severity:       pattern.severity,
+                                        Category:       "suspicious-file-operation",
+                                        Description:    pattern.description,
+                                        File:           relPath,
+                                        Recommendation: "Review file operations for security implications",
+                                })
+                        }</span>
+                }
+
+                <span class="cov0" title="0">return nil</span>
+        })
+
+        <span class="cov0" title="0">return issues, err</span>
+}
+
+// isAllowedPermission checks if a permission is in the allowed list
+func (v *Validator) isAllowedPermission(permission string) bool <span class="cov0" title="0">{
+        return v.allowedPermissions[permission]
+}</span>
+
+// Helper functions
+
+func isValidPluginID(id string) bool <span class="cov0" title="0">{
+        // Plugin IDs must be lowercase alphanumeric with hyphens
+        // Single character IDs are allowed, or multi-character IDs that start and end with alphanumeric
+        matched, _ := regexp.MatchString(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`, id)
+        return matched
+}</span>
+
+func isValidURL(url string) bool <span class="cov0" title="0">{
+        // Support http(s), ftp schemes
+        // Allow hostnames with or without TLD, IP addresses (IPv4/IPv6), and optional credentials
+        // Pattern breakdown:
+        // - Scheme: https?|ftp
+        // - Optional credentials: ([^@]+@)?
+        // - Host: hostname, IPv4, or IPv6 in brackets
+        // - Optional port, path, query, fragment
+        matched, _ := regexp.MatchString(`^(https?|ftp)://([^@/]+@)?([a-zA-Z0-9.-]+|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[[0-9a-fA-F:]+\])`, url)
+        return matched
+}</span>
+
+func parseLineNumber(lineStr string) int <span class="cov0" title="0">{
+        var line int
+        fmt.Sscanf(lineStr, "%d", &amp;line)
+        return line
+}</span>
+
+func findGosecPath() string <span class="cov0" title="0">{
+        // Try to find gosec in PATH
+        path, err := exec.LookPath("gosec")
+        if err == nil </span><span class="cov0" title="0">{
+                return path
+        }</span>
+
+        // Try common installation locations
+        <span class="cov0" title="0">commonPaths := []string{
+                "/usr/local/bin/gosec",
+                "/usr/bin/gosec",
+                os.Getenv("GOPATH") + "/bin/gosec",
+                os.Getenv("HOME") + "/go/bin/gosec",
+        }
+
+        for _, p := range commonPaths </span><span class="cov0" title="0">{
+                if _, err := os.Stat(p); err == nil </span><span class="cov0" title="0">{
+                        return p
+                }</span>
+        }
+
+        <span class="cov0" title="0">return ""</span> // Not found
+}
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package plugins
+
+import (
+        "context"
+        "database/sql"
+        "fmt"
+        "io"
+        "net/http"
+        "os"
+        "path/filepath"
+        "time"
+
+        "github.com/sirupsen/logrus"
+)
+
+// Verifier handles the plugin verification workflow
+type Verifier struct {
+        db          *sql.DB
+        validator   *Validator
+        logger      *logrus.Logger
+        downloadDir string // Directory for temporary plugin downloads
+}
+
+// NewVerifier creates a new plugin verifier
+func NewVerifier(db *sql.DB, logger *logrus.Logger) *Verifier <span class="cov0" title="0">{
+        downloadDir := os.TempDir() + "/spoke-plugin-verification"
+        os.MkdirAll(downloadDir, 0755)
+
+        return &amp;Verifier{
+                db:          db,
+                validator:   NewValidator(logger),
+                logger:      logger,
+                downloadDir: downloadDir,
+        }
+}</span>
+
+// VerificationRequest contains information needed to start verification
+type VerificationRequest struct {
+        PluginID     string
+        Version      string
+        SubmittedBy  string
+        ManifestURL  string
+        DownloadURL  string
+        AutoApprove  bool // If true, automatically approve if no critical issues
+}
+
+// VerificationResult contains the complete verification outcome
+type VerificationResult struct {
+        VerificationID   int64
+        PluginID         string
+        Version          string
+        Status           string // pending, in_progress, approved, rejected, review_required
+        SecurityLevel    string // verified (if approved)
+        ManifestErrors   []ValidationError
+        SecurityIssues   []SecurityIssue
+        PermissionIssues []ValidationError
+        Reason           string
+        StartedAt        time.Time
+        CompletedAt      time.Time
+        ProcessingTime   time.Duration
+}
+
+// SubmitForVerification creates a new verification request
+func (v *Verifier) SubmitForVerification(ctx context.Context, req *VerificationRequest) (int64, error) <span class="cov0" title="0">{
+        v.logger.Infof("Submitting plugin %s v%s for verification", req.PluginID, req.Version)
+
+        query := `
+                INSERT INTO plugin_verifications (plugin_id, version, status, submitted_by, submitted_at)
+                VALUES ($1, $2, 'pending', $3, CURRENT_TIMESTAMP)
+        `
+
+        result, err := v.db.ExecContext(ctx, query, req.PluginID, req.Version, req.SubmittedBy)
+        if err != nil </span><span class="cov0" title="0">{
+                return 0, fmt.Errorf("failed to create verification request: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">verificationID, err := result.LastInsertId()
+        if err != nil </span><span class="cov0" title="0">{
+                return 0, fmt.Errorf("failed to get verification ID: %w", err)
+        }</span>
+
+        // Record audit entry
+        <span class="cov0" title="0">v.recordAuditLog(ctx, verificationID, "submitted", req.SubmittedBy, "Verification request submitted")
+
+        v.logger.Infof("Created verification request #%d for %s v%s", verificationID, req.PluginID, req.Version)
+        return verificationID, nil</span>
+}
+
+// RunVerification performs the complete verification process
+func (v *Verifier) RunVerification(ctx context.Context, verificationID int64, downloadURL string) (*VerificationResult, error) <span class="cov0" title="0">{
+        startTime := time.Now()
+        v.logger.Infof("Starting verification #%d", verificationID)
+
+        // Update status to in_progress
+        if err := v.updateVerificationStatus(ctx, verificationID, "in_progress"); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        // Get verification details
+        <span class="cov0" title="0">var pluginID, version string
+        err := v.db.QueryRowContext(ctx,
+                "SELECT plugin_id, version FROM plugin_verifications WHERE id = $1",
+                verificationID).Scan(&amp;pluginID, &amp;version)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get verification details: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">result := &amp;VerificationResult{
+                VerificationID: verificationID,
+                PluginID:       pluginID,
+                Version:        version,
+                Status:         "in_progress",
+                StartedAt:      startTime,
+        }
+
+        // Step 1: Download plugin
+        pluginPath, cleanup, err := v.downloadPlugin(ctx, pluginID, version, downloadURL)
+        if cleanup != nil </span><span class="cov0" title="0">{
+                defer cleanup()
+        }</span>
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                result.Status = "rejected"
+                result.Reason = fmt.Sprintf("Failed to download plugin: %v", err)
+                v.completeVerification(ctx, result)
+                return result, err
+        }</span>
+
+        // Record scan start
+        <span class="cov0" title="0">scanID, _ := v.recordScanStart(ctx, pluginID, version, "full-validation")
+
+        // Step 2: Load and validate manifest
+        manifestPath := filepath.Join(pluginPath, "plugin.yaml")
+        manifest, err := LoadManifest(manifestPath)
+        if err != nil </span><span class="cov0" title="0">{
+                result.Status = "rejected"
+                result.Reason = fmt.Sprintf("Invalid manifest: %v", err)
+                v.recordScanComplete(ctx, scanID, "failed", 0, 0, err.Error())
+                v.completeVerification(ctx, result)
+                return result, err
+        }</span>
+
+        // Validate manifest
+        <span class="cov0" title="0">manifestErrors := v.validator.ValidateManifest(manifest)
+        result.ManifestErrors = manifestErrors
+
+        // Store manifest errors
+        for _, err := range manifestErrors </span><span class="cov0" title="0">{
+                v.storeValidationError(ctx, verificationID, err)
+        }</span>
+
+        // Step 3: Security scan
+        <span class="cov0" title="0">securityIssues, err := v.validator.ScanForSecurityIssues(ctx, pluginPath)
+        if err != nil </span><span class="cov0" title="0">{
+                v.logger.Warnf("Security scan failed: %v", err)
+                // Continue with partial results
+        }</span>
+        <span class="cov0" title="0">result.SecurityIssues = securityIssues
+
+        // Store security issues
+        for _, issue := range securityIssues </span><span class="cov0" title="0">{
+                v.storeSecurityIssue(ctx, verificationID, issue)
+        }</span>
+
+        // Step 4: Determine verification outcome
+        <span class="cov0" title="0">criticalIssues := 0
+        highIssues := 0
+        for _, issue := range securityIssues </span><span class="cov0" title="0">{
+                switch issue.Severity </span>{
+                case "critical":<span class="cov0" title="0">
+                        criticalIssues++</span>
+                case "high":<span class="cov0" title="0">
+                        highIssues++</span>
+                }
+        }
+
+        <span class="cov0" title="0">criticalManifestErrors := 0
+        for _, err := range manifestErrors </span><span class="cov0" title="0">{
+                if err.Severity == "error" </span><span class="cov0" title="0">{
+                        criticalManifestErrors++
+                }</span>
+        }
+
+        // Record scan completion
+        <span class="cov0" title="0">v.recordScanComplete(ctx, scanID, "completed", len(securityIssues), criticalIssues, "")
+
+        // Decision logic
+        if criticalManifestErrors &gt; 0 </span><span class="cov0" title="0">{
+                result.Status = "rejected"
+                result.Reason = fmt.Sprintf("Found %d critical manifest errors", criticalManifestErrors)
+        }</span> else<span class="cov0" title="0"> if criticalIssues &gt; 0 </span><span class="cov0" title="0">{
+                result.Status = "rejected"
+                result.Reason = fmt.Sprintf("Found %d critical security issues", criticalIssues)
+        }</span> else<span class="cov0" title="0"> if highIssues &gt; 3 || len(securityIssues) &gt; 10 </span><span class="cov0" title="0">{
+                result.Status = "review_required"
+                result.Reason = fmt.Sprintf("Found %d high-severity and %d total security issues requiring manual review", highIssues, len(securityIssues))
+        }</span> else<span class="cov0" title="0"> {
+                result.Status = "approved"
+                result.SecurityLevel = "verified"
+        }</span>
+
+        <span class="cov0" title="0">result.CompletedAt = time.Now()
+        result.ProcessingTime = result.CompletedAt.Sub(result.StartedAt)
+
+        // Step 5: Update database
+        if err := v.completeVerification(ctx, result); err != nil </span><span class="cov0" title="0">{
+                return result, err
+        }</span>
+
+        <span class="cov0" title="0">v.logger.Infof("Verification #%d completed with status: %s (took %v)", verificationID, result.Status, result.ProcessingTime)
+        return result, nil</span>
+}
+
+// ApproveVerification manually approves a verification (for manual review)
+func (v *Verifier) ApproveVerification(ctx context.Context, verificationID int64, approvedBy, reason string) error <span class="cov0" title="0">{
+        v.logger.Infof("Manually approving verification #%d by %s", verificationID, approvedBy)
+
+        query := `
+                UPDATE plugin_verifications
+                SET status = 'approved',
+                    security_level = 'verified',
+                    verified_by = $1,
+                    completed_at = CURRENT_TIMESTAMP,
+                    reason = $2
+                WHERE id = $3
+        `
+
+        _, err := v.db.ExecContext(ctx, query, approvedBy, reason, verificationID)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to approve verification: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">v.recordAuditLog(ctx, verificationID, "approved", approvedBy, reason)
+        return nil</span>
+}
+
+// RejectVerification manually rejects a verification
+func (v *Verifier) RejectVerification(ctx context.Context, verificationID int64, rejectedBy, reason string) error <span class="cov0" title="0">{
+        v.logger.Infof("Rejecting verification #%d by %s", verificationID, rejectedBy)
+
+        query := `
+                UPDATE plugin_verifications
+                SET status = 'rejected',
+                    verified_by = $1,
+                    completed_at = CURRENT_TIMESTAMP,
+                    reason = $2
+                WHERE id = $3
+        `
+
+        _, err := v.db.ExecContext(ctx, query, rejectedBy, reason, verificationID)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to reject verification: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">v.recordAuditLog(ctx, verificationID, "rejected", rejectedBy, reason)
+        return nil</span>
+}
+
+// GetVerificationStatus retrieves the current status of a verification
+func (v *Verifier) GetVerificationStatus(ctx context.Context, verificationID int64) (*VerificationResult, error) <span class="cov0" title="0">{
+        result := &amp;VerificationResult{
+                VerificationID: verificationID,
+        }
+
+        query := `
+                SELECT plugin_id, version, status, security_level, reason,
+                       submitted_at, started_at, completed_at
+                FROM plugin_verifications
+                WHERE id = $1
+        `
+
+        var startedAt, completedAt sql.NullTime
+        var securityLevel sql.NullString
+        var reason sql.NullString
+
+        err := v.db.QueryRowContext(ctx, query, verificationID).Scan(
+                &amp;result.PluginID,
+                &amp;result.Version,
+                &amp;result.Status,
+                &amp;securityLevel,
+                &amp;reason,
+                &amp;result.StartedAt,
+                &amp;startedAt,
+                &amp;completedAt,
+        )
+
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get verification status: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">if securityLevel.Valid </span><span class="cov0" title="0">{
+                result.SecurityLevel = securityLevel.String
+        }</span>
+        <span class="cov0" title="0">if reason.Valid </span><span class="cov0" title="0">{
+                result.Reason = reason.String
+        }</span>
+        <span class="cov0" title="0">if startedAt.Valid </span><span class="cov0" title="0">{
+                result.StartedAt = startedAt.Time
+        }</span>
+        <span class="cov0" title="0">if completedAt.Valid </span><span class="cov0" title="0">{
+                result.CompletedAt = completedAt.Time
+                result.ProcessingTime = result.CompletedAt.Sub(result.StartedAt)
+        }</span>
+
+        // Load validation errors
+        <span class="cov0" title="0">result.ManifestErrors, _ = v.loadValidationErrors(ctx, verificationID)
+
+        // Load security issues
+        result.SecurityIssues, _ = v.loadSecurityIssues(ctx, verificationID)
+
+        return result, nil</span>
+}
+
+// ListPendingVerifications returns all verifications awaiting review
+func (v *Verifier) ListPendingVerifications(ctx context.Context, limit int) ([]*VerificationResult, error) <span class="cov0" title="0">{
+        query := `
+                SELECT id, plugin_id, version, status, submitted_at
+                FROM plugin_verifications
+                WHERE status IN ('pending', 'review_required')
+                ORDER BY submitted_at ASC
+                LIMIT $1
+        `
+
+        rows, err := v.db.QueryContext(ctx, query, limit)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to list pending verifications: %w", err)
+        }</span>
+        <span class="cov0" title="0">defer rows.Close()
+
+        var results []*VerificationResult
+        for rows.Next() </span><span class="cov0" title="0">{
+                result := &amp;VerificationResult{}
+                err := rows.Scan(&amp;result.VerificationID, &amp;result.PluginID, &amp;result.Version, &amp;result.Status, &amp;result.StartedAt)
+                if err != nil </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+                <span class="cov0" title="0">results = append(results, result)</span>
+        }
+
+        <span class="cov0" title="0">return results, nil</span>
+}
+
+// Helper methods
+
+func (v *Verifier) downloadPlugin(ctx context.Context, pluginID, version, downloadURL string) (string, func(), error) <span class="cov0" title="0">{
+        // Create temporary directory for this plugin
+        pluginDir := filepath.Join(v.downloadDir, fmt.Sprintf("%s-%s-%d", pluginID, version, time.Now().Unix()))
+        if err := os.MkdirAll(pluginDir, 0755); err != nil </span><span class="cov0" title="0">{
+                return "", nil, fmt.Errorf("failed to create plugin directory: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">cleanup := func() </span><span class="cov0" title="0">{
+                os.RemoveAll(pluginDir)
+        }</span>
+
+        // Download plugin archive
+        <span class="cov0" title="0">archivePath := filepath.Join(pluginDir, "plugin.tar.gz")
+        if err := v.downloadFile(ctx, downloadURL, archivePath); err != nil </span><span class="cov0" title="0">{
+                return "", cleanup, fmt.Errorf("failed to download plugin: %w", err)
+        }</span>
+
+        // Extract archive
+        <span class="cov0" title="0">extractDir := filepath.Join(pluginDir, "extracted")
+        if err := extractTarGz(archivePath, extractDir); err != nil </span><span class="cov0" title="0">{
+                return "", cleanup, fmt.Errorf("failed to extract plugin: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return extractDir, cleanup, nil</span>
+}
+
+func (v *Verifier) downloadFile(ctx context.Context, url, destPath string) error <span class="cov0" title="0">{
+        req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov0" title="0">resp, err := http.DefaultClient.Do(req)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov0" title="0">defer resp.Body.Close()
+
+        if resp.StatusCode != http.StatusOK </span><span class="cov0" title="0">{
+                return fmt.Errorf("download failed with status: %s", resp.Status)
+        }</span>
+
+        <span class="cov0" title="0">out, err := os.Create(destPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov0" title="0">defer out.Close()
+
+        _, err = io.Copy(out, resp.Body)
+        return err</span>
+}
+
+func (v *Verifier) updateVerificationStatus(ctx context.Context, verificationID int64, status string) error <span class="cov0" title="0">{
+        var query string
+        if status == "in_progress" </span><span class="cov0" title="0">{
+                query = `UPDATE plugin_verifications SET status = $1, started_at = CURRENT_TIMESTAMP WHERE id = $2`
+        }</span> else<span class="cov0" title="0"> {
+                query = `UPDATE plugin_verifications SET status = $1 WHERE id = $2`
+        }</span>
+
+        <span class="cov0" title="0">_, err := v.db.ExecContext(ctx, query, status, verificationID)
+        return err</span>
+}
+
+func (v *Verifier) completeVerification(ctx context.Context, result *VerificationResult) error <span class="cov0" title="0">{
+        query := `
+                UPDATE plugin_verifications
+                SET status = $1,
+                    security_level = $2,
+                    completed_at = CURRENT_TIMESTAMP,
+                    reason = $3
+                WHERE id = $4
+        `
+
+        _, err := v.db.ExecContext(ctx, query,
+                result.Status,
+                sql.NullString{String: result.SecurityLevel, Valid: result.SecurityLevel != ""},
+                sql.NullString{String: result.Reason, Valid: result.Reason != ""},
+                result.VerificationID,
+        )
+
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to complete verification: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">v.recordAuditLog(ctx, result.VerificationID, "completed", "system",
+                fmt.Sprintf("Verification completed with status: %s", result.Status))
+
+        return nil</span>
+}
+
+func (v *Verifier) storeValidationError(ctx context.Context, verificationID int64, err ValidationError) error <span class="cov0" title="0">{
+        query := `
+                INSERT INTO plugin_validation_errors (verification_id, field, message, severity)
+                VALUES ($1, $2, $3, $4)
+        `
+        _, dbErr := v.db.ExecContext(ctx, query, verificationID, err.Field, err.Message, err.Severity)
+        return dbErr
+}</span>
+
+func (v *Verifier) storeSecurityIssue(ctx context.Context, verificationID int64, issue SecurityIssue) error <span class="cov0" title="0">{
+        query := `
+                INSERT INTO plugin_security_issues
+                (verification_id, severity, category, description, file, line_number, recommendation, cwe_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `
+        _, err := v.db.ExecContext(ctx, query,
+                verificationID,
+                issue.Severity,
+                issue.Category,
+                issue.Description,
+                sql.NullString{String: issue.File, Valid: issue.File != ""},
+                sql.NullInt64{Int64: int64(issue.Line), Valid: issue.Line &gt; 0},
+                sql.NullString{String: issue.Recommendation, Valid: issue.Recommendation != ""},
+                sql.NullString{String: issue.CWEID, Valid: issue.CWEID != ""},
+        )
+        return err
+}</span>
+
+func (v *Verifier) loadValidationErrors(ctx context.Context, verificationID int64) ([]ValidationError, error) <span class="cov0" title="0">{
+        query := `SELECT field, message, severity FROM plugin_validation_errors WHERE verification_id = $1`
+        rows, err := v.db.QueryContext(ctx, query, verificationID)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">defer rows.Close()
+
+        var errors []ValidationError
+        for rows.Next() </span><span class="cov0" title="0">{
+                var err ValidationError
+                if scanErr := rows.Scan(&amp;err.Field, &amp;err.Message, &amp;err.Severity); scanErr == nil </span><span class="cov0" title="0">{
+                        errors = append(errors, err)
+                }</span>
+        }
+        <span class="cov0" title="0">return errors, nil</span>
+}
+
+func (v *Verifier) loadSecurityIssues(ctx context.Context, verificationID int64) ([]SecurityIssue, error) <span class="cov0" title="0">{
+        query := `
+                SELECT severity, category, description, file, line_number, recommendation, cwe_id
+                FROM plugin_security_issues
+                WHERE verification_id = $1
+        `
+        rows, err := v.db.QueryContext(ctx, query, verificationID)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">defer rows.Close()
+
+        var issues []SecurityIssue
+        for rows.Next() </span><span class="cov0" title="0">{
+                var issue SecurityIssue
+                var file, recommendation, cweID sql.NullString
+                var lineNumber sql.NullInt64
+
+                err := rows.Scan(&amp;issue.Severity, &amp;issue.Category, &amp;issue.Description,
+                        &amp;file, &amp;lineNumber, &amp;recommendation, &amp;cweID)
+                if err != nil </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">if file.Valid </span><span class="cov0" title="0">{
+                        issue.File = file.String
+                }</span>
+                <span class="cov0" title="0">if lineNumber.Valid </span><span class="cov0" title="0">{
+                        issue.Line = int(lineNumber.Int64)
+                }</span>
+                <span class="cov0" title="0">if recommendation.Valid </span><span class="cov0" title="0">{
+                        issue.Recommendation = recommendation.String
+                }</span>
+                <span class="cov0" title="0">if cweID.Valid </span><span class="cov0" title="0">{
+                        issue.CWEID = cweID.String
+                }</span>
+
+                <span class="cov0" title="0">issues = append(issues, issue)</span>
+        }
+        <span class="cov0" title="0">return issues, nil</span>
+}
+
+func (v *Verifier) recordAuditLog(ctx context.Context, verificationID int64, action, actor, details string) <span class="cov0" title="0">{
+        query := `
+                INSERT INTO plugin_verification_audit (verification_id, action, actor, details)
+                VALUES ($1, $2, $3, $4)
+        `
+        v.db.ExecContext(ctx, query, verificationID, action, actor, details)
+}</span>
+
+func (v *Verifier) recordScanStart(ctx context.Context, pluginID, version, scanType string) (int64, error) <span class="cov0" title="0">{
+        query := `
+                INSERT INTO plugin_scan_history (plugin_id, version, scan_type, status, started_at)
+                VALUES ($1, $2, $3, 'in_progress', CURRENT_TIMESTAMP)
+        `
+        result, err := v.db.ExecContext(ctx, query, pluginID, version, scanType)
+        if err != nil </span><span class="cov0" title="0">{
+                return 0, err
+        }</span>
+        <span class="cov0" title="0">return result.LastInsertId()</span>
+}
+
+func (v *Verifier) recordScanComplete(ctx context.Context, scanID int64, status string, issuesFound, criticalIssues int, errorMsg string) <span class="cov0" title="0">{
+        query := `
+                UPDATE plugin_scan_history
+                SET status = $1,
+                    issues_found = $2,
+                    critical_issues = $3,
+                    error_message = $4,
+                    completed_at = CURRENT_TIMESTAMP,
+                    scan_duration_ms = EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - started_at)) * 1000
+                WHERE id = $5
+        `
+        v.db.ExecContext(ctx, query, status, issuesFound, criticalIssues,
+                sql.NullString{String: errorMsg, Valid: errorMsg != ""}, scanID)
+}</span>
+
+// extractTarGz extracts a tar.gz archive (stub implementation)
+func extractTarGz(archivePath, destDir string) error <span class="cov0" title="0">{
+        // TODO: Implement tar.gz extraction
+        // For now, assume plugin is already in correct format
+        os.MkdirAll(destDir, 0755)
+        return nil
+}</span>
+
+// GetDB returns the underlying database connection (for API handlers)
+func (v *Verifier) GetDB() *sql.DB <span class="cov0" title="0">{
+        return v.db
+}</span>
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
