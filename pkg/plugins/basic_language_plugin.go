@@ -165,7 +165,7 @@ func (p *BasicLanguagePlugin) loadLanguageSpec() error {
 		Name:        p.manifest.Name,
 		DisplayName: p.manifest.Name,
 		Enabled:     true,
-		Stable:      p.manifest.SecurityLevel == SecurityLevelOfficial || p.manifest.SecurityLevel == SecurityLevelVerified,
+		Stable:      true, // Default to stable for basic plugins
 		Description: p.manifest.Description,
 	}
 

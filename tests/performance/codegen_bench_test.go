@@ -4,8 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/platinummonkey/spoke/pkg/codegen"
-	"github.com/platinummonkey/spoke/pkg/codegen/orchestrator"
+github.com/platinummonkey/spoke/pkg/codegen
 )
 
 // BenchmarkCompileSingleLanguage benchmarks single language compilation
@@ -27,15 +26,10 @@ service BenchService {
 }
 `
 
-	config := orchestrator.DefaultConfig()
+	config := codegen.DefaultConfig()
 	config.EnableCache = false // Disable cache for benchmarking
-	orch, err := orchestrator.NewOrchestrator(config)
-	if err != nil {
-		b.Fatalf("Failed to create orchestrator: %v", err)
-	}
-	defer orch.Close()
-
-	req := &orchestrator.CompileRequest{
+	orch, err := 
+	req := &codegen.GenerateRequest{
 		ModuleName: "bench",
 		Version:    "v1.0.0",
 		Language:   "go",
@@ -52,7 +46,7 @@ service BenchService {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := orch.CompileSingle(ctx, req)
+		_, err := codegen.GenerateCode(ctx, req, config)
 		if err != nil {
 			b.Fatalf("Compilation failed: %v", err)
 		}
@@ -70,15 +64,10 @@ message CacheMessage {
 }
 `
 
-	config := orchestrator.DefaultConfig()
+	config := codegen.DefaultConfig()
 	config.EnableCache = true
-	orch, err := orchestrator.NewOrchestrator(config)
-	if err != nil {
-		b.Fatalf("Failed to create orchestrator: %v", err)
-	}
-	defer orch.Close()
-
-	req := &orchestrator.CompileRequest{
+	orch, err := 
+	req := &codegen.GenerateRequest{
 		ModuleName: "cache",
 		Version:    "v1.0.0",
 		Language:   "go",
@@ -93,14 +82,14 @@ message CacheMessage {
 	ctx := context.Background()
 
 	// Prime the cache
-	_, err = orch.CompileSingle(ctx, req)
+	_, err = codegen.GenerateCode(ctx, req, config)
 	if err != nil {
 		b.Fatalf("Failed to prime cache: %v", err)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		result, err := orch.CompileSingle(ctx, req)
+		result, err := codegen.GenerateCode(ctx, req, config)
 		if err != nil {
 			b.Fatalf("Compilation failed: %v", err)
 		}
@@ -122,16 +111,11 @@ message ParallelMessage {
 }
 `
 
-	config := orchestrator.DefaultConfig()
+	config := codegen.DefaultConfig()
 	config.EnableCache = false
 	config.MaxParallelWorkers = 5
-	orch, err := orchestrator.NewOrchestrator(config)
-	if err != nil {
-		b.Fatalf("Failed to create orchestrator: %v", err)
-	}
-	defer orch.Close()
-
-	req := &orchestrator.CompileRequest{
+	orch, err := 
+	req := &codegen.GenerateRequest{
 		ModuleName: "parallel",
 		Version:    "v1.0.0",
 		ProtoFiles: []codegen.ProtoFile{
@@ -147,7 +131,7 @@ message ParallelMessage {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := orch.CompileAll(ctx, req, languages)
+		_, err := codegen.GenerateCodeParallel(ctx, req, languages, config)
 		if err != nil {
 			// Partial failures OK for benchmarking
 			b.Logf("Warning: %v", err)

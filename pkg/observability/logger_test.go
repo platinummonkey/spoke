@@ -10,6 +10,41 @@ import (
 	"testing"
 )
 
+// slogEntry represents slog's JSON output format
+type slogEntry struct {
+	Time    string                 `json:"time"`
+	Level   string                 `json:"level"`
+	Message string                 `json:"msg"`
+	Fields  map[string]interface{} `json:"-"`
+}
+
+// UnmarshalJSON custom unmarshaler to capture all fields
+func (e *slogEntry) UnmarshalJSON(data []byte) error {
+	type Alias slogEntry
+	aux := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(e),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// Unmarshal all fields
+	var allFields map[string]interface{}
+	if err := json.Unmarshal(data, &allFields); err != nil {
+		return err
+	}
+
+	e.Fields = make(map[string]interface{})
+	for k, v := range allFields {
+		if k != "time" && k != "level" && k != "msg" {
+			e.Fields[k] = v
+		}
+	}
+	return nil
+}
+
 func TestLogger_Levels(t *testing.T) {
 	var buf bytes.Buffer
 	logger := NewLogger(InfoLevel, &buf)
@@ -29,7 +64,7 @@ func TestLogger_Levels(t *testing.T) {
 			t.Error("Info message should be logged at Info level")
 		}
 
-		var entry LogEntry
+		var entry slogEntry
 		if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
 			t.Fatalf("Failed to unmarshal log entry: %v", err)
 		}
@@ -65,7 +100,7 @@ func TestLogger_WithField(t *testing.T) {
 
 	logger.WithField("key", "value").Info("message")
 
-	var entry LogEntry
+	var entry slogEntry
 	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
 		t.Fatalf("Failed to unmarshal log entry: %v", err)
 	}
@@ -85,7 +120,7 @@ func TestLogger_WithFields(t *testing.T) {
 	}
 	logger.WithFields(fields).Info("message")
 
-	var entry LogEntry
+	var entry slogEntry
 	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
 		t.Fatalf("Failed to unmarshal log entry: %v", err)
 	}
@@ -105,7 +140,7 @@ func TestLogger_WithError(t *testing.T) {
 	err := strings.NewReader("test error").UnreadByte()
 	logger.WithError(err).Error("something went wrong")
 
-	var entry LogEntry
+	var entry slogEntry
 	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
 		t.Fatalf("Failed to unmarshal log entry: %v", err)
 	}
@@ -124,7 +159,7 @@ func TestLogger_Formatters(t *testing.T) {
 		debugLogger := NewLogger(DebugLevel, &buf)
 		debugLogger.Debugf("test %s %d", "string", 42)
 
-		var entry LogEntry
+		var entry slogEntry
 		if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
 			t.Fatalf("Failed to unmarshal log entry: %v", err)
 		}
@@ -138,7 +173,7 @@ func TestLogger_Formatters(t *testing.T) {
 		buf.Reset()
 		logger.Infof("test %d", 123)
 
-		var entry LogEntry
+		var entry slogEntry
 		if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
 			t.Fatalf("Failed to unmarshal log entry: %v", err)
 		}
@@ -152,7 +187,7 @@ func TestLogger_Formatters(t *testing.T) {
 		buf.Reset()
 		logger.Warnf("warning %s", "test")
 
-		var entry LogEntry
+		var entry slogEntry
 		if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
 			t.Fatalf("Failed to unmarshal log entry: %v", err)
 		}
@@ -166,7 +201,7 @@ func TestLogger_Formatters(t *testing.T) {
 		buf.Reset()
 		logger.Errorf("error %v", "test")
 
-		var entry LogEntry
+		var entry slogEntry
 		if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
 			t.Fatalf("Failed to unmarshal log entry: %v", err)
 		}
@@ -221,7 +256,7 @@ func TestContextHelpers(t *testing.T) {
 		contextLogger := FromContext(ctx)
 		contextLogger.Info("test message")
 
-		var entry LogEntry
+		var entry slogEntry
 		if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
 			t.Fatalf("Failed to unmarshal log entry: %v", err)
 		}

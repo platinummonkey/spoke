@@ -106,29 +106,16 @@ func (s *Server) downloadCompiled(w http.ResponseWriter, r *http.Request) {
 }
 
 // compileForLanguage routes compilation to v1 or v2 based on feature flag
-// DEPRECATED: Use compileVersion with v2 orchestrator instead
+// DEPRECATED: Use compileVersion with simplified code generator instead
 func (s *Server) compileForLanguage(version *Version, language Language) (CompilationInfo, error) {
-	codeGenVersion := s.getCodeGenVersion()
-
-	// Route to appropriate implementation
-	switch codeGenVersion {
-	case "v1":
-		// Use legacy direct protoc compilation
-		return s.compileV1(version, language)
-	case "v2":
-		// Use new orchestrator (default)
-		if s.orchestrator != nil {
-			return s.compileWithOrchestrator(version, language)
-		}
-		// Fallback to v1 if orchestrator unavailable
-		return s.compileV1(version, language)
-	default:
-		// Default to v2
-		if s.orchestrator != nil {
-			return s.compileWithOrchestrator(version, language)
-		}
-		return s.compileV1(version, language)
+	// Try new generator first, fallback to v1 if it fails
+	result, err := s.compileWithGenerator(version, language)
+	if err == nil {
+		return result, nil
 	}
+
+	// Fallback to v1 legacy compilation
+	return s.compileV1(version, language)
 }
 
 // compileV1 routes to legacy compilation methods

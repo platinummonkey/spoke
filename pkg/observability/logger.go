@@ -2,11 +2,10 @@ package observability
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
-	"time"
 )
 
 // LogLevel represents the severity of a log message
@@ -23,65 +22,63 @@ func (l LogLevel) String() string {
 	return []string{"DEBUG", "INFO", "WARN", "ERROR"}[l]
 }
 
-// Logger provides structured JSON logging
-type Logger struct {
-	level  LogLevel
-	output io.Writer
-	fields map[string]interface{}
+// toSlogLevel converts LogLevel to slog.Level
+func (l LogLevel) toSlogLevel() slog.Level {
+	switch l {
+	case DebugLevel:
+		return slog.LevelDebug
+	case InfoLevel:
+		return slog.LevelInfo
+	case WarnLevel:
+		return slog.LevelWarn
+	case ErrorLevel:
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
 }
 
-// NewLogger creates a new structured logger
+// Logger provides structured JSON logging using stdlib slog
+type Logger struct {
+	logger *slog.Logger
+	level  LogLevel
+}
+
+// NewLogger creates a new structured logger using slog
 func NewLogger(level LogLevel, output io.Writer) *Logger {
 	if output == nil {
 		output = os.Stdout
 	}
-	return &Logger{
-		level:  level,
-		output: output,
-		fields: make(map[string]interface{}),
-	}
-}
 
-// LogEntry represents a single log entry
-type LogEntry struct {
-	Timestamp   time.Time              `json:"timestamp"`
-	Level       string                 `json:"level"`
-	Message     string                 `json:"message"`
-	Fields      map[string]interface{} `json:"fields,omitempty"`
-	RequestID   string                 `json:"request_id,omitempty"`
-	UserID      string                 `json:"user_id,omitempty"`
-	Error       string                 `json:"error,omitempty"`
-	StackTrace  string                 `json:"stack_trace,omitempty"`
+	opts := &slog.HandlerOptions{
+		Level: level.toSlogLevel(),
+	}
+	handler := slog.NewJSONHandler(output, opts)
+
+	return &Logger{
+		logger: slog.New(handler),
+		level:  level,
+	}
 }
 
 // WithField adds a field to the logger context
 func (l *Logger) WithField(key string, value interface{}) *Logger {
-	newLogger := &Logger{
+	return &Logger{
+		logger: l.logger.With(key, value),
 		level:  l.level,
-		output: l.output,
-		fields: make(map[string]interface{}),
 	}
-	for k, v := range l.fields {
-		newLogger.fields[k] = v
-	}
-	newLogger.fields[key] = value
-	return newLogger
 }
 
 // WithFields adds multiple fields to the logger context
 func (l *Logger) WithFields(fields map[string]interface{}) *Logger {
-	newLogger := &Logger{
-		level:  l.level,
-		output: l.output,
-		fields: make(map[string]interface{}),
-	}
-	for k, v := range l.fields {
-		newLogger.fields[k] = v
-	}
+	args := make([]interface{}, 0, len(fields)*2)
 	for k, v := range fields {
-		newLogger.fields[k] = v
+		args = append(args, k, v)
 	}
-	return newLogger
+	return &Logger{
+		logger: l.logger.With(args...),
+		level:  l.level,
+	}
 }
 
 // WithError adds an error to the logger context
@@ -94,77 +91,42 @@ func (l *Logger) WithError(err error) *Logger {
 
 // Debug logs a debug message
 func (l *Logger) Debug(message string) {
-	l.log(DebugLevel, message, nil)
+	l.logger.Debug(message)
 }
 
 // Debugf logs a formatted debug message
 func (l *Logger) Debugf(format string, args ...interface{}) {
-	l.log(DebugLevel, fmt.Sprintf(format, args...), nil)
+	l.logger.Debug(fmt.Sprintf(format, args...))
 }
 
 // Info logs an info message
 func (l *Logger) Info(message string) {
-	l.log(InfoLevel, message, nil)
+	l.logger.Info(message)
 }
 
 // Infof logs a formatted info message
 func (l *Logger) Infof(format string, args ...interface{}) {
-	l.log(InfoLevel, fmt.Sprintf(format, args...), nil)
+	l.logger.Info(fmt.Sprintf(format, args...))
 }
 
 // Warn logs a warning message
 func (l *Logger) Warn(message string) {
-	l.log(WarnLevel, message, nil)
+	l.logger.Warn(message)
 }
 
 // Warnf logs a formatted warning message
 func (l *Logger) Warnf(format string, args ...interface{}) {
-	l.log(WarnLevel, fmt.Sprintf(format, args...), nil)
+	l.logger.Warn(fmt.Sprintf(format, args...))
 }
 
 // Error logs an error message
 func (l *Logger) Error(message string) {
-	l.log(ErrorLevel, message, nil)
+	l.logger.Error(message)
 }
 
 // Errorf logs a formatted error message
 func (l *Logger) Errorf(format string, args ...interface{}) {
-	l.log(ErrorLevel, fmt.Sprintf(format, args...), nil)
-}
-
-// log writes a log entry
-func (l *Logger) log(level LogLevel, message string, fields map[string]interface{}) {
-	if level < l.level {
-		return
-	}
-
-	entry := LogEntry{
-		Timestamp: time.Now().UTC(),
-		Level:     level.String(),
-		Message:   message,
-		Fields:    make(map[string]interface{}),
-	}
-
-	// Add logger context fields
-	for k, v := range l.fields {
-		entry.Fields[k] = v
-	}
-
-	// Add additional fields
-	for k, v := range fields {
-		entry.Fields[k] = v
-	}
-
-	// Marshal to JSON
-	data, err := json.Marshal(entry)
-	if err != nil {
-		// Fallback to simple output
-		fmt.Fprintf(l.output, "[%s] %s: %s\n", entry.Timestamp.Format(time.RFC3339), level.String(), message)
-		return
-	}
-
-	l.output.Write(data)
-	l.output.Write([]byte("\n"))
+	l.logger.Error(fmt.Sprintf(format, args...))
 }
 
 // contextKey is the type for context keys

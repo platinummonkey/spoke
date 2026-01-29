@@ -22,7 +22,7 @@ type DefaultOrchestrator struct {
 	languageRegistry *languages.Registry
 	dockerRunner     docker.Runner
 	packageRegistry  *packages.Registry
-	cache            cache.Cache
+	cache            *cache.MemoryCache
 	artifactsManager artifacts.Manager
 	jobs             map[string]*codegen.CompilationJob
 	jobsMu           sync.RWMutex
@@ -53,18 +53,11 @@ func NewOrchestrator(config *Config) (*DefaultOrchestrator, error) {
 	// For now, the registry is empty but ready to accept registrations
 
 	// Initialize cache (optional)
-	var cacheInstance cache.Cache
+	var cacheInstance *cache.MemoryCache
 	if config.EnableCache {
 		cacheConfig := &cache.Config{
-			EnableL1:    true,
-			L1MaxSize:   10 * 1024 * 1024, // 10MB
-			L1TTL:       5 * time.Minute,
-			EnableL2:    config.RedisAddr != "",
-			L2Addr:      config.RedisAddr,
-			L2Password:  config.RedisPassword,
-			L2DB:        config.RedisDB,
-			L2TTL:       24 * time.Hour,
-			L2KeyPrefix: "spoke:compiled:",
+			MaxSize: 100 * 1024 * 1024, // 100MB
+			TTL:     5 * time.Minute,
 		}
 		cacheInstance, err = cache.NewCache(cacheConfig)
 		if err != nil {

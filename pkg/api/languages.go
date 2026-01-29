@@ -10,11 +10,6 @@ import (
 
 // listLanguages returns a list of all supported languages
 func (s *Server) listLanguages(w http.ResponseWriter, r *http.Request) {
-	// Check if orchestrator is available
-	if s.orchestrator == nil {
-		http.Error(w, "Code generation orchestrator not available", http.StatusServiceUnavailable)
-		return
-	}
 
 	// Get language registry from orchestrator (we need to add a method for this)
 	// For now, return hardcoded list based on our language constants
@@ -223,12 +218,6 @@ func (s *Server) listLanguages(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getLanguage(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	languageID := vars["id"]
-
-	// Check if orchestrator is available
-	if s.orchestrator == nil {
-		http.Error(w, "Code generation orchestrator not available", http.StatusServiceUnavailable)
-		return
-	}
 
 	// Get all languages and find the requested one
 	// In a real implementation, we would query the language registry directly

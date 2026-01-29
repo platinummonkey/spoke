@@ -11,7 +11,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/platinummonkey/spoke/pkg/analytics"
 	"github.com/platinummonkey/spoke/pkg/async"
-	"github.com/platinummonkey/spoke/pkg/codegen/orchestrator"
 	"github.com/platinummonkey/spoke/pkg/httputil"
 	"github.com/platinummonkey/spoke/pkg/search"
 )
@@ -24,7 +23,6 @@ type Server struct {
 	authHandlers        *AuthHandlers
 	compatHandlers      *CompatibilityHandlers
 	validationHandlers  *ValidationHandlers
-	orchestrator        orchestrator.Orchestrator // Code generation orchestrator (v2)
 	searchIndexer       *search.Indexer            // Search indexer for proto entities
 	eventTracker        *analytics.EventTracker    // Analytics event tracker
 }
@@ -49,14 +47,6 @@ func NewServer(storage Storage, db *sql.DB) *Server {
 
 		// Initialize analytics event tracker
 		s.eventTracker = analytics.NewEventTracker(db)
-	}
-
-	// Initialize code generation orchestrator (v2)
-	// Note: Errors are non-fatal - falls back to v1 compilation if orchestrator fails
-	if orch, err := orchestrator.NewOrchestrator(nil); err == nil {
-		s.orchestrator = orch
-		// Register package generators
-		s.registerPackageGenerators()
 	}
 
 	s.setupRoutes()

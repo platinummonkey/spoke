@@ -102,52 +102,11 @@ func ValidateManifest(manifest *Manifest) []ValidationError {
 	}
 
 	// Validate plugin type
-	validTypes := map[PluginType]bool{
-		PluginTypeLanguage:  true,
-		PluginTypeValidator: true,
-		PluginTypeGenerator: true,
-		PluginTypeRunner:    true,
-		PluginTypeTransform: true,
-	}
-
-	if !validTypes[manifest.Type] {
+	if manifest.Type != PluginTypeLanguage {
 		errors = append(errors, ValidationError{
 			Field:   "type",
-			Message: fmt.Sprintf("Invalid plugin type: %s", manifest.Type),
+			Message: fmt.Sprintf("Invalid plugin type: %s (only 'language' is supported)", manifest.Type),
 		})
-	}
-
-	// Validate security level
-	validSecurityLevels := map[SecurityLevel]bool{
-		SecurityLevelOfficial:  true,
-		SecurityLevelVerified:  true,
-		SecurityLevelCommunity: true,
-	}
-
-	if manifest.SecurityLevel != "" && !validSecurityLevels[manifest.SecurityLevel] {
-		errors = append(errors, ValidationError{
-			Field:   "security_level",
-			Message: fmt.Sprintf("Invalid security level: %s", manifest.SecurityLevel),
-		})
-	}
-
-	// Validate permissions
-	allowedPermissions := map[string]bool{
-		"filesystem:read":  true,
-		"filesystem:write": true,
-		"network:read":     true,
-		"network:write":    true,
-		"process:exec":     true,
-		"env:read":         true,
-	}
-
-	for _, perm := range manifest.Permissions {
-		if !allowedPermissions[perm] {
-			errors = append(errors, ValidationError{
-				Field:   "permissions",
-				Message: fmt.Sprintf("Unknown permission: %s", perm),
-			})
-		}
 	}
 
 	return errors

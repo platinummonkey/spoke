@@ -150,17 +150,11 @@ func (l *Loader) loadPluginFromDir(ctx context.Context, pluginDir string) (Plugi
 	// Load plugin based on type
 	var plugin Plugin
 
-	switch manifest.Type {
-	case PluginTypeLanguage:
-		plugin, err = l.loadLanguagePlugin(ctx, pluginDir, manifest)
-	case PluginTypeValidator:
-		plugin, err = l.loadValidatorPlugin(ctx, pluginDir, manifest)
-	case PluginTypeRunner:
-		plugin, err = l.loadRunnerPlugin(ctx, pluginDir, manifest)
-	default:
+	if manifest.Type != PluginTypeLanguage {
 		return nil, fmt.Errorf("unsupported plugin type: %s", manifest.Type)
 	}
 
+	plugin, err = l.loadLanguagePlugin(ctx, pluginDir, manifest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load plugin: %w", err)
 	}
@@ -218,18 +212,6 @@ func (l *Loader) createBufAdapter(manifest *Manifest) (Plugin, error) {
 	}
 
 	return factory(manifest)
-}
-
-// loadValidatorPlugin loads a validator plugin
-func (l *Loader) loadValidatorPlugin(ctx context.Context, pluginDir string, manifest *Manifest) (Plugin, error) {
-	// For now, return error - will implement in later phases
-	return nil, fmt.Errorf("validator plugins not yet implemented")
-}
-
-// loadRunnerPlugin loads a runner plugin
-func (l *Loader) loadRunnerPlugin(ctx context.Context, pluginDir string, manifest *Manifest) (Plugin, error) {
-	// For now, return error - will implement in later phases
-	return nil, fmt.Errorf("runner plugins not yet implemented")
 }
 
 // GetDefaultPluginDirectories returns the default plugin search directories

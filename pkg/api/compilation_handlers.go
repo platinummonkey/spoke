@@ -4,44 +4,15 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/platinummonkey/spoke/pkg/codegen"
-	"github.com/platinummonkey/spoke/pkg/codegen/orchestrator"
 	"github.com/platinummonkey/spoke/pkg/httputil"
 )
 
-// registerPackageGenerators registers package generators with the orchestrator
-func (s *Server) registerPackageGenerators() {
-	if s.orchestrator == nil {
-		return
-	}
 
-	// Access the internal orchestrator to get the package registry
-	// Note: This is a bit of a hack - ideally orchestrator would expose a method
-	// For now, we'll register generators when creating the orchestrator itself
-	// This method is a placeholder for future enhancement
-
-	// TODO: Add method to orchestrator to register generators externally
-	// For now, generators are registered internally in the orchestrator
-}
-
-// getCodeGenVersion returns the code generation version to use based on environment variable
-func (s *Server) getCodeGenVersion() string {
-	version := os.Getenv("SPOKE_CODEGEN_VERSION")
-	if version == "" {
-		return "v2" // Default to v2 (new orchestrator)
-	}
-	return version
-}
-
-// compileWithOrchestrator compiles a version using the v2 orchestrator
-func (s *Server) compileWithOrchestrator(version *Version, language Language) (CompilationInfo, error) {
-	if s.orchestrator == nil {
-		return CompilationInfo{}, fmt.Errorf("orchestrator not available")
-	}
-
+// compileWithGenerator compiles a version using the simplified code generator
+func (s *Server) compileWithGenerator(version *Version, language Language) (CompilationInfo, error) {
 	// Convert Version to proto files
 	protoFiles := make([]codegen.ProtoFile, 0, len(version.Files))
 	for _, file := range version.Files {
@@ -82,25 +53,22 @@ func (s *Server) compileWithOrchestrator(version *Version, language Language) (C
 		})
 	}
 
-	// Create compilation request
-	req := &orchestrator.CompileRequest{
+	// Create generation request
+	req := &codegen.GenerateRequest{
 		ModuleName:   version.ModuleName,
 		Version:      version.Version,
-		VersionID:    0, // Not tracked in current system
 		ProtoFiles:   protoFiles,
 		Dependencies: dependencies,
 		Language:     string(language),
 		IncludeGRPC:  false, // TODO: Make this configurable
 		Options:      make(map[string]string),
-		StorageDir:   "", // Will be set by orchestrator
-		S3Bucket:     "", // TODO: Configure from server settings
 	}
 
-	// Compile using orchestrator
+	// Generate code
 	ctx := context.Background()
-	result, err := s.orchestrator.CompileSingle(ctx, req)
+	result, err := codegen.GenerateCode(ctx, req, nil)
 	if err != nil {
-		return CompilationInfo{}, fmt.Errorf("orchestrator compilation failed: %w", err)
+		return CompilationInfo{}, fmt.Errorf("code generation failed: %w", err)
 	}
 
 	// Convert result to CompilationInfo
@@ -136,14 +104,6 @@ func (s *Server) compileVersion(w http.ResponseWriter, r *http.Request) {
 	moduleName := vars["name"]
 	versionStr := vars["version"]
 
-	// Check if orchestrator is available
-	if s.orchestrator == nil {
-		httputil.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{
-			"error": "Code generation orchestrator not available",
-		})
-		return
-	}
-
 	// Parse request body
 	var req CompileRequest
 	if !httputil.ParseJSONOrError(w, r, &req) {
@@ -163,8 +123,8 @@ func (s *Server) compileVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert to orchestrator request
-	orchReq := &orchestrator.CompileRequest{
+	// Create generation request
+	genReq := &codegen.GenerateRequest{
 		ModuleName:  moduleName,
 		Version:     versionStr,
 		ProtoFiles:  s.convertFilesToProtoFiles(version.Files),
@@ -174,7 +134,7 @@ func (s *Server) compileVersion(w http.ResponseWriter, r *http.Request) {
 
 	// Compile all requested languages
 	ctx := r.Context()
-	results, err := s.orchestrator.CompileAll(ctx, orchReq, req.Languages)
+	results, err := codegen.GenerateCodeParallel(ctx, genReq, req.Languages, nil)
 	if err != nil {
 		// Partial success is OK - return what we have
 		httputil.WriteInternalError(w, fmt.Errorf("compilation partially failed: %w", err))
@@ -190,8 +150,6 @@ func (s *Server) compileVersion(w http.ResponseWriter, r *http.Request) {
 			Duration: result.Duration.Milliseconds(),
 			CacheHit: result.CacheHit,
 			Error:    result.Error,
-			S3Key:    result.S3Key,
-			S3Bucket: result.S3Bucket,
 		}
 	}
 
@@ -208,40 +166,9 @@ func (s *Server) getCompilationJob(w http.ResponseWriter, r *http.Request) {
 	vars := httputil.GetPathVars(r)
 	jobID := vars["jobId"]
 
-	// Check if orchestrator is available
-	if s.orchestrator == nil {
-		httputil.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{
-			"error": "Code generation orchestrator not available",
-		})
-		return
-	}
-
-	// Get job status from orchestrator
-	ctx := r.Context()
-	job, err := s.orchestrator.GetStatus(ctx, jobID)
-	if err != nil {
-		httputil.WriteNotFoundError(w, fmt.Sprintf("Job not found: %v", err))
-		return
-	}
-
-	// Convert to API response
-	jobInfo := CompilationJobInfo{
-		ID:          job.ID,
-		Language:    job.Language,
-		Status:      string(job.Status),
-		StartedAt:   job.StartedAt,
-		CompletedAt: job.CompletedAt,
-		CacheHit:    job.CacheHit,
-		Error:       job.Error,
-	}
-
-	if job.Result != nil {
-		jobInfo.Duration = job.Result.Duration.Milliseconds()
-		jobInfo.S3Key = job.Result.S3Key
-		jobInfo.S3Bucket = job.Result.S3Bucket
-	}
-
-	httputil.WriteSuccess(w, jobInfo)
+	// Since we no longer track jobs asynchronously, return a simple completed status
+	// In the new simplified model, compilations happen synchronously
+	httputil.WriteNotFoundError(w, fmt.Sprintf("Job tracking not supported in simplified model. Job ID: %s", jobID))
 }
 
 // Helper functions

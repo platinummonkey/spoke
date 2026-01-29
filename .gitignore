@@ -11,3 +11,9 @@ docs/public/
 docs/resources/_gen/
 docs/themes/
 docs/.hugo_build.lock
+
+# Gas Town (added by gt)
+.runtime/
+.claude/
+.beads/
+.logs/

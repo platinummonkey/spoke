@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/platinummonkey/spoke/pkg/codegen"
-	"github.com/platinummonkey/spoke/pkg/codegen/orchestrator"
 )
 
 // TestCompilationWorkflow tests the end-to-end compilation workflow
@@ -40,18 +39,13 @@ service TestService {
 		t.Fatalf("Failed to write test proto file: %v", err)
 	}
 
-	// Create orchestrator
-	config := orchestrator.DefaultConfig()
+	// Create config
+	config := codegen.DefaultConfig()
 	config.EnableCache = false // Disable cache for testing
-	orch, err := orchestrator.NewOrchestrator(config)
-	if err != nil {
-		t.Fatalf("Failed to create orchestrator: %v", err)
-	}
-	defer orch.Close()
 
 	// Test compilation for Go
 	t.Run("CompileGo", func(t *testing.T) {
-		req := &orchestrator.CompileRequest{
+		req := &codegen.GenerateRequest{
 			ModuleName: "test",
 			Version:    "v1.0.0",
 			Language:   "go",
@@ -67,7 +61,7 @@ service TestService {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		result, err := orch.CompileSingle(ctx, req)
+		result, err := codegen.GenerateCode(ctx, req, config)
 		if err != nil {
 			// Skip test if Docker images are not available
 			if strings.Contains(err.Error(), "failed to pull docker image") || strings.Contains(err.Error(), "denied: requested access to the resource is denied") {
@@ -124,16 +118,11 @@ message User {
 `
 
 	// Create orchestrator
-	config := orchestrator.DefaultConfig()
+	config := codegen.DefaultConfig()
 	config.EnableCache = false
 	config.MaxParallelWorkers = 3
-	orch, err := orchestrator.NewOrchestrator(config)
-	if err != nil {
-		t.Fatalf("Failed to create orchestrator: %v", err)
-	}
-	defer orch.Close()
-
-	req := &orchestrator.CompileRequest{
+	orch, err := 
+	req := &codegen.GenerateRequest{
 		ModuleName: "multitest",
 		Version:    "v1.0.0",
 		ProtoFiles: []codegen.ProtoFile{
@@ -150,7 +139,7 @@ message User {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	results, err := orch.CompileAll(ctx, req, languages)
+	results, err := codegen.GenerateCodeParallel(ctx, req, languages, config)
 	if err != nil {
 		// Partial failures are OK in integration tests
 		t.Logf("Some compilations failed: %v", err)
@@ -194,20 +183,15 @@ message CachedMessage {
 `
 
 	// Create orchestrator with cache enabled
-	config := orchestrator.DefaultConfig()
+	config := codegen.DefaultConfig()
 	config.EnableCache = true
 	config.RedisAddr = os.Getenv("REDIS_ADDR") // Only enable if Redis available
 	if config.RedisAddr == "" {
 		t.Skip("Skipping cache test - Redis not available")
 	}
 
-	orch, err := orchestrator.NewOrchestrator(config)
-	if err != nil {
-		t.Fatalf("Failed to create orchestrator: %v", err)
-	}
-	defer orch.Close()
-
-	req := &orchestrator.CompileRequest{
+	orch, err := 
+	req := &codegen.GenerateRequest{
 		ModuleName: "cachetest",
 		Version:    "v1.0.0",
 		Language:   "go",
@@ -222,7 +206,7 @@ message CachedMessage {
 	ctx := context.Background()
 
 	// First compilation - cache miss
-	result1, err := orch.CompileSingle(ctx, req)
+	result1, err := codegen.GenerateCode(ctx, req, config)
 	if err != nil {
 		t.Fatalf("First compilation failed: %v", err)
 	}
@@ -234,7 +218,7 @@ message CachedMessage {
 	duration1 := result1.Duration
 
 	// Second compilation - should be cache hit
-	result2, err := orch.CompileSingle(ctx, req)
+	result2, err := codegen.GenerateCode(ctx, req, config)
 	if err != nil {
 		t.Fatalf("Second compilation failed: %v", err)
 	}
@@ -265,15 +249,10 @@ message Invalid {
 }
 `
 
-	config := orchestrator.DefaultConfig()
+	config := codegen.DefaultConfig()
 	config.EnableCache = false
-	orch, err := orchestrator.NewOrchestrator(config)
-	if err != nil {
-		t.Fatalf("Failed to create orchestrator: %v", err)
-	}
-	defer orch.Close()
-
-	req := &orchestrator.CompileRequest{
+	orch, err := 
+	req := &codegen.GenerateRequest{
 		ModuleName: "invalid",
 		Version:    "v1.0.0",
 		Language:   "go",
@@ -288,7 +267,7 @@ message Invalid {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	result, err := orch.CompileSingle(ctx, req)
+	result, err := codegen.GenerateCode(ctx, req, config)
 
 	// Should either return error or unsuccessful result
 	if err == nil && result.Success {
@@ -316,16 +295,11 @@ message Simple {
 }
 `
 
-	config := orchestrator.DefaultConfig()
+	config := codegen.DefaultConfig()
 	config.EnableCache = false
 	config.CompilationTimeout = 1 // Very short timeout for testing
-	orch, err := orchestrator.NewOrchestrator(config)
-	if err != nil {
-		t.Fatalf("Failed to create orchestrator: %v", err)
-	}
-	defer orch.Close()
-
-	req := &orchestrator.CompileRequest{
+	orch, err := 
+	req := &codegen.GenerateRequest{
 		ModuleName: "simple",
 		Version:    "v1.0.0",
 		Language:   "go",
@@ -339,7 +313,7 @@ message Simple {
 
 	ctx := context.Background()
 
-	result, err := orch.CompileSingle(ctx, req)
+	result, err := codegen.GenerateCode(ctx, req, config)
 
 	// Should complete within timeout (or timeout)
 	if err == nil {
