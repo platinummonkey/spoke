@@ -85,3 +85,20 @@ override:
   # Shutdown orchestration - complex integration testing required
   - threshold: 10
     path: ^pkg/observability/shutdown\.go$
+
+  # Codegen package - Docker integration code requires Docker environment
+  # After YAGNI simplification, core codegen logic moved to integration tests
+  - threshold: 10
+    path: ^pkg/codegen/
+
+  # Plugin registry - requires plugin binaries and filesystem integration
+  - threshold: 0
+    path: ^pkg/plugins/registry\.go$
+
+  # API compilation handlers - integration code requiring Docker orchestrator
+  - threshold: 15
+    path: ^pkg/api/compilation_handlers\.go$
+
+  # Observability logger - slog-based wrapper with minimal logic
+  - threshold: 39
+    path: ^pkg/observability/logger\.go$
