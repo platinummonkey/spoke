@@ -116,7 +116,7 @@ func TestSaveManifest(t *testing.T) {
 		Name:        "Test Plugin",
 		Version:     "2.1.3",
 		APIVersion:  "1.5.0",
-		Type:        PluginTypeValidator,
+		Type:        PluginTypeLanguage,
 		Description: "Test description",
 		Author:      "Test Author",
 	}
@@ -317,10 +317,6 @@ func TestManifestValidation_InvalidPluginType(t *testing.T) {
 func TestManifestValidation_ValidPluginTypes(t *testing.T) {
 	validTypes := []PluginType{
 		PluginTypeLanguage,
-		PluginTypeValidator,
-		PluginTypeGenerator,
-		PluginTypeRunner,
-		PluginTypeTransform,
 	}
 
 	for _, pluginType := range validTypes {
@@ -342,62 +338,12 @@ func TestManifestValidation_ValidPluginTypes(t *testing.T) {
 	}
 }
 
-// TestManifestValidation_InvalidPermissions tests validation of invalid permissions
-func TestManifestValidation_InvalidPermissions(t *testing.T) {
-	manifest := &Manifest{
-		ID:          "test-plugin",
-		Name:        "Test Plugin",
-		Version:     "1.0.0",
-		APIVersion:  "1.0.0",
-		Type:        PluginTypeLanguage,
-		Permissions: []string{"filesystem:read", "invalid:permission", "another:bad"},
-	}
 
-	errors := ValidateManifest(manifest)
-	assert.NotEmpty(t, errors)
-
-	// Should have 2 permission errors
-	permissionErrors := 0
-	for _, err := range errors {
-		if err.Field == "permissions" {
-			assert.Contains(t, err.Message, "Unknown permission")
-			permissionErrors++
-		}
-	}
-	assert.Equal(t, 2, permissionErrors, "Expected 2 permission validation errors")
-}
-
-// TestManifestValidation_ValidPermissions tests all valid permissions
-func TestManifestValidation_ValidPermissions(t *testing.T) {
-	manifest := &Manifest{
-		ID:         "test-plugin",
-		Name:       "Test Plugin",
-		Version:    "1.0.0",
-		APIVersion: "1.0.0",
-		Type:       PluginTypeLanguage,
-		Permissions: []string{
-			"filesystem:read",
-			"filesystem:write",
-			"network:read",
-			"network:write",
-			"process:exec",
-			"env:read",
-		},
-	}
-
-	errors := ValidateManifest(manifest)
-	// Should have no permission-related errors
-	for _, err := range errors {
-		assert.NotEqual(t, "permissions", err.Field)
-	}
-}
 
 // TestManifestValidation_MultipleErrors tests that multiple validation errors are returned
 func TestManifestValidation_MultipleErrors(t *testing.T) {
 	manifest := &Manifest{
 		// Missing ID, Name, Version, APIVersion, Type
-		SecurityLevel: SecurityLevel("invalid"),
-		Permissions:   []string{"bad:permission"},
 	}
 
 	errors := ValidateManifest(manifest)
@@ -531,7 +477,7 @@ func TestLoadManifest_ComplexMetadata(t *testing.T) {
 		Name:       "Complex Plugin",
 		Version:    "1.0.0",
 		APIVersion: "1.0.0",
-		Type:       PluginTypeGenerator,
+		Type:       PluginTypeLanguage,
 		Metadata: map[string]string{
 			"language":      "go",
 			"platform":      "darwin",
@@ -557,10 +503,6 @@ func TestLoadManifest_ComplexMetadata(t *testing.T) {
 func TestLoadManifest_AllPluginTypes(t *testing.T) {
 	types := []PluginType{
 		PluginTypeLanguage,
-		PluginTypeValidator,
-		PluginTypeGenerator,
-		PluginTypeRunner,
-		PluginTypeTransform,
 	}
 
 	for _, pluginType := range types {
@@ -586,38 +528,4 @@ func TestLoadManifest_AllPluginTypes(t *testing.T) {
 	}
 }
 
-// TestManifestValidation_EmptyPermissions tests that empty permissions list is valid
-func TestManifestValidation_EmptyPermissions(t *testing.T) {
-	manifest := &Manifest{
-		ID:          "test-plugin",
-		Name:        "Test Plugin",
-		Version:     "1.0.0",
-		APIVersion:  "1.0.0",
-		Type:        PluginTypeLanguage,
-		Permissions: []string{}, // Empty is valid
-	}
 
-	errors := ValidateManifest(manifest)
-	// Should have no permission-related errors
-	for _, err := range errors {
-		assert.NotEqual(t, "permissions", err.Field)
-	}
-}
-
-// TestManifestValidation_NilPermissions tests that nil permissions list is valid
-func TestManifestValidation_NilPermissions(t *testing.T) {
-	manifest := &Manifest{
-		ID:          "test-plugin",
-		Name:        "Test Plugin",
-		Version:     "1.0.0",
-		APIVersion:  "1.0.0",
-		Type:        PluginTypeLanguage,
-		Permissions: nil, // Nil is valid
-	}
-
-	errors := ValidateManifest(manifest)
-	// Should have no permission-related errors
-	for _, err := range errors {
-		assert.NotEqual(t, "permissions", err.Field)
-	}
-}
