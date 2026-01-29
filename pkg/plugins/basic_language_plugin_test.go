@@ -228,10 +228,9 @@ func TestBasicLanguagePlugin_GetLanguageSpec(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	manifest := &Manifest{
-		ID:            "test-plugin",
-		Name:          "Test Plugin",
-		Version:       "1.0.0",
-		SecurityLevel: SecurityLevelOfficial,
+		ID:      "test-plugin",
+		Name:    "Test Plugin",
+		Version: "1.0.0",
 	}
 
 	plugin := NewBasicLanguagePlugin(manifest, tmpDir)

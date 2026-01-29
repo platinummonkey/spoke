@@ -16,20 +16,17 @@ func TestLoadManifest(t *testing.T) {
 
 	// Create a valid manifest
 	manifest := &Manifest{
-		ID:            "test-plugin",
-		Name:          "Test Plugin",
-		Version:       "1.0.0",
-		APIVersion:    "1.0.0",
-		Type:          PluginTypeLanguage,
-		Description:   "A test plugin",
-		Author:        "Test Author",
-		License:       "MIT",
-		Homepage:      "https://example.com",
-		Repository:    "https://github.com/example/test-plugin",
-		SecurityLevel: SecurityLevelCommunity,
-		Permissions:   []string{"filesystem:read"},
-		Dependencies:  []string{"dep-plugin"},
-		Metadata:      map[string]string{"key": "value"},
+		ID:          "test-plugin",
+		Name:        "Test Plugin",
+		Version:     "1.0.0",
+		APIVersion:  "1.0.0",
+		Type:        PluginTypeLanguage,
+		Description: "A test plugin",
+		Author:      "Test Author",
+		License:     "MIT",
+		Homepage:    "https://example.com",
+		Repository:  "https://github.com/example/test-plugin",
+		Metadata:    map[string]string{"key": "value"},
 	}
 
 	err := SaveManifest(manifest, manifestPath)
@@ -49,9 +46,6 @@ func TestLoadManifest(t *testing.T) {
 	assert.Equal(t, "MIT", loaded.License)
 	assert.Equal(t, "https://example.com", loaded.Homepage)
 	assert.Equal(t, "https://github.com/example/test-plugin", loaded.Repository)
-	assert.Equal(t, SecurityLevelCommunity, loaded.SecurityLevel)
-	assert.Equal(t, []string{"filesystem:read"}, loaded.Permissions)
-	assert.Equal(t, []string{"dep-plugin"}, loaded.Dependencies)
 	assert.Equal(t, "value", loaded.Metadata["key"])
 }
 
@@ -153,13 +147,11 @@ func TestSaveManifest_InvalidPath(t *testing.T) {
 // TestManifestValidation_Valid tests validation of a valid manifest
 func TestManifestValidation_Valid(t *testing.T) {
 	manifest := &Manifest{
-		ID:            "valid-plugin",
-		Name:          "Valid Plugin",
-		Version:       "1.0.0",
-		APIVersion:    "1.0.0",
-		Type:          PluginTypeLanguage,
-		SecurityLevel: SecurityLevelOfficial,
-		Permissions:   []string{"filesystem:read", "network:write"},
+		ID:         "valid-plugin",
+		Name:       "Valid Plugin",
+		Version:    "1.0.0",
+		APIVersion: "1.0.0",
+		Type:       PluginTypeLanguage,
 	}
 
 	errors := ValidateManifest(manifest)
@@ -347,77 +339,6 @@ func TestManifestValidation_ValidPluginTypes(t *testing.T) {
 				assert.NotEqual(t, "type", err.Field)
 			}
 		})
-	}
-}
-
-// TestManifestValidation_InvalidSecurityLevel tests validation of invalid security levels
-func TestManifestValidation_InvalidSecurityLevel(t *testing.T) {
-	manifest := &Manifest{
-		ID:            "test-plugin",
-		Name:          "Test Plugin",
-		Version:       "1.0.0",
-		APIVersion:    "1.0.0",
-		Type:          PluginTypeLanguage,
-		SecurityLevel: SecurityLevel("invalid-level"),
-	}
-
-	errors := ValidateManifest(manifest)
-	assert.NotEmpty(t, errors)
-
-	found := false
-	for _, err := range errors {
-		if err.Field == "security_level" {
-			assert.Contains(t, err.Message, "Invalid security level")
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "Expected security level validation error")
-}
-
-// TestManifestValidation_ValidSecurityLevels tests all valid security levels
-func TestManifestValidation_ValidSecurityLevels(t *testing.T) {
-	validLevels := []SecurityLevel{
-		SecurityLevelOfficial,
-		SecurityLevelVerified,
-		SecurityLevelCommunity,
-	}
-
-	for _, level := range validLevels {
-		t.Run(string(level), func(t *testing.T) {
-			manifest := &Manifest{
-				ID:            "test-plugin",
-				Name:          "Test Plugin",
-				Version:       "1.0.0",
-				APIVersion:    "1.0.0",
-				Type:          PluginTypeLanguage,
-				SecurityLevel: level,
-			}
-
-			errors := ValidateManifest(manifest)
-			// Should have no security level-related errors
-			for _, err := range errors {
-				assert.NotEqual(t, "security_level", err.Field)
-			}
-		})
-	}
-}
-
-// TestManifestValidation_EmptySecurityLevel tests that empty security level is valid
-func TestManifestValidation_EmptySecurityLevel(t *testing.T) {
-	manifest := &Manifest{
-		ID:            "test-plugin",
-		Name:          "Test Plugin",
-		Version:       "1.0.0",
-		APIVersion:    "1.0.0",
-		Type:          PluginTypeLanguage,
-		SecurityLevel: "", // Empty is allowed
-	}
-
-	errors := ValidateManifest(manifest)
-	// Should have no security level-related errors
-	for _, err := range errors {
-		assert.NotEqual(t, "security_level", err.Field)
 	}
 }
 
