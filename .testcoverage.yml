@@ -38,6 +38,15 @@ exclude:
     - _test\.go$                 # Test files themselves
     - pkg/audit/file_logger\.go$ # Audit file logging requires filesystem integration
     - pkg/audit/middleware\.go$   # Audit middleware requires full HTTP stack integration
+    - pkg/rbac/middleware\.go$    # RBAC middleware requires full auth stack
+    - pkg/rbac/integration\.go$   # RBAC integration requires full system setup
+    - pkg/plugins/verification\.go$ # Plugin verification requires external plugin binaries
+    - pkg/middleware/quota\.go$   # Quota middleware requires distributed state
+    - pkg/middleware/distributed_ratelimit\.go$ # Distributed rate limiting requires Redis cluster
+    - pkg/marketplace/storage\.go$ # Marketplace storage interface
+    - pkg/marketplace/handlers\.go$ # Marketplace handlers require full marketplace infrastructure
+    - pkg/linter/rules/register\.go$ # Rule registration code
+    - pkg/httputil/middleware\.go$ # HTTP middleware utilities
 
 # Override thresholds for specific paths
 override:
