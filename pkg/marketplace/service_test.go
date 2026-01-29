@@ -110,7 +110,7 @@ func TestValidatePlugin(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid validator type",
+			name: "invalid validator type",
 			plugin: &Plugin{
 				ID:            "test-plugin",
 				Name:          "Test Plugin",
@@ -118,10 +118,11 @@ func TestValidatePlugin(t *testing.T) {
 				Type:          "validator",
 				SecurityLevel: "verified",
 			},
-			wantErr: false,
+			wantErr: true,
+			errMsg:  "invalid plugin type",
 		},
 		{
-			name: "valid generator type",
+			name: "invalid generator type",
 			plugin: &Plugin{
 				ID:            "test-plugin",
 				Name:          "Test Plugin",
@@ -129,27 +130,30 @@ func TestValidatePlugin(t *testing.T) {
 				Type:          "generator",
 				SecurityLevel: "official",
 			},
-			wantErr: false,
+			wantErr: true,
+			errMsg:  "invalid plugin type",
 		},
 		{
-			name: "valid runner type",
+			name: "invalid runner type",
 			plugin: &Plugin{
 				ID:     "test-plugin",
 				Name:   "Test Plugin",
 				Author: "Test Author",
 				Type:   "runner",
 			},
-			wantErr: false,
+			wantErr: true,
+			errMsg:  "invalid plugin type",
 		},
 		{
-			name: "valid transform type",
+			name: "invalid transform type",
 			plugin: &Plugin{
 				ID:     "test-plugin",
 				Name:   "Test Plugin",
 				Author: "Test Author",
 				Type:   "transform",
 			},
-			wantErr: false,
+			wantErr: true,
+			errMsg:  "invalid plugin type",
 		},
 	}
 
