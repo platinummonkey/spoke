@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -15,6 +16,7 @@ type RedisCache struct {
 	storage *PostgresStorage
 	redis   *redis.Client
 	ttl     map[string]time.Duration
+	ttlMu   sync.RWMutex
 }
 
 // NewRedisCache creates a new Redis cache layer
@@ -84,7 +86,7 @@ func (c *RedisCache) GetModule(name string) (*api.Module, error) {
 	// Store in cache
 	data, err := json.Marshal(module)
 	if err == nil {
-		c.redis.Set(ctx, cacheKey, data, c.ttl["module"])
+		c.redis.Set(ctx, cacheKey, data, c.GetTTL("module"))
 	}
 
 	return module, nil
@@ -113,7 +115,7 @@ func (c *RedisCache) ListModules() ([]*api.Module, error) {
 	// Store in cache
 	data, err := json.Marshal(modules)
 	if err == nil {
-		c.redis.Set(ctx, cacheKey, data, c.ttl["list"])
+		c.redis.Set(ctx, cacheKey, data, c.GetTTL("list"))
 	}
 
 	return modules, nil
@@ -159,7 +161,7 @@ func (c *RedisCache) GetVersion(moduleName, version string) (*api.Version, error
 	// Store in cache
 	data, err := json.Marshal(ver)
 	if err == nil {
-		c.redis.Set(ctx, cacheKey, data, c.ttl["version"])
+		c.redis.Set(ctx, cacheKey, data, c.GetTTL("version"))
 	}
 
 	return ver, nil
@@ -188,7 +190,7 @@ func (c *RedisCache) ListVersions(moduleName string) ([]*api.Version, error) {
 	// Store in cache
 	data, err := json.Marshal(versions)
 	if err == nil {
-		c.redis.Set(ctx, cacheKey, data, c.ttl["list"])
+		c.redis.Set(ctx, cacheKey, data, c.GetTTL("list"))
 	}
 
 	return versions, nil
@@ -217,7 +219,7 @@ func (c *RedisCache) GetFile(moduleName, version, path string) (*api.File, error
 	// Store in cache
 	data, err := json.Marshal(file)
 	if err == nil {
-		c.redis.Set(ctx, cacheKey, data, c.ttl["file"])
+		c.redis.Set(ctx, cacheKey, data, c.GetTTL("file"))
 	}
 
 	return file, nil
@@ -282,7 +284,7 @@ func (c *RedisCache) WarmupCache() error {
 		if err != nil {
 			continue
 		}
-		c.redis.Set(ctx, fmt.Sprintf("module:%s", module.Name), data, c.ttl["module"])
+		c.redis.Set(ctx, fmt.Sprintf("module:%s", module.Name), data, c.GetTTL("module"))
 
 		// Cache versions for this module
 		versions, err := c.storage.ListVersions(module.Name)
@@ -294,7 +296,7 @@ func (c *RedisCache) WarmupCache() error {
 		if err != nil {
 			continue
 		}
-		c.redis.Set(ctx, fmt.Sprintf("versions:%s:list", module.Name), versionData, c.ttl["list"])
+		c.redis.Set(ctx, fmt.Sprintf("versions:%s:list", module.Name), versionData, c.GetTTL("list"))
 
 		// Cache individual versions (limit to latest 5)
 		for i, version := range versions {
@@ -308,7 +310,7 @@ func (c *RedisCache) WarmupCache() error {
 			c.redis.Set(ctx,
 				fmt.Sprintf("version:%s:%s", version.ModuleName, version.Version),
 				verData,
-				c.ttl["version"],
+				c.GetTTL("version"),
 			)
 		}
 	}
@@ -316,7 +318,7 @@ func (c *RedisCache) WarmupCache() error {
 	// Cache module list
 	modulesData, err := json.Marshal(modules)
 	if err == nil {
-		c.redis.Set(ctx, "modules:list", modulesData, c.ttl["list"])
+		c.redis.Set(ctx, "modules:list", modulesData, c.GetTTL("list"))
 	}
 
 	return nil
@@ -324,10 +326,14 @@ func (c *RedisCache) WarmupCache() error {
 
 // SetTTL updates TTL for a specific cache type
 func (c *RedisCache) SetTTL(cacheType string, ttl time.Duration) {
+	c.ttlMu.Lock()
+	defer c.ttlMu.Unlock()
 	c.ttl[cacheType] = ttl
 }
 
 // GetTTL returns TTL for a specific cache type
 func (c *RedisCache) GetTTL(cacheType string) time.Duration {
+	c.ttlMu.RLock()
+	defer c.ttlMu.RUnlock()
 	return c.ttl[cacheType]
 }
