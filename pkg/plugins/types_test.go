@@ -163,232 +163,29 @@ func TestValidationError_Initialization(t *testing.T) {
 		ve := &ValidationError{}
 		assert.Empty(t, ve.Field)
 		assert.Empty(t, ve.Message)
-		assert.Empty(t, ve.Severity)
 	})
 
 	t.Run("Full validation error", func(t *testing.T) {
 		ve := &ValidationError{
-			Field:    "id",
-			Message:  "ID is required",
-			Severity: "error",
+			Field:   "id",
+			Message: "ID is required",
 		}
 		assert.Equal(t, "id", ve.Field)
 		assert.Equal(t, "ID is required", ve.Message)
-		assert.Equal(t, "error", ve.Severity)
-	})
-
-	t.Run("Validation error with warning severity", func(t *testing.T) {
-		ve := &ValidationError{
-			Field:    "license",
-			Message:  "License should be specified",
-			Severity: "warning",
-		}
-		assert.Equal(t, "warning", ve.Severity)
 	})
 
 	t.Run("Multiple validation errors", func(t *testing.T) {
 		errors := []ValidationError{
-			{Field: "id", Message: "ID is required", Severity: "error"},
-			{Field: "name", Message: "Name is required", Severity: "error"},
-			{Field: "version", Message: "Version is required", Severity: "error"},
-			{Field: "author", Message: "Author recommended", Severity: "warning"},
+			{Field: "id", Message: "ID is required"},
+			{Field: "name", Message: "Name is required"},
+			{Field: "version", Message: "Version is required"},
 		}
 
-		assert.Len(t, errors, 4)
-		errorCount := 0
-		warningCount := 0
-		for _, err := range errors {
-			if err.Severity == "error" {
-				errorCount++
-			} else if err.Severity == "warning" {
-				warningCount++
-			}
-		}
-		assert.Equal(t, 3, errorCount)
-		assert.Equal(t, 1, warningCount)
+		assert.Len(t, errors, 3)
 	})
 }
 
-// TestSecurityIssue_Initialization tests creating and initializing SecurityIssue structs
-func TestSecurityIssue_Initialization(t *testing.T) {
-	t.Run("Empty security issue", func(t *testing.T) {
-		si := &SecurityIssue{}
-		assert.Empty(t, si.Severity)
-		assert.Empty(t, si.Category)
-		assert.Empty(t, si.Description)
-		assert.Empty(t, si.File)
-		assert.Zero(t, si.Line)
-		assert.Zero(t, si.Column)
-		assert.Empty(t, si.Recommendation)
-		assert.Empty(t, si.CWEID)
-	})
 
-	t.Run("Full security issue", func(t *testing.T) {
-		si := &SecurityIssue{
-			Severity:       "high",
-			Category:       "dangerous-import",
-			Description:    "Use of unsafe package detected",
-			File:           "/path/to/file.go",
-			Line:           42,
-			Column:         10,
-			Recommendation: "Avoid using unsafe package",
-			CWEID:          "CWE-242",
-		}
-
-		assert.Equal(t, "high", si.Severity)
-		assert.Equal(t, "dangerous-import", si.Category)
-		assert.Equal(t, "Use of unsafe package detected", si.Description)
-		assert.Equal(t, "/path/to/file.go", si.File)
-		assert.Equal(t, 42, si.Line)
-		assert.Equal(t, 10, si.Column)
-		assert.Equal(t, "Avoid using unsafe package", si.Recommendation)
-		assert.Equal(t, "CWE-242", si.CWEID)
-	})
-
-	t.Run("Security issues with different severities", func(t *testing.T) {
-		severities := []string{"critical", "high", "medium", "low", "warning"}
-		for _, severity := range severities {
-			si := &SecurityIssue{
-				Severity:    severity,
-				Category:    "test",
-				Description: "Test issue",
-			}
-			assert.Equal(t, severity, si.Severity)
-		}
-	})
-
-	t.Run("Security issues with different categories", func(t *testing.T) {
-		categories := []string{
-			"imports",
-			"hardcoded-secrets",
-			"sql-injection",
-			"dangerous-import",
-			"suspicious-file-ops",
-		}
-		for _, category := range categories {
-			si := &SecurityIssue{
-				Category:    category,
-				Severity:    "medium",
-				Description: "Test issue",
-			}
-			assert.Equal(t, category, si.Category)
-		}
-	})
-
-	t.Run("Security issue with minimal info", func(t *testing.T) {
-		si := &SecurityIssue{
-			Severity:    "low",
-			Category:    "warning",
-			Description: "Potential issue detected",
-		}
-		assert.Empty(t, si.File)
-		assert.Zero(t, si.Line)
-		assert.Empty(t, si.Recommendation)
-	})
-}
-
-// TestPluginValidationResult_Initialization tests creating and initializing PluginValidationResult structs
-func TestPluginValidationResult_Initialization(t *testing.T) {
-	t.Run("Empty validation result", func(t *testing.T) {
-		pvr := &PluginValidationResult{}
-		assert.False(t, pvr.Valid)
-		assert.Nil(t, pvr.ManifestErrors)
-		assert.Nil(t, pvr.SecurityIssues)
-		assert.Nil(t, pvr.PermissionIssues)
-		assert.Zero(t, pvr.ScanDuration)
-		assert.Nil(t, pvr.Recommendations)
-	})
-
-	t.Run("Valid plugin result", func(t *testing.T) {
-		pvr := &PluginValidationResult{
-			Valid:        true,
-			ScanDuration: 500 * time.Millisecond,
-		}
-		assert.True(t, pvr.Valid)
-		assert.Empty(t, pvr.ManifestErrors)
-		assert.Empty(t, pvr.SecurityIssues)
-		assert.Equal(t, 500*time.Millisecond, pvr.ScanDuration)
-	})
-
-	t.Run("Invalid plugin with errors", func(t *testing.T) {
-		pvr := &PluginValidationResult{
-			Valid: false,
-			ManifestErrors: []ValidationError{
-				{Field: "id", Message: "ID is required", Severity: "error"},
-			},
-			SecurityIssues: []SecurityIssue{
-				{Severity: "high", Category: "dangerous-import", Description: "Unsafe package used"},
-			},
-			PermissionIssues: []ValidationError{
-				{Field: "permissions", Message: "Unknown permission", Severity: "error"},
-			},
-			ScanDuration: 1 * time.Second,
-			Recommendations: []string{
-				"Fix manifest errors",
-				"Address security issues",
-			},
-		}
-
-		assert.False(t, pvr.Valid)
-		assert.Len(t, pvr.ManifestErrors, 1)
-		assert.Len(t, pvr.SecurityIssues, 1)
-		assert.Len(t, pvr.PermissionIssues, 1)
-		assert.Equal(t, 1*time.Second, pvr.ScanDuration)
-		assert.Len(t, pvr.Recommendations, 2)
-	})
-
-	t.Run("Validation result with multiple issues", func(t *testing.T) {
-		pvr := &PluginValidationResult{
-			Valid: false,
-			ManifestErrors: []ValidationError{
-				{Field: "id", Message: "Invalid ID format", Severity: "error"},
-				{Field: "version", Message: "Invalid version", Severity: "error"},
-				{Field: "author", Message: "Author missing", Severity: "warning"},
-			},
-			SecurityIssues: []SecurityIssue{
-				{Severity: "critical", Category: "hardcoded-secrets", Description: "API key found"},
-				{Severity: "high", Category: "dangerous-import", Description: "os/exec used"},
-				{Severity: "medium", Category: "suspicious-file-ops", Description: "File deletion detected"},
-			},
-			ScanDuration: 2 * time.Second,
-		}
-
-		assert.Len(t, pvr.ManifestErrors, 3)
-		assert.Len(t, pvr.SecurityIssues, 3)
-
-		// Count by severity
-		criticalCount := 0
-		highCount := 0
-		mediumCount := 0
-		for _, issue := range pvr.SecurityIssues {
-			switch issue.Severity {
-			case "critical":
-				criticalCount++
-			case "high":
-				highCount++
-			case "medium":
-				mediumCount++
-			}
-		}
-		assert.Equal(t, 1, criticalCount)
-		assert.Equal(t, 1, highCount)
-		assert.Equal(t, 1, mediumCount)
-	})
-
-	t.Run("Validation result with only warnings", func(t *testing.T) {
-		pvr := &PluginValidationResult{
-			Valid: true, // Can be valid with just warnings
-			ManifestErrors: []ValidationError{
-				{Field: "license", Message: "License recommended", Severity: "warning"},
-			},
-			ScanDuration: 100 * time.Millisecond,
-		}
-
-		assert.True(t, pvr.Valid)
-		assert.Len(t, pvr.ManifestErrors, 1)
-		assert.Equal(t, "warning", pvr.ManifestErrors[0].Severity)
-	})
-}
 
 // mockPlugin is a test implementation of the Plugin interface
 type mockPlugin struct {
@@ -530,63 +327,17 @@ func TestPluginInfo_FieldTypes(t *testing.T) {
 // TestValidationError_FieldTypes tests that ValidationError fields have correct types
 func TestValidationError_FieldTypes(t *testing.T) {
 	ve := &ValidationError{
-		Field:    "test",
-		Message:  "message",
-		Severity: "error",
+		Field:   "test",
+		Message: "message",
 	}
 
 	var _ string = ve.Field
 	var _ string = ve.Message
-	var _ string = ve.Severity
 
 	assert.NotNil(t, ve)
 }
 
-// TestSecurityIssue_FieldTypes tests that SecurityIssue fields have correct types
-func TestSecurityIssue_FieldTypes(t *testing.T) {
-	si := &SecurityIssue{
-		Severity:       "high",
-		Category:       "test",
-		Description:    "desc",
-		File:           "file.go",
-		Line:           1,
-		Column:         1,
-		Recommendation: "fix it",
-		CWEID:          "CWE-123",
-	}
 
-	var _ string = si.Severity
-	var _ string = si.Category
-	var _ string = si.Description
-	var _ string = si.File
-	var _ int = si.Line
-	var _ int = si.Column
-	var _ string = si.Recommendation
-	var _ string = si.CWEID
-
-	assert.NotNil(t, si)
-}
-
-// TestPluginValidationResult_FieldTypes tests that PluginValidationResult fields have correct types
-func TestPluginValidationResult_FieldTypes(t *testing.T) {
-	pvr := &PluginValidationResult{
-		Valid:            true,
-		ManifestErrors:   []ValidationError{},
-		SecurityIssues:   []SecurityIssue{},
-		PermissionIssues: []ValidationError{},
-		ScanDuration:     time.Second,
-		Recommendations:  []string{},
-	}
-
-	var _ bool = pvr.Valid
-	var _ []ValidationError = pvr.ManifestErrors
-	var _ []SecurityIssue = pvr.SecurityIssues
-	var _ []ValidationError = pvr.PermissionIssues
-	var _ time.Duration = pvr.ScanDuration
-	var _ []string = pvr.Recommendations
-
-	assert.NotNil(t, pvr)
-}
 
 // TestPluginTypes_StringConversion tests converting plugin types to strings
 func TestPluginTypes_StringConversion(t *testing.T) {
@@ -622,26 +373,6 @@ func TestManifest_EmptySlices(t *testing.T) {
 	})
 }
 
-// TestPluginValidationResult_Duration tests duration handling
-func TestPluginValidationResult_Duration(t *testing.T) {
-	t.Run("Various durations", func(t *testing.T) {
-		durations := []time.Duration{
-			0,
-			1 * time.Millisecond,
-			100 * time.Millisecond,
-			1 * time.Second,
-			5 * time.Second,
-			1 * time.Minute,
-		}
-
-		for _, d := range durations {
-			pvr := &PluginValidationResult{
-				ScanDuration: d,
-			}
-			assert.Equal(t, d, pvr.ScanDuration)
-		}
-	})
-}
 
 // TestContext_Usage tests that context is properly used with interfaces
 func TestContext_Usage(t *testing.T) {
@@ -725,31 +456,10 @@ func TestManifest_MetadataOperations(t *testing.T) {
 
 // TestValidationError_Collection tests working with collections of validation errors
 func TestValidationError_Collection(t *testing.T) {
-	t.Run("Filter by severity", func(t *testing.T) {
-		errors := []ValidationError{
-			{Field: "id", Message: "Required", Severity: "error"},
-			{Field: "name", Message: "Required", Severity: "error"},
-			{Field: "author", Message: "Recommended", Severity: "warning"},
-		}
-
-		errorCount := 0
-		warningCount := 0
-		for _, err := range errors {
-			if err.Severity == "error" {
-				errorCount++
-			} else if err.Severity == "warning" {
-				warningCount++
-			}
-		}
-
-		assert.Equal(t, 2, errorCount)
-		assert.Equal(t, 1, warningCount)
-	})
-
 	t.Run("Find error by field", func(t *testing.T) {
 		errors := []ValidationError{
-			{Field: "id", Message: "Required", Severity: "error"},
-			{Field: "version", Message: "Invalid", Severity: "error"},
+			{Field: "id", Message: "Required"},
+			{Field: "version", Message: "Invalid"},
 		}
 
 		var foundError *ValidationError
@@ -766,41 +476,6 @@ func TestValidationError_Collection(t *testing.T) {
 	})
 }
 
-// TestSecurityIssue_Collection tests working with collections of security issues
-func TestSecurityIssue_Collection(t *testing.T) {
-	t.Run("Filter by severity", func(t *testing.T) {
-		issues := []SecurityIssue{
-			{Severity: "critical", Category: "secret", Description: "API key found"},
-			{Severity: "high", Category: "import", Description: "Dangerous import"},
-			{Severity: "medium", Category: "file", Description: "File operation"},
-			{Severity: "low", Category: "warning", Description: "Minor issue"},
-		}
-
-		criticalCount := 0
-		for _, issue := range issues {
-			if issue.Severity == "critical" {
-				criticalCount++
-			}
-		}
-		assert.Equal(t, 1, criticalCount)
-	})
-
-	t.Run("Group by category", func(t *testing.T) {
-		issues := []SecurityIssue{
-			{Severity: "high", Category: "import", Description: "Issue 1"},
-			{Severity: "high", Category: "import", Description: "Issue 2"},
-			{Severity: "medium", Category: "file", Description: "Issue 3"},
-		}
-
-		categories := make(map[string]int)
-		for _, issue := range issues {
-			categories[issue.Category]++
-		}
-
-		assert.Equal(t, 2, categories["import"])
-		assert.Equal(t, 1, categories["file"])
-	})
-}
 
 // TestPluginInfo_TimeOperations tests time-related operations on PluginInfo
 func TestPluginInfo_TimeOperations(t *testing.T) {
