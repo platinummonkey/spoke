@@ -125,11 +125,10 @@ func TestBasicLanguagePlugin_Load_WithDefaultSpec(t *testing.T) {
 
 	// Create manifest without language spec metadata
 	manifest := &Manifest{
-		ID:            "default-plugin",
-		Name:          "Default Plugin",
-		Version:       "1.0.0",
-		Description:   "Default plugin description",
-		SecurityLevel: SecurityLevelOfficial,
+		ID:          "default-plugin",
+		Name:        "Default Plugin",
+		Version:     "1.0.0",
+		Description: "Default plugin description",
 	}
 
 	plugin := NewBasicLanguagePlugin(manifest, tmpDir)
@@ -141,42 +140,8 @@ func TestBasicLanguagePlugin_Load_WithDefaultSpec(t *testing.T) {
 	assert.Equal(t, "Default Plugin", plugin.languageSpec.Name)
 	assert.Equal(t, "Default Plugin", plugin.languageSpec.DisplayName)
 	assert.True(t, plugin.languageSpec.Enabled)
-	assert.True(t, plugin.languageSpec.Stable) // Official security level
+	assert.True(t, plugin.languageSpec.Stable)
 	assert.Equal(t, "Default plugin description", plugin.languageSpec.Description)
-}
-
-func TestBasicLanguagePlugin_Load_WithVerifiedSecurityLevel(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	manifest := &Manifest{
-		ID:            "verified-plugin",
-		Name:          "Verified Plugin",
-		Version:       "1.0.0",
-		SecurityLevel: SecurityLevelVerified,
-	}
-
-	plugin := NewBasicLanguagePlugin(manifest, tmpDir)
-	err := plugin.Load()
-
-	assert.NoError(t, err)
-	assert.True(t, plugin.languageSpec.Stable) // Verified security level
-}
-
-func TestBasicLanguagePlugin_Load_WithCommunitySecurityLevel(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	manifest := &Manifest{
-		ID:            "community-plugin",
-		Name:          "Community Plugin",
-		Version:       "1.0.0",
-		SecurityLevel: SecurityLevelCommunity,
-	}
-
-	plugin := NewBasicLanguagePlugin(manifest, tmpDir)
-	err := plugin.Load()
-
-	assert.NoError(t, err)
-	assert.False(t, plugin.languageSpec.Stable) // Community security level
 }
 
 func TestBasicLanguagePlugin_Load_InvalidYAMLFile(t *testing.T) {
