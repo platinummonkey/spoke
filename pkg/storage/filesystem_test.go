@@ -744,7 +744,7 @@ func TestFileSystemStorage_ListModulesPaginated(t *testing.T) {
 		}
 
 		// Get next 2 modules
-		modules, total, err = storage.ListModulesPaginated(ctx, 2, 2)
+		modules, _, err = storage.ListModulesPaginated(ctx, 2, 2)
 		if err != nil {
 			t.Fatalf("ListModulesPaginated failed: %v", err)
 		}
@@ -754,7 +754,7 @@ func TestFileSystemStorage_ListModulesPaginated(t *testing.T) {
 		}
 
 		// Get last module
-		modules, total, err = storage.ListModulesPaginated(ctx, 2, 4)
+		modules, _, err = storage.ListModulesPaginated(ctx, 2, 4)
 		if err != nil {
 			t.Fatalf("ListModulesPaginated failed: %v", err)
 		}
