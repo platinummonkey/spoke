@@ -254,8 +254,7 @@ func TestCompileForLanguage_V2WithOrchestrator(t *testing.T) {
 	defer os.Unsetenv("SPOKE_CODEGEN_VERSION")
 
 	server := &Server{
-		storage:      &mockStorage{},
-		orchestrator: &mockOrchestrator{}, // Use the existing mock from compilation_handlers_test.go
+		storage: &mockStorage{},
 	}
 
 	version := &Version{
@@ -278,8 +277,7 @@ func TestCompileForLanguage_V2FallbackToV1(t *testing.T) {
 	defer os.Unsetenv("SPOKE_CODEGEN_VERSION")
 
 	server := &Server{
-		storage:      &mockStorage{},
-		orchestrator: nil, // No orchestrator
+		storage: &mockStorage{},
 	}
 
 	version := &Version{
@@ -300,8 +298,7 @@ func TestCompileForLanguage_DefaultToV2(t *testing.T) {
 	os.Unsetenv("SPOKE_CODEGEN_VERSION")
 
 	server := &Server{
-		storage:      &mockStorage{},
-		orchestrator: nil,
+		storage: &mockStorage{},
 	}
 
 	version := &Version{

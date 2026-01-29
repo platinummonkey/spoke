@@ -13,9 +13,7 @@ import (
 
 // TestListLanguages_NoOrchestrator tests listLanguages when orchestrator is unavailable
 func TestListLanguages_NoOrchestrator(t *testing.T) {
-	server := &Server{
-		orchestrator: nil,
-	}
+	server := &Server{}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/languages", nil)
 	w := httptest.NewRecorder()
@@ -28,10 +26,7 @@ func TestListLanguages_NoOrchestrator(t *testing.T) {
 
 // TestListLanguages_Success tests successful listing of languages
 func TestListLanguages_Success(t *testing.T) {
-	mockOrch := &mockOrchestrator{}
-	server := &Server{
-		orchestrator: mockOrch,
-	}
+	server := &Server{}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/languages", nil)
 	w := httptest.NewRecorder()
@@ -76,10 +71,7 @@ func TestListLanguages_Success(t *testing.T) {
 
 // TestListLanguages_PackageManagerInfo tests that package manager info is included
 func TestListLanguages_PackageManagerInfo(t *testing.T) {
-	mockOrch := &mockOrchestrator{}
-	server := &Server{
-		orchestrator: mockOrch,
-	}
+	server := &Server{}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/languages", nil)
 	w := httptest.NewRecorder()
@@ -109,9 +101,7 @@ func TestListLanguages_PackageManagerInfo(t *testing.T) {
 
 // TestGetLanguage_NoOrchestrator tests getLanguage when orchestrator is unavailable
 func TestGetLanguage_NoOrchestrator(t *testing.T) {
-	server := &Server{
-		orchestrator: nil,
-	}
+	server := &Server{}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/languages/go", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "go"})
@@ -125,10 +115,7 @@ func TestGetLanguage_NoOrchestrator(t *testing.T) {
 
 // TestGetLanguage_NotFound tests getLanguage for a non-existent language
 func TestGetLanguage_NotFound(t *testing.T) {
-	mockOrch := &mockOrchestrator{}
-	server := &Server{
-		orchestrator: mockOrch,
-	}
+	server := &Server{}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/languages/nonexistent", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "nonexistent"})
@@ -142,10 +129,7 @@ func TestGetLanguage_NotFound(t *testing.T) {
 
 // TestGetLanguage_Success tests successful retrieval of a language
 func TestGetLanguage_Success(t *testing.T) {
-	mockOrch := &mockOrchestrator{}
-	server := &Server{
-		orchestrator: mockOrch,
-	}
+	server := &Server{}
 
 	// Note: The current implementation has a bug - it creates an empty allLanguages slice
 	// instead of reusing the language list from listLanguages. This test documents
