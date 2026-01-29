@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-github.com/platinummonkey/spoke/pkg/codegen
+	"github.com/platinummonkey/spoke/pkg/codegen"
 )
 
 // BenchmarkCompileSingleLanguage benchmarks single language compilation
@@ -28,7 +28,7 @@ service BenchService {
 
 	config := codegen.DefaultConfig()
 	config.EnableCache = false // Disable cache for benchmarking
-	orch, err := 
+
 	req := &codegen.GenerateRequest{
 		ModuleName: "bench",
 		Version:    "v1.0.0",
@@ -66,7 +66,7 @@ message CacheMessage {
 
 	config := codegen.DefaultConfig()
 	config.EnableCache = true
-	orch, err := 
+
 	req := &codegen.GenerateRequest{
 		ModuleName: "cache",
 		Version:    "v1.0.0",
@@ -82,7 +82,7 @@ message CacheMessage {
 	ctx := context.Background()
 
 	// Prime the cache
-	_, err = codegen.GenerateCode(ctx, req, config)
+	_, err := codegen.GenerateCode(ctx, req, config)
 	if err != nil {
 		b.Fatalf("Failed to prime cache: %v", err)
 	}
@@ -113,8 +113,8 @@ message ParallelMessage {
 
 	config := codegen.DefaultConfig()
 	config.EnableCache = false
-	config.MaxParallelWorkers = 5
-	orch, err := 
+	config.MaxWorkers = 5
+
 	req := &codegen.GenerateRequest{
 		ModuleName: "parallel",
 		Version:    "v1.0.0",

@@ -360,11 +360,7 @@ func (s *Service) validatePlugin(plugin *Plugin) error {
 
 	// Validate type
 	validTypes := map[string]bool{
-		string(plugins.PluginTypeLanguage):  true,
-		string(plugins.PluginTypeValidator): true,
-		string(plugins.PluginTypeGenerator): true,
-		string(plugins.PluginTypeRunner):    true,
-		string(plugins.PluginTypeTransform): true,
+		string(plugins.PluginTypeLanguage): true,
 	}
 
 	if !validTypes[plugin.Type] {

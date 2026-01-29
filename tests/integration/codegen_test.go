@@ -117,11 +117,11 @@ message User {
 }
 `
 
-	// Create orchestrator
+	// Create generator config
 	config := codegen.DefaultConfig()
 	config.EnableCache = false
-	config.MaxParallelWorkers = 3
-	orch, err := 
+	config.MaxWorkers = 3
+
 	req := &codegen.GenerateRequest{
 		ModuleName: "multitest",
 		Version:    "v1.0.0",
@@ -182,15 +182,10 @@ message CachedMessage {
 }
 `
 
-	// Create orchestrator with cache enabled
+	// Create config with cache enabled
 	config := codegen.DefaultConfig()
 	config.EnableCache = true
-	config.RedisAddr = os.Getenv("REDIS_ADDR") // Only enable if Redis available
-	if config.RedisAddr == "" {
-		t.Skip("Skipping cache test - Redis not available")
-	}
 
-	orch, err := 
 	req := &codegen.GenerateRequest{
 		ModuleName: "cachetest",
 		Version:    "v1.0.0",
@@ -251,7 +246,7 @@ message Invalid {
 
 	config := codegen.DefaultConfig()
 	config.EnableCache = false
-	orch, err := 
+
 	req := &codegen.GenerateRequest{
 		ModuleName: "invalid",
 		Version:    "v1.0.0",
@@ -297,8 +292,8 @@ message Simple {
 
 	config := codegen.DefaultConfig()
 	config.EnableCache = false
-	config.CompilationTimeout = 1 // Very short timeout for testing
-	orch, err := 
+	config.Timeout = 1 * time.Second // Very short timeout for testing
+
 	req := &codegen.GenerateRequest{
 		ModuleName: "simple",
 		Version:    "v1.0.0",
@@ -317,9 +312,9 @@ message Simple {
 
 	// Should complete within timeout (or timeout)
 	if err == nil {
-		if result.Duration > time.Duration(config.CompilationTimeout)*time.Second {
-			t.Errorf("Compilation exceeded timeout: %v > %ds",
-				result.Duration, config.CompilationTimeout)
+		if result.Duration > config.Timeout {
+			t.Errorf("Compilation exceeded timeout: %v > %v",
+				result.Duration, config.Timeout)
 		}
 	}
 }
