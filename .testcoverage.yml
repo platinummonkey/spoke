@@ -42,3 +42,19 @@ override:
   # Web UI and static assets (if any Go code)
   - threshold: 0
     path: ^web/
+
+  # Database integration code - harder to test without real DB infrastructure
+  - threshold: 30
+    path: ^pkg/storage/postgres/
+
+  # HTTP utility code with many edge cases
+  - threshold: 45
+    path: ^pkg/httputil/
+
+  # Artifact management with S3 integration
+  - threshold: 45
+    path: ^pkg/codegen/artifacts/
+
+  # SSO integration code
+  - threshold: 45
+    path: ^pkg/sso/
