@@ -17,10 +17,6 @@ func TestPluginType_Constants(t *testing.T) {
 		expected string
 	}{
 		{"Language type", PluginTypeLanguage, "language"},
-		{"Validator type", PluginTypeValidator, "validator"},
-		{"Generator type", PluginTypeGenerator, "generator"},
-		{"Runner type", PluginTypeRunner, "runner"},
-		{"Transform type", PluginTypeTransform, "transform"},
 	}
 
 	for _, tt := range tests {
@@ -30,24 +26,6 @@ func TestPluginType_Constants(t *testing.T) {
 	}
 }
 
-// TestSecurityLevel_Constants tests all security level constants
-func TestSecurityLevel_Constants(t *testing.T) {
-	tests := []struct {
-		name     string
-		level    SecurityLevel
-		expected string
-	}{
-		{"Official level", SecurityLevelOfficial, "official"},
-		{"Verified level", SecurityLevelVerified, "verified"},
-		{"Community level", SecurityLevelCommunity, "community"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, string(tt.level))
-		})
-	}
-}
 
 // TestManifest_Initialization tests creating and initializing Manifest structs
 func TestManifest_Initialization(t *testing.T) {
@@ -63,28 +41,22 @@ func TestManifest_Initialization(t *testing.T) {
 		assert.Empty(t, m.Homepage)
 		assert.Empty(t, m.Repository)
 		assert.Empty(t, m.Type)
-		assert.Empty(t, m.SecurityLevel)
-		assert.Nil(t, m.Permissions)
-		assert.Nil(t, m.Dependencies)
 		assert.Nil(t, m.Metadata)
 	})
 
 	t.Run("Full manifest", func(t *testing.T) {
 		m := &Manifest{
-			ID:            "test-plugin",
-			Name:          "Test Plugin",
-			Version:       "1.2.3",
-			APIVersion:    "1.0.0",
-			Description:   "A test plugin",
-			Author:        "Test Author",
-			License:       "MIT",
-			Homepage:      "https://example.com",
-			Repository:    "https://github.com/test/plugin",
-			Type:          PluginTypeLanguage,
-			SecurityLevel: SecurityLevelOfficial,
-			Permissions:   []string{"filesystem:read", "network:read"},
-			Dependencies:  []string{"dep1", "dep2"},
-			Metadata:      map[string]string{"key": "value"},
+			ID:          "test-plugin",
+			Name:        "Test Plugin",
+			Version:     "1.2.3",
+			APIVersion:  "1.0.0",
+			Description: "A test plugin",
+			Author:      "Test Author",
+			License:     "MIT",
+			Homepage:    "https://example.com",
+			Repository:  "https://github.com/test/plugin",
+			Type:        PluginTypeLanguage,
+			Metadata:    map[string]string{"key": "value"},
 		}
 
 		assert.Equal(t, "test-plugin", m.ID)
@@ -97,23 +69,12 @@ func TestManifest_Initialization(t *testing.T) {
 		assert.Equal(t, "https://example.com", m.Homepage)
 		assert.Equal(t, "https://github.com/test/plugin", m.Repository)
 		assert.Equal(t, PluginTypeLanguage, m.Type)
-		assert.Equal(t, SecurityLevelOfficial, m.SecurityLevel)
-		assert.Len(t, m.Permissions, 2)
-		assert.Contains(t, m.Permissions, "filesystem:read")
-		assert.Contains(t, m.Permissions, "network:read")
-		assert.Len(t, m.Dependencies, 2)
-		assert.Equal(t, "dep1", m.Dependencies[0])
-		assert.Equal(t, "dep2", m.Dependencies[1])
 		assert.Equal(t, "value", m.Metadata["key"])
 	})
 
 	t.Run("Manifest with all plugin types", func(t *testing.T) {
 		types := []PluginType{
 			PluginTypeLanguage,
-			PluginTypeValidator,
-			PluginTypeGenerator,
-			PluginTypeRunner,
-			PluginTypeTransform,
 		}
 
 		for _, pType := range types {
@@ -126,37 +87,7 @@ func TestManifest_Initialization(t *testing.T) {
 		}
 	})
 
-	t.Run("Manifest with all security levels", func(t *testing.T) {
-		levels := []SecurityLevel{
-			SecurityLevelOfficial,
-			SecurityLevelVerified,
-			SecurityLevelCommunity,
-		}
 
-		for _, level := range levels {
-			m := &Manifest{
-				ID:            "test",
-				SecurityLevel: level,
-				Version:       "1.0.0",
-			}
-			assert.Equal(t, level, m.SecurityLevel)
-		}
-	})
-
-	t.Run("Manifest with multiple permissions", func(t *testing.T) {
-		m := &Manifest{
-			ID: "test",
-			Permissions: []string{
-				"filesystem:read",
-				"filesystem:write",
-				"network:read",
-				"network:write",
-				"process:exec",
-				"env:read",
-			},
-		}
-		assert.Len(t, m.Permissions, 6)
-	})
 
 	t.Run("Manifest with metadata", func(t *testing.T) {
 		m := &Manifest{
@@ -550,20 +481,17 @@ func TestPluginLoader_Interface(t *testing.T) {
 // TestManifest_FieldTypes tests that manifest fields have correct types
 func TestManifest_FieldTypes(t *testing.T) {
 	m := &Manifest{
-		ID:            "test",
-		Name:          "Test",
-		Version:       "1.0.0",
-		APIVersion:    "1.0.0",
-		Description:   "desc",
-		Author:        "author",
-		License:       "MIT",
-		Homepage:      "https://example.com",
-		Repository:    "https://github.com/test/test",
-		Type:          PluginTypeLanguage,
-		SecurityLevel: SecurityLevelCommunity,
-		Permissions:   []string{"filesystem:read"},
-		Dependencies:  []string{"dep1"},
-		Metadata:      map[string]string{"key": "value"},
+		ID:          "test",
+		Name:        "Test",
+		Version:     "1.0.0",
+		APIVersion:  "1.0.0",
+		Description: "desc",
+		Author:      "author",
+		License:     "MIT",
+		Homepage:    "https://example.com",
+		Repository:  "https://github.com/test/test",
+		Type:        PluginTypeLanguage,
+		Metadata:    map[string]string{"key": "value"},
 	}
 
 	// Test that we can access all fields with correct types
@@ -577,9 +505,6 @@ func TestManifest_FieldTypes(t *testing.T) {
 	var _ string = m.Homepage
 	var _ string = m.Repository
 	var _ PluginType = m.Type
-	var _ SecurityLevel = m.SecurityLevel
-	var _ []string = m.Permissions
-	var _ []string = m.Dependencies
 	var _ map[string]string = m.Metadata
 
 	assert.NotNil(t, m)
@@ -670,10 +595,6 @@ func TestPluginTypes_StringConversion(t *testing.T) {
 		expected   string
 	}{
 		{PluginTypeLanguage, "language"},
-		{PluginTypeValidator, "validator"},
-		{PluginTypeGenerator, "generator"},
-		{PluginTypeRunner, "runner"},
-		{PluginTypeTransform, "transform"},
 	}
 
 	for _, tt := range tests {
@@ -684,47 +605,19 @@ func TestPluginTypes_StringConversion(t *testing.T) {
 	}
 }
 
-// TestSecurityLevels_StringConversion tests converting security levels to strings
-func TestSecurityLevels_StringConversion(t *testing.T) {
-	tests := []struct {
-		level    SecurityLevel
-		expected string
-	}{
-		{SecurityLevelOfficial, "official"},
-		{SecurityLevelVerified, "verified"},
-		{SecurityLevelCommunity, "community"},
-	}
-
-	for _, tt := range tests {
-		t.Run(string(tt.level), func(t *testing.T) {
-			result := string(tt.level)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
 
 // TestManifest_EmptySlices tests that empty slices behave correctly
 func TestManifest_EmptySlices(t *testing.T) {
-	t.Run("Nil slices", func(t *testing.T) {
+	t.Run("Nil metadata", func(t *testing.T) {
 		m := &Manifest{}
-		assert.Nil(t, m.Permissions)
-		assert.Nil(t, m.Dependencies)
 		assert.Nil(t, m.Metadata)
-		assert.Len(t, m.Permissions, 0)
-		assert.Len(t, m.Dependencies, 0)
 	})
 
-	t.Run("Empty initialized slices", func(t *testing.T) {
+	t.Run("Empty initialized metadata", func(t *testing.T) {
 		m := &Manifest{
-			Permissions:  []string{},
-			Dependencies: []string{},
-			Metadata:     map[string]string{},
+			Metadata: map[string]string{},
 		}
-		assert.NotNil(t, m.Permissions)
-		assert.NotNil(t, m.Dependencies)
 		assert.NotNil(t, m.Metadata)
-		assert.Len(t, m.Permissions, 0)
-		assert.Len(t, m.Dependencies, 0)
 		assert.Len(t, m.Metadata, 0)
 	})
 }
@@ -828,57 +721,7 @@ func TestManifest_MetadataOperations(t *testing.T) {
 	})
 }
 
-// TestPermissions_Operations tests permissions slice operations
-func TestPermissions_Operations(t *testing.T) {
-	t.Run("Add permissions", func(t *testing.T) {
-		m := &Manifest{
-			Permissions: []string{},
-		}
 
-		m.Permissions = append(m.Permissions, "filesystem:read")
-		m.Permissions = append(m.Permissions, "network:read")
-
-		assert.Len(t, m.Permissions, 2)
-		assert.Contains(t, m.Permissions, "filesystem:read")
-		assert.Contains(t, m.Permissions, "network:read")
-	})
-
-	t.Run("Check permission existence", func(t *testing.T) {
-		m := &Manifest{
-			Permissions: []string{"filesystem:read", "network:read"},
-		}
-
-		found := false
-		for _, p := range m.Permissions {
-			if p == "filesystem:read" {
-				found = true
-				break
-			}
-		}
-		assert.True(t, found)
-	})
-}
-
-// TestDependencies_Operations tests dependencies slice operations
-func TestDependencies_Operations(t *testing.T) {
-	t.Run("Add dependencies", func(t *testing.T) {
-		m := &Manifest{
-			Dependencies: []string{},
-		}
-
-		m.Dependencies = append(m.Dependencies, "dep1")
-		m.Dependencies = append(m.Dependencies, "dep2")
-
-		assert.Len(t, m.Dependencies, 2)
-		assert.Equal(t, "dep1", m.Dependencies[0])
-		assert.Equal(t, "dep2", m.Dependencies[1])
-	})
-
-	t.Run("Empty dependencies", func(t *testing.T) {
-		m := &Manifest{}
-		assert.Len(t, m.Dependencies, 0)
-	})
-}
 
 // TestValidationError_Collection tests working with collections of validation errors
 func TestValidationError_Collection(t *testing.T) {
