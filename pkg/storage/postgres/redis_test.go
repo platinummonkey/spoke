@@ -782,7 +782,7 @@ func TestRedisClient_ContextCancellation(t *testing.T) {
 	client, _, cleanup := setupRedisClientTest(t)
 	defer cleanup()
 
-	// Create a context that's already cancelled
+	// Create a context that's already canceled
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -793,10 +793,10 @@ func TestRedisClient_ContextCancellation(t *testing.T) {
 		UpdatedAt:   time.Now(),
 	}
 
-	// Operation should fail due to cancelled context
+	// Operation should fail due to canceled context
 	err := client.SetModule(ctx, module)
 	if err == nil {
-		t.Fatal("Expected error with cancelled context")
+		t.Fatal("Expected error with canceled context")
 	}
 }
 
