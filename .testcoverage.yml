@@ -86,13 +86,8 @@ override:
   - threshold: 10
     path: ^pkg/observability/shutdown\.go$
 
-  # Codegen package - Docker integration code requires Docker environment
-  # After YAGNI simplification, core codegen logic moved to integration tests
-  # Current package coverage: 8.8%
-  - threshold: 8
-    path: ^pkg/codegen
-
   # Core codegen files with 0% coverage - tested via integration tests requiring Docker
+  # These must come before the general pkg/codegen override to take precedence
   - threshold: 0
     path: ^pkg/codegen/packages\.go$
 
@@ -104,6 +99,12 @@ override:
 
   - threshold: 0
     path: ^pkg/codegen/cache\.go$
+
+  # Codegen package - Docker integration code requires Docker environment
+  # After YAGNI simplification, core codegen logic moved to integration tests
+  # Current package coverage: 8.8%
+  - threshold: 8
+    path: ^pkg/codegen
 
   # Plugin registry - requires plugin binaries and filesystem integration
   - threshold: 0
