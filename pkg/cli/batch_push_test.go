@@ -875,6 +875,12 @@ func setupTestGitRepo(t *testing.T, dir string, remoteURL string) {
 	err = cmd.Run()
 	require.NoError(t, err)
 
+	// Disable GPG signing to prevent hangs
+	cmd = exec.Command("git", "config", "commit.gpgsign", "false")
+	cmd.Dir = dir
+	err = cmd.Run()
+	require.NoError(t, err)
+
 	// Set up git remote
 	cmd = exec.Command("git", "remote", "add", "origin", remoteURL)
 	cmd.Dir = dir
