@@ -55,6 +55,8 @@ exclude:
     - pkg/webhooks/integrations\.go$ # Webhook integrations require external services
     - pkg/webhooks/handlers\.go$ # Webhook handlers require integration infrastructure
     - pkg/sso/provisioner\.go$ # SSO provisioning requires SCIM/provisioning provider
+    - ^pkg/contextkeys/          # Context key utilities - tested indirectly via integration tests
+    - pkg/observability/panic_handler\.go$ # Panic recovery helpers - tested indirectly
 
 # Override thresholds for specific paths
 override:
@@ -99,13 +101,6 @@ override:
 
   - threshold: 0
     path: ^pkg/codegen/cache\.go$
-
-  # Utility packages with no unit tests - used indirectly by integration tests
-  - threshold: 0
-    path: ^pkg/contextkeys/
-
-  - threshold: 0
-    path: ^pkg/observability/panic_handler\.go$
 
   # Codegen package - Docker integration code requires Docker environment
   # After YAGNI simplification, core codegen logic moved to integration tests
