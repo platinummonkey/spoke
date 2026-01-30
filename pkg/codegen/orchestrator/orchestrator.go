@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"runtime/debug"
 	"sync"
 	"time"
 
@@ -275,13 +274,7 @@ func (o *DefaultOrchestrator) CompileAll(ctx context.Context, req *CompileReques
 			defer wg.Done()
 
 			// Recover from panics to prevent crashing the process
-			defer func() {
-				if r := recover(); r != nil {
-					o.logger.WithField("panic", r).
-						WithField("stack", string(debug.Stack())).
-						Error("PANIC recovered in orchestrator worker")
-				}
-			}()
+			defer observability.RecoverPanic(o.logger, "orchestrator worker goroutine")
 
 			for work := range workCh {
 				// Create language-specific request
@@ -317,14 +310,9 @@ func (o *DefaultOrchestrator) CompileAll(ctx context.Context, req *CompileReques
 	// Wait for all workers to finish
 	go func() {
 		// Recover from panics (unlikely but defensive)
-		defer func() {
-			if r := recover(); r != nil {
-				o.logger.WithField("panic", r).
-					WithField("stack", string(debug.Stack())).
-					Error("PANIC recovered in orchestrator wait goroutine")
-				close(resultCh)
-			}
-		}()
+		defer observability.RecoverPanicWithCallback(o.logger, "orchestrator wait goroutine", func() {
+			close(resultCh)
+		})
 
 		wg.Wait()
 		close(resultCh)
