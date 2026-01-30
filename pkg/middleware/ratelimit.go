@@ -47,6 +47,34 @@ func PerBotRateLimitConfig() *RateLimitConfig {
 }
 
 // RateLimiter implements rate limiting using token bucket algorithm
+//
+// # CRITICAL: Cleanup Requirements
+//
+// RateLimiter stores buckets in memory (map[string]*bucket). Without cleanup,
+// this map will grow unboundedly as new keys (IPs, user IDs) are encountered,
+// causing a memory leak.
+//
+// REQUIRED: Call StartCleanup() after creating a RateLimiter:
+//
+//	rl := middleware.NewRateLimiter(config)
+//	ctx, cancel := context.WithCancel(context.Background())
+//	defer cancel()  // Stop cleanup when done
+//	rl.StartCleanup(ctx)
+//
+// StartCleanup runs a background goroutine that periodically removes buckets
+// that haven't been accessed in 2x the window duration. The goroutine stops
+// when ctx is canceled.
+//
+// Consequences of not calling StartCleanup:
+//   - Memory leak: Buckets accumulate indefinitely
+//   - Performance degradation: Map lookups slow down as map grows
+//   - Eventual OOM: Process may crash on high-traffic systems
+//
+// For production systems:
+//   - Use DistributedRateLimiter with Redis instead (handles cleanup automatically)
+//   - In-memory RateLimiter is suitable for development/testing only
+//
+// See also: StartCleanup(), Cleanup()
 type RateLimiter struct {
 	config *RateLimitConfig
 	// In-memory buckets (for simple implementation)
@@ -128,7 +156,15 @@ func (rl *RateLimiter) Remaining(key string) int {
 	return b.tokens
 }
 
-// Cleanup removes old buckets (should be called periodically)
+// Cleanup removes old buckets that haven't been accessed recently
+//
+// Buckets are removed if they haven't been updated in 2x the window duration.
+// This prevents the buckets map from growing unboundedly.
+//
+// Thread-safety: Acquires write lock on rl.mu and lock on each bucket.
+//
+// Typically called automatically by StartCleanup() goroutine. Manual calls
+// are only needed if you're implementing custom cleanup scheduling.
 func (rl *RateLimiter) Cleanup() {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -144,6 +180,30 @@ func (rl *RateLimiter) Cleanup() {
 }
 
 // StartCleanup starts a background goroutine to cleanup old buckets
+//
+// # CRITICAL: This method MUST be called after creating a RateLimiter
+//
+// Without cleanup, the buckets map will grow unboundedly, causing a memory leak.
+//
+// The cleanup goroutine:
+//   - Runs Cleanup() every WindowDuration interval
+//   - Stops when ctx is canceled
+//   - Recovers from panics to prevent process crashes
+//
+// Usage:
+//
+//	rl := NewRateLimiter(config)
+//	ctx, cancel := context.WithCancel(context.Background())
+//	defer cancel()  // Stop cleanup when shutting down
+//	rl.StartCleanup(ctx)
+//
+// Context lifetime:
+//   - Use application lifetime context for long-running services
+//   - Use request context ONLY for short-lived rate limiters (not recommended)
+//   - Cancel context during graceful shutdown to stop cleanup goroutine
+//
+// Note: This method returns immediately; cleanup runs asynchronously.
+// The goroutine will exit when ctx is canceled.
 func (rl *RateLimiter) StartCleanup(ctx context.Context) {
 	ticker := time.NewTicker(rl.config.WindowDuration)
 	go func() {
