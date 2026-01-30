@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/platinummonkey/spoke/pkg/codegen/docker"
 	"github.com/platinummonkey/spoke/pkg/codegen/languages"
 	"github.com/platinummonkey/spoke/pkg/codegen/packages"
+	"github.com/platinummonkey/spoke/pkg/observability"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -147,6 +149,9 @@ func newMockOrchestrator(t *testing.T, dockerRunner docker.Runner, cacheInstance
 
 	pkgRegistry := packages.NewRegistry()
 
+	// Create a logger for tests (writes to os.Stderr for test visibility)
+	logger := observability.NewLogger(observability.InfoLevel, os.Stderr)
+
 	return &DefaultOrchestrator{
 		config:           DefaultConfig(),
 		languageRegistry: langRegistry,
@@ -155,6 +160,7 @@ func newMockOrchestrator(t *testing.T, dockerRunner docker.Runner, cacheInstance
 		cache:            cacheInstance,
 		artifactsManager: artifactsManager,
 		jobs:             make(map[string]*codegen.CompilationJob),
+		logger:           logger,
 	}
 }
 
