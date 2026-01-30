@@ -6,7 +6,7 @@
 [![Push](https://github.com/platinummonkey/spoke/actions/workflows/spoke-push.yml/badge.svg)](https://github.com/platinummonkey/spoke/actions/workflows/spoke-push.yml)
 [![Docs](https://github.com/platinummonkey/spoke/actions/workflows/hugo.yml/badge.svg)](https://github.com/platinummonkey/spoke/actions/workflows/hugo.yml)
 [![Test](https://github.com/platinummonkey/spoke/actions/workflows/test.yml/badge.svg)](https://github.com/platinummonkey/spoke/actions/workflows/test.yml)
-[![Coverage](https://raw.githubusercontent.com/platinummonkey/spoke/badges/.github/badges/coverage.svg)](https://github.com/platinummonkey/spoke/actions/workflows/test.yml)
+[![Coverage](https://raw.githubusercontent.com/platinummonkey/spoke/badges/.badges/main/coverage.svg)](https://github.com/platinummonkey/spoke/actions/workflows/test.yml)
 
 Spoke is a Protobuf Schema Registry that helps manage and version your Protocol Buffer definitions. It provides a simple way to store, retrieve, and compile protobuf files with dependency management.
 
