@@ -22,8 +22,8 @@ type GenerateRequest struct {
 
 // Config holds code generation configuration
 type Config struct {
-	MaxWorkers int
-	Timeout    time.Duration
+	MaxWorkers  int
+	Timeout     time.Duration
 	EnableCache bool
 }
 
@@ -36,11 +36,31 @@ func DefaultConfig() *Config {
 	}
 }
 
-// memoryCache is a simple in-memory cache using sync.Map
+// Generator is a code generator with dependency injection for cache
+//
+// IMPORTANT: Use NewGenerator() to create instances. The zero value is not usable.
+//
+// Benefits of dependency injection over global cache:
+//   - Testable: Each test can have isolated cache state
+//   - Configurable: Different cache implementations can be injected
+//   - Clear dependencies: Cache dependency is explicit in struct
+//   - Thread-safe: Multiple generators can coexist without interference
+type Generator struct {
+	cache sync.Map // In-memory cache using sync.Map
+}
+
+// NewGenerator creates a new code generator with injected dependencies
+func NewGenerator() *Generator {
+	return &Generator{}
+}
+
+// Deprecated: globalCache is deprecated. Use Generator.cache instead.
+// This exists only for backward compatibility with legacy callers.
+// TODO: Remove after migrating all callers to Generator
 var globalCache sync.Map
 
-// GenerateCode compiles proto files for a single language
-func GenerateCode(ctx context.Context, req *GenerateRequest, config *Config) (*CompilationResult, error) {
+// GenerateCode compiles proto files for a single language using the generator's cache
+func (g *Generator) GenerateCode(ctx context.Context, req *GenerateRequest, config *Config) (*CompilationResult, error) {
 	if config == nil {
 		config = DefaultConfig()
 	}
@@ -58,7 +78,7 @@ func GenerateCode(ctx context.Context, req *GenerateRequest, config *Config) (*C
 	// Check cache if enabled
 	if config.EnableCache {
 		cacheKey := buildCacheKey(req)
-		if cached, ok := globalCache.Load(cacheKey); ok {
+		if cached, ok := g.cache.Load(cacheKey); ok {
 			if cachedResult, ok := cached.(*CompilationResult); ok {
 				cachedResult.CacheHit = true
 				cachedResult.Duration = time.Since(startTime)
@@ -115,14 +135,14 @@ func GenerateCode(ctx context.Context, req *GenerateRequest, config *Config) (*C
 	// Store in cache if enabled
 	if config.EnableCache {
 		cacheKey := buildCacheKey(req)
-		globalCache.Store(cacheKey, result)
+		g.cache.Store(cacheKey, result)
 	}
 
 	return result, nil
 }
 
 // GenerateCodeParallel compiles proto files for multiple languages in parallel
-func GenerateCodeParallel(ctx context.Context, req *GenerateRequest, languages []string, config *Config) ([]*CompilationResult, error) {
+func (g *Generator) GenerateCodeParallel(ctx context.Context, req *GenerateRequest, languages []string, config *Config) ([]*CompilationResult, error) {
 	if config == nil {
 		config = DefaultConfig()
 	}
@@ -139,15 +159,15 @@ func GenerateCodeParallel(ctx context.Context, req *GenerateRequest, languages [
 	}
 
 	// Use errgroup for parallel execution with max workers
-	g, ctx := errgroup.WithContext(ctx)
-	g.SetLimit(config.MaxWorkers)
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.SetLimit(config.MaxWorkers)
 
 	results := make([]*CompilationResult, len(languages))
 	var mu sync.Mutex
 
 	for i, lang := range languages {
 		i, lang := i, lang // capture loop variables
-		g.Go(func() error {
+		eg.Go(func() error {
 			langReq := &GenerateRequest{
 				ModuleName:   req.ModuleName,
 				Version:      req.Version,
@@ -158,7 +178,7 @@ func GenerateCodeParallel(ctx context.Context, req *GenerateRequest, languages [
 				Options:      req.Options,
 			}
 
-			result, err := GenerateCode(ctx, langReq, config)
+			result, err := g.GenerateCode(ctx, langReq, config)
 
 			mu.Lock()
 			results[i] = result
@@ -169,7 +189,7 @@ func GenerateCodeParallel(ctx context.Context, req *GenerateRequest, languages [
 	}
 
 	// Wait for all compilations to complete
-	if err := g.Wait(); err != nil {
+	if err := eg.Wait(); err != nil {
 		// Return partial results even if some failed
 		return results, err
 	}
@@ -260,4 +280,42 @@ func generatePackageFiles(langSpec *LanguageSpec, req *GenerateRequest) ([]Gener
 	}
 
 	return generator.Generate(pkgReq)
+}
+
+// defaultGenerator is the global generator instance for backward compatibility
+// Deprecated: Use NewGenerator() to create generator instances instead
+var defaultGenerator = NewGenerator()
+
+// GenerateCode is a backward-compatible wrapper for legacy callers
+//
+// Deprecated: Use Generator.GenerateCode() with dependency injection instead.
+// This function uses a global generator instance which makes testing difficult.
+//
+// Migration:
+//
+//	// Old (global state):
+//	result, err := codegen.GenerateCode(ctx, req, config)
+//
+//	// New (dependency injection):
+//	generator := codegen.NewGenerator()
+//	result, err := generator.GenerateCode(ctx, req, config)
+func GenerateCode(ctx context.Context, req *GenerateRequest, config *Config) (*CompilationResult, error) {
+	return defaultGenerator.GenerateCode(ctx, req, config)
+}
+
+// GenerateCodeParallel is a backward-compatible wrapper for legacy callers
+//
+// Deprecated: Use Generator.GenerateCodeParallel() with dependency injection instead.
+// This function uses a global generator instance which makes testing difficult.
+//
+// Migration:
+//
+//	// Old (global state):
+//	results, err := codegen.GenerateCodeParallel(ctx, req, langs, config)
+//
+//	// New (dependency injection):
+//	generator := codegen.NewGenerator()
+//	results, err := generator.GenerateCodeParallel(ctx, req, langs, config)
+func GenerateCodeParallel(ctx context.Context, req *GenerateRequest, languages []string, config *Config) ([]*CompilationResult, error) {
+	return defaultGenerator.GenerateCodeParallel(ctx, req, languages, config)
 }
