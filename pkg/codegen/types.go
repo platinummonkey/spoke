@@ -86,13 +86,29 @@ const (
 )
 
 // CacheKey represents a key for caching compiled artifacts
+// CacheKey represents a unique identifier for cached compilation results
+//
+// CRITICAL INVARIANT: Cache keys must be generated with sorted inputs.
+// Use cache.GenerateCacheKey() to create keys - never construct manually.
+//
+// Cache Key Format Version: v1
+// String format: {moduleName}:{version}:{language}:{pluginVersion}:{protoHash}:{optionsHash}
+//
+// WARNING: Changing the String() method or key generation algorithm
+// INVALIDATES ALL CACHED COMPILATIONS system-wide.
+//
+// If you must modify:
+// 1. Increment cache format version number
+// 2. Clear all cached data or implement migration
+// 3. Update cache package documentation
+// 4. Test that identical inputs produce identical keys
 type CacheKey struct {
 	ModuleName    string
 	Version       string
 	Language      string
 	PluginVersion string
-	ProtoHash     string // Combined hash of all proto files + dependencies
-	Options       map[string]string
+	ProtoHash     string            // Combined hash of all proto files + dependencies (generated with sorted inputs)
+	Options       map[string]string // Plugin options (hashed with sorted keys)
 }
 
 // String returns the cache key as a string

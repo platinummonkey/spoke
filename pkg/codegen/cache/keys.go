@@ -1,3 +1,25 @@
+// Package cache provides cache key generation and formatting for compilation results
+//
+// CRITICAL INVARIANT: SORTED ORDER REQUIREMENT
+// All cache keys MUST be generated with inputs sorted in a consistent order.
+// This ensures that identical compilations produce identical cache keys regardless
+// of input order.
+//
+// Sorted components:
+//   - Proto files: sorted by Path (string comparison)
+//   - Dependencies: sorted by ModuleName, then Version
+//   - Dependency proto files: sorted by Path
+//   - Options map: keys sorted alphabetically before hashing
+//
+// CHANGING THESE SORT ORDERS WILL INVALIDATE THE ENTIRE CACHE
+//
+// Cache Key Format Version: v1
+// Format: {moduleName}:{version}:{language}:{pluginVersion}:{protoHash}:{optionsHash}
+//
+// DO NOT modify generateProtoHash(), hashOptions(), or FormatCacheKey() without:
+// 1. Incrementing cache format version
+// 2. Clearing all existing cached compilations
+// 3. Updating cache migration documentation
 package cache
 
 import (
@@ -11,6 +33,10 @@ import (
 )
 
 // GenerateCacheKey generates a cache key from compilation parameters
+//
+// IMPORTANT: This function ensures deterministic key generation by sorting all inputs.
+// DO NOT call with pre-sorted inputs assuming you're helping - the sorting is intentional
+// and must happen in this function to guarantee consistency.
 func GenerateCacheKey(moduleName, version, language, pluginVersion string, protoFiles []codegen.ProtoFile, dependencies []codegen.Dependency, options map[string]string) *codegen.CacheKey {
 	return &codegen.CacheKey{
 		ModuleName:    moduleName,
@@ -23,6 +49,20 @@ func GenerateCacheKey(moduleName, version, language, pluginVersion string, proto
 }
 
 // generateProtoHash generates a SHA256 hash of all proto files and dependencies
+//
+// CRITICAL INVARIANT: All inputs are sorted before hashing to ensure deterministic results.
+// Hash format version: v1
+//
+// Algorithm:
+// 1. Sort proto files by Path
+// 2. Hash each file: path + \0 + content + \0
+// 3. Sort dependencies by (ModuleName, Version)
+// 4. For each dependency:
+//    - Hash: moduleName + \0 + version + \0
+//    - Sort dependency proto files by Path
+//    - Hash each file: path + \0 + content + \0
+//
+// CHANGING THIS ALGORITHM INVALIDATES ALL CACHED COMPILATIONS
 func generateProtoHash(protoFiles []codegen.ProtoFile, dependencies []codegen.Dependency) string {
 	hasher := sha256.New()
 
@@ -73,6 +113,18 @@ func generateProtoHash(protoFiles []codegen.ProtoFile, dependencies []codegen.De
 }
 
 // FormatCacheKey formats a cache key as a string for storage
+//
+// Cache Key Format Version: v1
+// Format: {moduleName}:{version}:{language}:{pluginVersion}:{protoHash}:{optionsHash}
+//
+// CRITICAL: This is the single source of truth for cache key string format.
+// The codegen.CacheKey.String() method delegates to this function.
+//
+// CHANGING THIS FORMAT INVALIDATES ALL CACHED COMPILATIONS
+// If you must change it:
+// 1. Increment version number in package documentation
+// 2. Clear all cached data (or implement migration)
+// 3. Update cache documentation
 func FormatCacheKey(key *codegen.CacheKey) string {
 	// Format: {moduleName}:{version}:{language}:{pluginVersion}:{protoHash}:{optionsHash}
 	parts := []string{
@@ -92,6 +144,16 @@ func FormatCacheKey(key *codegen.CacheKey) string {
 }
 
 // hashOptions generates a stable hash of options map
+//
+// CRITICAL INVARIANT: Map keys are sorted alphabetically before hashing.
+// This ensures identical options produce identical hashes regardless of iteration order.
+//
+// Algorithm:
+// 1. Extract and sort all keys alphabetically
+// 2. For each key in sorted order: hash key + \0 + value + \0
+// 3. Return first 16 hex characters of SHA256 hash
+//
+// CHANGING THIS ALGORITHM INVALIDATES ALL CACHED COMPILATIONS WITH OPTIONS
 func hashOptions(options map[string]string) string {
 	if len(options) == 0 {
 		return ""
