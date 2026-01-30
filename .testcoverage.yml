@@ -100,6 +100,13 @@ override:
   - threshold: 0
     path: ^pkg/codegen/cache\.go$
 
+  # Utility packages with no unit tests - used indirectly by integration tests
+  - threshold: 0
+    path: ^pkg/contextkeys/
+
+  - threshold: 0
+    path: ^pkg/observability/panic_handler\.go$
+
   # Codegen package - Docker integration code requires Docker environment
   # After YAGNI simplification, core codegen logic moved to integration tests
   # Current package coverage: 8.8%
