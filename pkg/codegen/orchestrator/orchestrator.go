@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/platinummonkey/spoke/pkg/codegen/docker"
 	"github.com/platinummonkey/spoke/pkg/codegen/languages"
 	"github.com/platinummonkey/spoke/pkg/codegen/packages"
+	"github.com/platinummonkey/spoke/pkg/observability"
 )
 
 // CacheInterface defines the cache methods used by orchestrator
@@ -33,6 +35,7 @@ type DefaultOrchestrator struct {
 	artifactsManager artifacts.Manager
 	jobs             map[string]*codegen.CompilationJob
 	jobsMu           sync.RWMutex
+	logger           *observability.Logger
 }
 
 // NewOrchestrator creates a new compilation orchestrator
@@ -53,6 +56,9 @@ func NewOrchestrator(config *Config) (*DefaultOrchestrator, error) {
 		return nil, fmt.Errorf("failed to initialize Docker runner: %v", err)
 	}
 
+	// Initialize logger
+	logger := observability.NewLogger(observability.InfoLevel, os.Stdout)
+
 	// Initialize package generator registry
 	pkgRegistry := packages.NewRegistry()
 	// Register default package generators
@@ -66,7 +72,7 @@ func NewOrchestrator(config *Config) (*DefaultOrchestrator, error) {
 		cacheInstance, err = cache.NewCache(cacheConfig)
 		if err != nil {
 			// Log error but continue without cache
-			fmt.Printf("Warning: failed to initialize cache: %v\n", err)
+			logger.WithError(err).Warn("Failed to initialize cache, continuing without cache")
 		}
 	}
 
@@ -83,7 +89,7 @@ func NewOrchestrator(config *Config) (*DefaultOrchestrator, error) {
 		artifactsManagerInstance, err = artifacts.NewS3Manager(artifactsConfig)
 		if err != nil {
 			// Log error but continue without S3
-			fmt.Printf("Warning: failed to initialize artifacts manager: %v\n", err)
+			logger.WithError(err).Warn("Failed to initialize artifacts manager, continuing without S3")
 		}
 	}
 
@@ -95,6 +101,7 @@ func NewOrchestrator(config *Config) (*DefaultOrchestrator, error) {
 		cache:            cacheInstance,
 		artifactsManager: artifactsManagerInstance,
 		jobs:             make(map[string]*codegen.CompilationJob),
+		logger:           logger,
 	}, nil
 }
 
@@ -192,7 +199,7 @@ func (o *DefaultOrchestrator) CompileSingle(ctx context.Context, req *CompileReq
 		storeResult, err := o.artifactsManager.Store(ctx, storeReq)
 		if err != nil {
 			// Log error but don't fail the compilation
-			fmt.Printf("Warning: failed to upload artifacts to S3: %v\n", err)
+			o.logger.WithError(err).Warn("Failed to upload artifacts to S3")
 		} else {
 			result.S3Key = storeResult.S3Key
 			result.S3Bucket = storeResult.S3Bucket
@@ -214,7 +221,7 @@ func (o *DefaultOrchestrator) CompileSingle(ctx context.Context, req *CompileReq
 
 		if err := o.cache.Set(ctx, cacheKey, result, 24*time.Hour); err != nil {
 			// Log error but don't fail the compilation
-			fmt.Printf("Warning: failed to store result in cache: %v\n", err)
+			o.logger.WithError(err).Warn("Failed to store result in cache")
 		}
 	}
 
@@ -270,7 +277,9 @@ func (o *DefaultOrchestrator) CompileAll(ctx context.Context, req *CompileReques
 			// Recover from panics to prevent crashing the process
 			defer func() {
 				if r := recover(); r != nil {
-					fmt.Printf("[Orchestrator] PANIC in worker: %v\n%s\n", r, debug.Stack())
+					o.logger.WithField("panic", r).
+						WithField("stack", string(debug.Stack())).
+						Error("PANIC recovered in orchestrator worker")
 				}
 			}()
 
@@ -310,7 +319,9 @@ func (o *DefaultOrchestrator) CompileAll(ctx context.Context, req *CompileReques
 		// Recover from panics (unlikely but defensive)
 		defer func() {
 			if r := recover(); r != nil {
-				fmt.Printf("[Orchestrator] PANIC in wait goroutine: %v\n%s\n", r, debug.Stack())
+				o.logger.WithField("panic", r).
+					WithField("stack", string(debug.Stack())).
+					Error("PANIC recovered in orchestrator wait goroutine")
 				close(resultCh)
 			}
 		}()
