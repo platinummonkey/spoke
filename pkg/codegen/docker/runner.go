@@ -48,12 +48,39 @@ func NewDockerRunner() (*DockerRunner, error) {
 }
 
 // Execute runs a compilation in a Docker container
+//
+// # Defer Execution Order
+//
+// This function uses multiple defer statements for cleanup and metrics.
+// Defers execute in LIFO (Last In, First Out) order, so the sequence is:
+//
+//  1. defer result.Duration = ... (line 57) - DECLARED FIRST, RUNS LAST
+//  2. defer os.RemoveAll(inputDir) (line 89) - runs second-to-last
+//  3. defer os.RemoveAll(outputDir) (line 96) - runs third-to-last
+//  4. defer container cleanup (if container created) - RUNS FIRST
+//
+// Cleanup order (earliest to latest):
+//  1. Container cleanup (if exists) - Release Docker resources
+//  2. outputDir cleanup - Remove temporary output directory
+//  3. inputDir cleanup - Remove temporary input directory
+//  4. Duration measurement - Record total execution time
+//
+// Why this order matters:
+//   - Container MUST be cleaned up before directories (container may have locks)
+//   - Directories cleaned up before duration measurement (cleanup time included)
+//   - Duration measurement last ensures we capture full execution time including cleanup
+//
+// If you add new defer statements, consider their position carefully:
+//   - Resource cleanup (files, containers) should be deferred AFTER duration measurement
+//   - Metric recording should be deferred BEFORE resource cleanup
 func (r *DockerRunner) Execute(ctx context.Context, req *ExecutionRequest) (*ExecutionResult, error) {
 	result := &ExecutionResult{
 		Success: false,
 	}
 
 	startTime := time.Now()
+	// DEFER ORDER: This runs LAST (declared first)
+	// Records total execution time including all cleanup
 	defer func() {
 		result.Duration = time.Since(startTime)
 	}()
@@ -86,6 +113,7 @@ func (r *DockerRunner) Execute(ctx context.Context, req *ExecutionRequest) (*Exe
 		result.Error = fmt.Errorf("failed to create input directory: %v", err)
 		return result, result.Error
 	}
+	// DEFER ORDER: Runs second-to-last (cleanup happens before duration measurement)
 	defer os.RemoveAll(inputDir)
 
 	outputDir, err := os.MkdirTemp("", "spoke-docker-output-*")
@@ -93,6 +121,7 @@ func (r *DockerRunner) Execute(ctx context.Context, req *ExecutionRequest) (*Exe
 		result.Error = fmt.Errorf("failed to create output directory: %v", err)
 		return result, result.Error
 	}
+	// DEFER ORDER: Runs third-to-last (after container cleanup, before inputDir cleanup)
 	defer os.RemoveAll(outputDir)
 
 	// Write proto files to input directory
