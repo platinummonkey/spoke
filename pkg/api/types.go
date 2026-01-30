@@ -122,7 +122,19 @@ type CompilationJobInfo struct {
 // Storage interface defines the methods required for storing and retrieving protobuf modules
 //
 // DEPRECATED: Use storage.Storage interface instead.
-// This interface will be removed in v2.0.0 (12 months from v1.8.0 release).
+//
+// DEPRECATION TIMELINE:
+//   - Deprecated: 2025-01-15 (v1.8.0 release)
+//   - Final removal: 2026-01-15 (v2.0.0 release)
+//   - Migration period: 12 months
+//
+// STATUS (as of 2026-01-30):
+//   ⚠️  15 days PAST removal deadline
+//   ⚠️  This interface should be removed imminently
+//   ⚠️  All production code MUST migrate to storage.Storage
+//
+// After 2026-01-15, this interface will be completely removed.
+// Code using api.Storage will not compile. Plan migration before this date.
 //
 // Migration: Replace api.Storage with storage.Storage and use context-aware methods:
 //   - CreateModule → CreateModuleContext(ctx, module)
@@ -135,6 +147,9 @@ type CompilationJobInfo struct {
 //   - GetFile → GetFileContext(ctx, moduleName, version, path)
 //
 // See pkg/storage/DEPRECATION.md for detailed migration guide.
+//
+// TODO(maintainers): Remove this interface after confirming all callers migrated.
+// Check remaining usage: git grep -n "api\.Storage\b" | grep -v "Deprecated"
 type Storage interface {
 	// Module operations
 	CreateModule(module *Module) error
