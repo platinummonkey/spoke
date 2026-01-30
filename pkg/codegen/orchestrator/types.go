@@ -2,8 +2,10 @@ package orchestrator
 
 import (
 	"context"
+	"time"
 
 	"github.com/platinummonkey/spoke/pkg/codegen"
+	"github.com/platinummonkey/spoke/pkg/codegen/config"
 )
 
 // Orchestrator coordinates the compilation process
@@ -49,7 +51,7 @@ type CompileRequest struct {
 // Config holds orchestrator configuration
 type Config struct {
 	// Parallel execution
-	MaxParallelWorkers int // Maximum number of parallel compilations (default: 5)
+	MaxParallelWorkers int // Maximum number of parallel compilations
 
 	// Feature flags
 	EnableCache        bool
@@ -68,16 +70,16 @@ type Config struct {
 	RedisDB            int
 
 	// Timeouts
-	CompilationTimeout int // Seconds (default: 300)
+	CompilationTimeout time.Duration // Maximum time for a single compilation
 }
 
 // DefaultConfig returns default configuration
 func DefaultConfig() *Config {
 	return &Config{
-		MaxParallelWorkers: 5,
+		MaxParallelWorkers: config.DefaultMaxParallelWorkers,
 		EnableCache:        true,
 		EnableMetrics:      true,
-		CodeGenVersion:     "v2",
-		CompilationTimeout: 300,
+		CodeGenVersion:     config.DefaultCodeGenVersion,
+		CompilationTimeout: config.DefaultCompilationTimeout,
 	}
 }

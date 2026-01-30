@@ -11,6 +11,7 @@ import (
 	"github.com/platinummonkey/spoke/pkg/codegen"
 	"github.com/platinummonkey/spoke/pkg/codegen/artifacts"
 	"github.com/platinummonkey/spoke/pkg/codegen/cache"
+	pkgconfig "github.com/platinummonkey/spoke/pkg/codegen/config"
 	"github.com/platinummonkey/spoke/pkg/codegen/docker"
 	"github.com/platinummonkey/spoke/pkg/codegen/languages"
 	"github.com/platinummonkey/spoke/pkg/codegen/packages"
@@ -386,13 +387,13 @@ func TestGetStatus_NotFound(t *testing.T) {
 }
 
 func TestDefaultConfig(t *testing.T) {
-	config := DefaultConfig()
-	assert.NotNil(t, config)
-	assert.Equal(t, 5, config.MaxParallelWorkers)
-	assert.True(t, config.EnableCache)
-	assert.True(t, config.EnableMetrics)
-	assert.Equal(t, "v2", config.CodeGenVersion)
-	assert.Equal(t, 300, config.CompilationTimeout)
+	cfg := DefaultConfig()
+	assert.NotNil(t, cfg)
+	assert.Equal(t, pkgconfig.DefaultMaxParallelWorkers, cfg.MaxParallelWorkers)
+	assert.True(t, cfg.EnableCache)
+	assert.True(t, cfg.EnableMetrics)
+	assert.Equal(t, pkgconfig.DefaultCodeGenVersion, cfg.CodeGenVersion)
+	assert.Equal(t, pkgconfig.DefaultCompilationTimeout, cfg.CompilationTimeout)
 }
 
 func TestClose(t *testing.T) {

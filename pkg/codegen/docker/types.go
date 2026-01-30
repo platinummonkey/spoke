@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/platinummonkey/spoke/pkg/codegen"
+	"github.com/platinummonkey/spoke/pkg/codegen/config"
 )
 
 // Runner executes protoc compilation in Docker containers
@@ -37,9 +38,9 @@ type ExecutionRequest struct {
 	OutputDir     string // Output directory inside container
 
 	// Resource limits
-	MemoryLimit   int64         // Memory limit in bytes (default: 512MB)
-	CPULimit      float64       // CPU limit (default: 1.0)
-	Timeout       time.Duration // Execution timeout (default: 5 minutes)
+	MemoryLimit   int64         // Memory limit in bytes (see config.DefaultDockerMemoryLimit)
+	CPULimit      float64       // CPU limit (see config.DefaultDockerCPULimit)
+	Timeout       time.Duration // Execution timeout (see config.DefaultDockerTimeout)
 
 	// Environment variables
 	Env           map[string]string
@@ -58,7 +59,7 @@ type ExecutionResult struct {
 
 // ResourceLimits defines default resource limits
 var (
-	DefaultMemoryLimit = int64(512 * 1024 * 1024) // 512MB
-	DefaultCPULimit    = 1.0                        // 1 CPU core
-	DefaultTimeout     = 5 * time.Minute            // 5 minutes
+	DefaultMemoryLimit = config.DefaultDockerMemoryLimit
+	DefaultCPULimit    = config.DefaultDockerCPULimit
+	DefaultTimeout     = config.DefaultDockerTimeout
 )

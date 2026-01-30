@@ -62,10 +62,7 @@ func NewOrchestrator(config *Config) (*DefaultOrchestrator, error) {
 	// Initialize cache (optional)
 	var cacheInstance *cache.MemoryCache
 	if config.EnableCache {
-		cacheConfig := &cache.Config{
-			MaxSize: 100 * 1024 * 1024, // 100MB
-			TTL:     5 * time.Minute,
-		}
+		cacheConfig := cache.DefaultConfig()
 		cacheInstance, err = cache.NewCache(cacheConfig)
 		if err != nil {
 			// Log error but continue without cache

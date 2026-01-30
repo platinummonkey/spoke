@@ -2,6 +2,8 @@ package cache
 
 import (
 	"time"
+
+	"github.com/platinummonkey/spoke/pkg/codegen/config"
 )
 
 // Stats represents cache statistics
@@ -21,7 +23,7 @@ type Config struct {
 // DefaultConfig returns default cache configuration
 func DefaultConfig() *Config {
 	return &Config{
-		MaxSize: 100 * 1024 * 1024, // 100MB
-		TTL:     5 * time.Minute,
+		MaxSize: config.DefaultCacheMaxSize,
+		TTL:     config.DefaultCacheTTL,
 	}
 }
