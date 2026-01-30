@@ -1,20 +1,20 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"strconv"
 
 	"github.com/gorilla/mux"
+	"github.com/platinummonkey/spoke/pkg/contextkeys"
 	"github.com/platinummonkey/spoke/pkg/orgs"
 )
 
-// OrgContextKey is the key for organization context
-type OrgContextKey string
+// OrgContextKey is DEPRECATED: Use contextkeys.Key instead
+type OrgContextKey = contextkeys.Key
 
 const (
-	// OrgKey is the context key for organization
-	OrgKey OrgContextKey = "organization"
+	// OrgKey is DEPRECATED: Use contextkeys.OrgKey instead
+	OrgKey = contextkeys.OrgKey
 )
 
 // OrgContextMiddleware adds organization context to the request
@@ -37,7 +37,7 @@ func OrgContextMiddleware(orgService orgs.Service) func(http.Handler) http.Handl
 				}
 
 				// Add organization to context
-				ctx := context.WithValue(r.Context(), OrgKey, org)
+				ctx := contextkeys.WithOrg(r.Context(), org)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
@@ -51,7 +51,7 @@ func OrgContextMiddleware(orgService orgs.Service) func(http.Handler) http.Handl
 				}
 
 				// Add organization to context
-				ctx := context.WithValue(r.Context(), OrgKey, org)
+				ctx := contextkeys.WithOrg(r.Context(), org)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
@@ -73,7 +73,7 @@ func QuotaCheckMiddleware(orgService orgs.Service, quotaType string) func(http.H
 			}
 
 			// Get organization from context
-			org, ok := r.Context().Value(OrgKey).(*orgs.Organization)
+			org, ok := r.Context().Value(contextkeys.OrgKey).(*orgs.Organization)
 			if !ok {
 				// No organization context, skip quota check
 				next.ServeHTTP(w, r)
@@ -117,7 +117,7 @@ func UsageTrackingMiddleware(orgService orgs.Service) func(http.Handler) http.Ha
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Get organization from context
-			org, ok := r.Context().Value(OrgKey).(*orgs.Organization)
+			org, ok := r.Context().Value(contextkeys.OrgKey).(*orgs.Organization)
 			if ok {
 				// Track API request (fire and forget)
 				go orgService.IncrementAPIRequests(org.ID)

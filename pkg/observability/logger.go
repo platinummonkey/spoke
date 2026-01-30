@@ -6,6 +6,8 @@ import (
 	"io"
 	"log/slog"
 	"os"
+
+	"github.com/platinummonkey/spoke/pkg/contextkeys"
 )
 
 // LogLevel represents the severity of a log message
@@ -129,34 +131,34 @@ func (l *Logger) Errorf(format string, args ...interface{}) {
 	l.logger.Error(fmt.Sprintf(format, args...))
 }
 
-// contextKey is the type for context keys
-type contextKey string
+// contextKey is DEPRECATED: Use contextkeys.Key instead
+type contextKey = contextkeys.Key
 
 const (
-	// RequestIDKey is the context key for request ID
-	RequestIDKey contextKey = "request_id"
-	// UserIDKey is the context key for user ID
-	UserIDKey contextKey = "user_id"
-	// LoggerKey is the context key for the logger
-	LoggerKey contextKey = "logger"
+	// RequestIDKey is DEPRECATED: Use contextkeys.RequestIDKey instead
+	RequestIDKey = contextkeys.RequestIDKey
+	// UserIDKey is DEPRECATED: Use contextkeys.UserIDKey instead
+	UserIDKey = contextkeys.UserIDKey
+	// LoggerKey is DEPRECATED: Use contextkeys.LoggerKey instead
+	LoggerKey = contextkeys.LoggerKey
 )
 
 // WithRequestID adds a request ID to the context
+// DEPRECATED: Use contextkeys.WithRequestID instead
 func WithRequestID(ctx context.Context, requestID string) context.Context {
-	return context.WithValue(ctx, RequestIDKey, requestID)
+	return contextkeys.WithRequestID(ctx, requestID)
 }
 
 // GetRequestID retrieves the request ID from context
+// DEPRECATED: Use contextkeys.GetRequestID instead
 func GetRequestID(ctx context.Context) string {
-	if requestID, ok := ctx.Value(RequestIDKey).(string); ok {
-		return requestID
-	}
-	return ""
+	return contextkeys.GetRequestID(ctx)
 }
 
 // WithUserID adds a user ID to the context
+// DEPRECATED: Use contextkeys.WithUserID instead
 func WithUserID(ctx context.Context, userID string) context.Context {
-	return context.WithValue(ctx, UserIDKey, userID)
+	return contextkeys.WithUserID(ctx, userID)
 }
 
 // GetUserID retrieves the user ID from context

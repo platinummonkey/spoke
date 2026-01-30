@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/platinummonkey/spoke/pkg/contextkeys"
 )
 
 // Logger is the interface for audit logging
@@ -37,25 +39,26 @@ type Logger interface {
 	Close() error
 }
 
-// contextKey is the type for context keys
-type contextKey string
+// contextKey is DEPRECATED: Use contextkeys.Key instead
+type contextKey = contextkeys.Key
 
 const (
-	// AuditLoggerKey is the context key for the audit logger
-	AuditLoggerKey contextKey = "audit_logger"
+	// AuditLoggerKey is DEPRECATED: Use contextkeys.AuditLoggerKey instead
+	AuditLoggerKey = contextkeys.AuditLoggerKey
 
-	// RequestStartTimeKey is the context key for request start time
-	RequestStartTimeKey contextKey = "request_start_time"
+	// RequestStartTimeKey is DEPRECATED: Use contextkeys.RequestStartTimeKey instead
+	RequestStartTimeKey = contextkeys.RequestStartTimeKey
 )
 
 // WithLogger adds an audit logger to the context
+// DEPRECATED: Use contextkeys.WithAuditLogger instead
 func WithLogger(ctx context.Context, logger Logger) context.Context {
-	return context.WithValue(ctx, AuditLoggerKey, logger)
+	return contextkeys.WithAuditLogger(ctx, logger)
 }
 
 // FromContext retrieves the audit logger from context
 func FromContext(ctx context.Context) Logger {
-	if logger, ok := ctx.Value(AuditLoggerKey).(Logger); ok {
+	if logger, ok := ctx.Value(contextkeys.AuditLoggerKey).(Logger); ok {
 		return logger
 	}
 	// Return a no-op logger if none is set
@@ -63,8 +66,9 @@ func FromContext(ctx context.Context) Logger {
 }
 
 // WithRequestStartTime adds the request start time to the context
+// DEPRECATED: Use contextkeys.WithRequestStartTime instead
 func WithRequestStartTime(ctx context.Context, t time.Time) context.Context {
-	return context.WithValue(ctx, RequestStartTimeKey, t)
+	return contextkeys.WithRequestStartTime(ctx, t)
 }
 
 // GetRequestStartTime retrieves the request start time from context

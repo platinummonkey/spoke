@@ -1,19 +1,20 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"strings"
 
 	"github.com/platinummonkey/spoke/pkg/auth"
+	"github.com/platinummonkey/spoke/pkg/contextkeys"
 )
 
-// ContextKey is a type for context keys
-type ContextKey string
+// AuthContextKey is DEPRECATED: Use contextkeys.AuthKey instead
+// This alias is provided for backward compatibility and will be removed in v2.0.0
+type ContextKey = contextkeys.Key
 
 const (
-	// AuthContextKey is the context key for authentication context
-	AuthContextKey ContextKey = "auth_context"
+	// AuthContextKey is DEPRECATED: Use contextkeys.AuthKey instead
+	AuthContextKey = contextkeys.AuthKey
 )
 
 // AuthMiddleware provides authentication middleware
@@ -69,7 +70,7 @@ func (m *AuthMiddleware) Handler(next http.Handler) http.Handler {
 		}
 
 		// Add auth context to request
-		ctx := context.WithValue(r.Context(), AuthContextKey, authCtx)
+		ctx := contextkeys.WithAuth(r.Context(), authCtx)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -82,7 +83,7 @@ func (m *AuthMiddleware) unauthorizedResponse(w http.ResponseWriter, message str
 
 // GetAuthContext extracts auth context from request
 func GetAuthContext(r *http.Request) *auth.AuthContext {
-	ctx := r.Context().Value(AuthContextKey)
+	ctx := r.Context().Value(contextkeys.AuthKey)
 	if ctx == nil {
 		return nil
 	}
