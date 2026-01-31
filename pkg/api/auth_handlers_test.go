@@ -74,12 +74,11 @@ func TestRegisterRoutes(t *testing.T) {
 
 // TestCreateUser_Success tests successful user creation
 func TestCreateUser_Success(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
 
-	// This would use a real test database
-	t.Skip("Requires PostgreSQL test database")
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 }
 
 // TestCreateUser_Validation tests user creation validation
@@ -339,43 +338,48 @@ func TestUpdateUser_Validation(t *testing.T) {
 
 // TestUpdateUser_EmptyUpdate tests empty update request
 func TestUpdateUser_EmptyUpdate(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 }
 
 // TestDeleteUser_SoftDelete verifies soft delete behavior
 func TestDeleteUser_SoftDelete(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 	// Would verify that user is marked inactive, not actually deleted
 }
 
 // TestGetUser_NotFound tests user not found error
 func TestGetUser_NotFound(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 }
 
 // TestRevokeToken tests token revocation
 func TestRevokeToken(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 }
 
 // TestListTokens tests token listing
 func TestListTokens(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 }
 
 // TestCreateOrganization_Validation tests organization creation validation
@@ -424,19 +428,21 @@ func TestGrantModulePermission_Validation(t *testing.T) {
 
 // TestTokenExpiration tests token expiration handling
 func TestTokenExpiration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 	// Would test that expired tokens are rejected
 }
 
 // TestTokenScopes tests token scope handling
 func TestTokenScopes(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 	// Would test that token scopes are correctly stored and retrieved
 }
 
@@ -595,10 +601,11 @@ func TestGrantModulePermission_InvalidPermission(t *testing.T) {
 
 // TestGrantModulePermission_ValidPermissions tests valid permission types
 func TestGrantModulePermission_ValidPermissions(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 
 	// Would test that "read", "write", "delete", "admin" are accepted
 }
@@ -743,73 +750,81 @@ func TestUpdateUser_InvalidJSON(t *testing.T) {
 
 // TestGetUser_InvalidID tests getUser with invalid ID
 func TestGetUser_InvalidID(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 	// Would test that non-numeric IDs are handled properly
 }
 
 // TestDeleteUser_InvalidID tests deleteUser with invalid ID
 func TestDeleteUser_InvalidID(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 	// Would test that non-numeric IDs are handled properly
 }
 
 // TestRevokeToken_InvalidID tests revokeToken with invalid ID
 func TestRevokeToken_InvalidID(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 	// Would test that non-numeric IDs are handled properly
 }
 
 // TestListTokens_WithFilters tests listTokens with query parameters
 func TestListTokens_WithFilters(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 	// Would test filtering by user_id, active status, etc.
 }
 
 // TestListOrganizationMembers_Pagination tests member listing with pagination
 func TestListOrganizationMembers_Pagination(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 	// Would test pagination parameters
 }
 
 // TestListModulePermissions_EmptyResult tests listing permissions for module with none
 func TestListModulePermissions_EmptyResult(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 	// Would test that empty array is returned when no permissions exist
 }
 
 // TestTokenScopesValidation tests token scope validation
 func TestTokenScopesValidation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 	// Would test that scopes are properly stored and retrieved
 }
 
 // TestTokenExpiresAtValidation tests token expiration time validation
 func TestTokenExpiresAtValidation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 	// Would test that expiration times are properly stored and enforced
 }
 

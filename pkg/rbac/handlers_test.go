@@ -217,10 +217,11 @@ func TestCreateRole_InvalidJSON(t *testing.T) {
 
 // TestAssignRoleToUser_Validation tests user role assignment validation
 func TestAssignRoleToUser_Validation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database - validation logic needs database mock")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement with real database or proper mocking
+	t.Skip("Test implementation pending")
 
 	tests := []struct {
 		name           string
@@ -286,10 +287,11 @@ func TestAssignRoleToUser_Validation(t *testing.T) {
 
 // TestCheckPermission_Validation tests permission check validation
 func TestCheckPermission_Validation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database - validation logic needs database mock")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement with real database or proper mocking
+	t.Skip("Test implementation pending")
 
 	tests := []struct {
 		name           string
@@ -351,10 +353,11 @@ func TestCheckPermission_Validation(t *testing.T) {
 
 // TestCreateTeam_Validation tests team creation validation
 func TestCreateTeam_Validation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database - validation logic needs database mock")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement with real database or proper mocking
+	t.Skip("Test implementation pending")
 
 	tests := []struct {
 		name           string
@@ -408,10 +411,11 @@ func TestCreateTeam_Validation(t *testing.T) {
 
 // TestAddTeamMember_Validation tests team member addition validation
 func TestAddTeamMember_Validation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database - validation logic needs database mock")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement with real database or proper mocking
+	t.Skip("Test implementation pending")
 
 	tests := []struct {
 		name           string
@@ -477,10 +481,11 @@ func TestAddTeamMember_Validation(t *testing.T) {
 
 // TestUpdateRole_Validation tests role update validation
 func TestUpdateRole_Validation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database - validation logic needs database mock")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement with real database or proper mocking
+	t.Skip("Test implementation pending")
 
 	db := &sql.DB{}
 	auditLogger := &mockAuditLogger{}
@@ -502,10 +507,11 @@ func TestUpdateRole_Validation(t *testing.T) {
 
 // TestUpdateTeam_Validation tests team update validation
 func TestUpdateTeam_Validation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database - validation logic needs database mock")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement with real database or proper mocking
+	t.Skip("Test implementation pending")
 
 	db := &sql.DB{}
 	auditLogger := &mockAuditLogger{}
@@ -554,10 +560,11 @@ func TestGetRoleTemplates(t *testing.T) {
 
 // TestAuditLogging tests that audit logs are created
 func TestAuditLogging(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 
 	db := &sql.DB{}
 	mockLogger := &mockAuditLogger{logs: []*audit.AuditEvent{}}
@@ -585,37 +592,41 @@ func TestAuditLogging(t *testing.T) {
 
 // TestPermissionCheckResponse tests permission check response format
 func TestPermissionCheckResponse(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 	// Would test that permission check returns proper response format
 }
 
 // TestRoleInheritance tests role inheritance
 func TestRoleInheritance(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 	// Would test that child roles inherit parent permissions
 }
 
 // TestTeamRolePropagation tests that team roles propagate to members
 func TestTeamRolePropagation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 	// Would test that assigning a role to a team affects all members
 }
 
 // TestScopeHierarchy tests permission scope hierarchy
 func TestScopeHierarchy(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping database test in short mode")
-	}
-	t.Skip("Requires PostgreSQL test database")
+	// Skip if no database available or in short mode
+	_ = SkipIfNoDatabaseOrShort(t)
+
+	// TODO: Implement real database test
+	t.Skip("Test implementation pending")
 	// Would test global > organization > resource scope hierarchy
 }
 

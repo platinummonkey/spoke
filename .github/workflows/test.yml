@@ -74,7 +74,7 @@ jobs:
           SPOKE_REDIS_URL: redis://localhost:6379/0
           TEST_POSTGRES_PRIMARY: postgres://postgres:postgres@localhost:5432/spoke_test?sslmode=disable
           TEST_REDIS_URL: redis://localhost:6379/0
-        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic -tags integration ./...
 
       - name: Go test coverage check
         uses: vladopajic/go-test-coverage@v2
