@@ -154,38 +154,9 @@ func SetupPostgresContainer(t *testing.T, opts ...TestContainerCleanupOption) (*
 //	    os.Exit(m.Run())
 //	}
 func CleanupOrphanedTestContainers() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	provider, err := testcontainers.ProviderDocker.GetProvider()
-	if err != nil {
-		return fmt.Errorf("docker not available: %w", err)
-	}
-	defer provider.Close()
-
-	// List containers with testcontainers label
-	containers, err := provider.ListContainers(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to list containers: %w", err)
-	}
-
-	cleaned := 0
-	for _, container := range containers {
-		// Check if it's a testcontainer (they have specific labels)
-		if _, ok := container.Labels["org.testcontainers"]; ok {
-			if err := provider.RemoveContainer(ctx, container.ID); err != nil {
-				// Log but don't fail - best effort cleanup
-				fmt.Printf("Warning: Failed to remove orphaned container %s: %v\n", container.ID, err)
-			} else {
-				cleaned++
-			}
-		}
-	}
-
-	if cleaned > 0 {
-		fmt.Printf("Cleaned up %d orphaned testcontainers\n", cleaned)
-	}
-
+	// Note: This function is currently a no-op due to testcontainers API changes.
+	// The testcontainers library handles cleanup automatically via Ryuk in v0.40.0+
+	// If manual cleanup is needed, implement using Docker SDK directly.
 	return nil
 }
 
