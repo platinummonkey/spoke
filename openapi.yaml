@@ -59,6 +59,8 @@ tags:
     description: Compatibility checking
   - name: Compilation
     description: Code generation and compilation
+  - name: Dependencies
+    description: Dependency management and analysis
   - name: Modules
     description: Protocol module management
   - name: Organizations
@@ -2646,6 +2648,212 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  # ============================================================================
+  # DEPENDENCIES API
+  # ============================================================================
+
+  /modules/{name}/versions/{version}/dependencies:
+    get:
+      tags: [Dependencies]
+      summary: Get direct dependencies
+      description: Retrieve direct dependencies for a module version
+      operationId: getDependencies
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+        - $ref: '#/components/parameters/VersionParam'
+      responses:
+        '200':
+          description: List of direct dependencies
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  module:
+                    type: string
+                  version:
+                    type: string
+                  dependencies:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Dependency'
+                  count:
+                    type: integer
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /modules/{name}/versions/{version}/dependencies/transitive:
+    get:
+      tags: [Dependencies]
+      summary: Get transitive dependencies
+      description: Retrieve all transitive dependencies (dependencies of dependencies)
+      operationId: getTransitiveDependencies
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+        - $ref: '#/components/parameters/VersionParam'
+      responses:
+        '200':
+          description: List of transitive dependencies
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  module:
+                    type: string
+                  version:
+                    type: string
+                  dependencies:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Dependency'
+                  count:
+                    type: integer
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /modules/{name}/versions/{version}/dependents:
+    get:
+      tags: [Dependencies]
+      summary: Get dependents
+      description: Find modules that depend on this version
+      operationId: getDependents
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+        - $ref: '#/components/parameters/VersionParam'
+      responses:
+        '200':
+          description: List of dependent modules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  module:
+                    type: string
+                  version:
+                    type: string
+                  dependents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Dependency'
+                  count:
+                    type: integer
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /modules/{name}/versions/{version}/impact:
+    get:
+      tags: [Dependencies]
+      summary: Impact analysis
+      description: Analyze the impact of changes to this version
+      operationId: getImpactAnalysis
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+        - $ref: '#/components/parameters/VersionParam'
+      responses:
+        '200':
+          description: Impact analysis results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpactAnalysis'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /modules/{name}/versions/{version}/lockfile:
+    get:
+      tags: [Dependencies]
+      summary: Get dependency lockfile
+      description: Generate a lockfile with all resolved dependencies
+      operationId: getLockfile
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+        - $ref: '#/components/parameters/VersionParam'
+      responses:
+        '200':
+          description: Dependency lockfile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lockfile'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /modules/{name}/versions/{version}/lockfile/validate:
+    post:
+      tags: [Dependencies]
+      summary: Validate lockfile
+      description: Validate a lockfile against current dependencies
+      operationId: validateLockfile
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+        - $ref: '#/components/parameters/VersionParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Lockfile'
+      responses:
+        '200':
+          description: Validation results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  differences:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /modules/{name}/versions/{version}/graph:
+    get:
+      tags: [Dependencies]
+      summary: Get dependency graph
+      description: Retrieve the full dependency graph with circular dependency detection
+      operationId: getDependencyGraph
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ModuleName'
+        - $ref: '#/components/parameters/VersionParam'
+      responses:
+        '200':
+          description: Dependency graph
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DependencyGraph'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
 # ==============================================================================
 # COMPONENTS
 # ==============================================================================
@@ -3221,6 +3429,87 @@ components:
         reviewed_at:
           type: string
           format: date-time
+
+    Dependency:
+      type: object
+      properties:
+        module:
+          type: string
+          description: Module name
+        version:
+          type: string
+          description: Version number
+        type:
+          type: string
+          enum: [direct, transitive]
+          description: Dependency type
+
+    DependencyGraph:
+      type: object
+      properties:
+        module:
+          type: string
+        version:
+          type: string
+        nodes:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              module:
+                type: string
+              version:
+                type: string
+        edges:
+          type: array
+          items:
+            type: object
+            properties:
+              from:
+                type: string
+              to:
+                type: string
+              type:
+                type: string
+        has_circular_dependency:
+          type: boolean
+        circular_path:
+          type: array
+          items:
+            type: string
+
+    ImpactAnalysis:
+      type: object
+      properties:
+        module:
+          type: string
+        version:
+          type: string
+        direct_dependents:
+          type: array
+          items:
+            $ref: '#/components/schemas/Dependency'
+        transitive_dependents:
+          type: array
+          items:
+            $ref: '#/components/schemas/Dependency'
+        total_impact:
+          type: integer
+          description: Total number of affected modules
+
+    Lockfile:
+      type: object
+      properties:
+        module:
+          type: string
+        version:
+          type: string
+        dependencies:
+          type: array
+          items:
+            $ref: '#/components/schemas/Dependency'
 
     Error:
       type: object
