@@ -121,6 +121,12 @@ func protodescriptorToProto(fd protoreflect.FileDescriptor) *descriptorpb.FileDe
 		fileProto.Service = services
 	}
 
+	// Add file options
+	if fd.Options() != nil {
+		// Convert protoreflect options to FileOptions proto
+		fileProto.Options = fd.Options().(*descriptorpb.FileOptions)
+	}
+
 	return fileProto
 }
 
@@ -437,8 +443,7 @@ func convertDescriptorToAST(desc *descriptorpb.FileDescriptorProto, sourceInfo *
 
 	// Convert file options
 	if desc.Options != nil {
-		// TODO: Convert file options to OptionNode
-		// For now, we'll skip this as it's complex and may not be critical
+		root.Options = convertFileOptions(desc.Options)
 	}
 
 	// Convert messages
@@ -457,6 +462,112 @@ func convertDescriptorToAST(desc *descriptorpb.FileDescriptorProto, sourceInfo *
 	}
 
 	return root
+}
+
+// convertFileOptions converts FileOptions to OptionNodes
+func convertFileOptions(opts *descriptorpb.FileOptions) []*OptionNode {
+	if opts == nil {
+		return nil
+	}
+
+	options := make([]*OptionNode, 0)
+
+	// Extract commonly used file options
+	if opts.GoPackage != nil {
+		options = append(options, &OptionNode{
+			Name:            "go_package",
+			Value:           opts.GetGoPackage(),
+			Comments:        make([]*CommentNode, 0),
+			SpokeDirectives: make([]*SpokeDirectiveNode, 0),
+		})
+	}
+
+	if opts.JavaPackage != nil {
+		options = append(options, &OptionNode{
+			Name:            "java_package",
+			Value:           opts.GetJavaPackage(),
+			Comments:        make([]*CommentNode, 0),
+			SpokeDirectives: make([]*SpokeDirectiveNode, 0),
+		})
+	}
+
+	if opts.JavaOuterClassname != nil {
+		options = append(options, &OptionNode{
+			Name:            "java_outer_classname",
+			Value:           opts.GetJavaOuterClassname(),
+			Comments:        make([]*CommentNode, 0),
+			SpokeDirectives: make([]*SpokeDirectiveNode, 0),
+		})
+	}
+
+	if opts.JavaMultipleFiles != nil {
+		value := "false"
+		if opts.GetJavaMultipleFiles() {
+			value = "true"
+		}
+		options = append(options, &OptionNode{
+			Name:            "java_multiple_files",
+			Value:           value,
+			Comments:        make([]*CommentNode, 0),
+			SpokeDirectives: make([]*SpokeDirectiveNode, 0),
+		})
+	}
+
+	if opts.OptimizeFor != nil {
+		value := opts.GetOptimizeFor().String()
+		options = append(options, &OptionNode{
+			Name:            "optimize_for",
+			Value:           value,
+			Comments:        make([]*CommentNode, 0),
+			SpokeDirectives: make([]*SpokeDirectiveNode, 0),
+		})
+	}
+
+	if opts.CcEnableArenas != nil {
+		value := "false"
+		if opts.GetCcEnableArenas() {
+			value = "true"
+		}
+		options = append(options, &OptionNode{
+			Name:            "cc_enable_arenas",
+			Value:           value,
+			Comments:        make([]*CommentNode, 0),
+			SpokeDirectives: make([]*SpokeDirectiveNode, 0),
+		})
+	}
+
+	if opts.ObjcClassPrefix != nil {
+		options = append(options, &OptionNode{
+			Name:            "objc_class_prefix",
+			Value:           opts.GetObjcClassPrefix(),
+			Comments:        make([]*CommentNode, 0),
+			SpokeDirectives: make([]*SpokeDirectiveNode, 0),
+		})
+	}
+
+	if opts.CsharpNamespace != nil {
+		options = append(options, &OptionNode{
+			Name:            "csharp_namespace",
+			Value:           opts.GetCsharpNamespace(),
+			Comments:        make([]*CommentNode, 0),
+			SpokeDirectives: make([]*SpokeDirectiveNode, 0),
+		})
+	}
+
+	if opts.Deprecated != nil {
+		value := "false"
+		if opts.GetDeprecated() {
+			value = "true"
+		}
+		options = append(options, &OptionNode{
+			Name:            "deprecated",
+			Value:           value,
+			Comments:        make([]*CommentNode, 0),
+			SpokeDirectives: make([]*SpokeDirectiveNode, 0),
+		})
+	}
+
+	return options
 }
 
 // convertMessage converts a DescriptorProto (message descriptor) to MessageNode
