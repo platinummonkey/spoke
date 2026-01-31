@@ -25,98 +25,13 @@ import (
 )
 
 // setupIntegrationTestDB creates a PostgreSQL test container and runs migrations
+// This now uses the SetupPostgresContainer helper which properly cleans up containers and volumes
 func setupIntegrationTestDB(t *testing.T) (*sql.DB, func()) {
 	t.Helper()
-	ctx := context.Background()
-
-	// Check if Docker/Podman is available
-	provider, err := testcontainers.ProviderDocker.GetProvider()
-	if err != nil {
-		t.Skip("Docker/Podman not available, skipping integration tests")
-	}
-	defer provider.Close()
-
-	// Start PostgreSQL container
-	postgresContainer, err := postgres.Run(ctx,
-		"postgres:15-alpine",
-		postgres.WithDatabase("spoke_test"),
-		postgres.WithUsername("spoke"),
-		postgres.WithPassword("spoke_test_password"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(60*time.Second)),
-	)
-	if err != nil {
-		t.Skipf("Failed to start PostgreSQL container: %v", err)
-	}
-
-	// Get connection string
-	connStr, err := postgresContainer.ConnectionString(ctx, "sslmode=disable")
-	require.NoError(t, err)
-
-	// Connect to database
-	db, err := sql.Open("postgres", connStr)
-	require.NoError(t, err)
-
-	// Wait for connection
-	err = db.Ping()
-	require.NoError(t, err)
-
-	// Run migrations
-	err = runMigrations(db)
-	require.NoError(t, err, "Failed to run migrations")
-
-	// Cleanup function
-	cleanup := func() {
-		db.Close()
-		if err := postgresContainer.Terminate(ctx); err != nil {
-			t.Logf("Failed to terminate container: %v", err)
-		}
-	}
-
-	return db, cleanup
+	return SetupPostgresContainer(t)
 }
 
-// runMigrations applies database migrations from the migrations directory
-func runMigrations(db *sql.DB) error {
-	// Get the migrations directory path
-	wd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get working directory: %w", err)
-	}
-
-	// Find migrations directory (go up until we find it)
-	migrationsDir := filepath.Join(wd, "..", "..", "migrations")
-	if _, err := os.Stat(migrationsDir); os.IsNotExist(err) {
-		// Try one more level up
-		migrationsDir = filepath.Join(wd, "..", "..", "..", "migrations")
-		if _, err := os.Stat(migrationsDir); os.IsNotExist(err) {
-			return fmt.Errorf("migrations directory not found")
-		}
-	}
-
-	// Read and apply key migration files
-	migrationFiles := []string{
-		"001_create_base_schema.up.sql",
-		"002_create_auth_schema.up.sql",
-	}
-
-	for _, filename := range migrationFiles {
-		migrationPath := filepath.Join(migrationsDir, filename)
-		content, err := os.ReadFile(migrationPath)
-		if err != nil {
-			return fmt.Errorf("failed to read migration %s: %w", filename, err)
-		}
-
-		_, err = db.Exec(string(content))
-		if err != nil {
-			return fmt.Errorf("failed to execute migration %s: %w", filename, err)
-		}
-	}
-
-	return nil
-}
+// runMigrations is now provided by testhelpers_integration.go
 
 // TestIntegration_ModuleWorkflow tests the full module CRUD workflow
 func TestIntegration_ModuleWorkflow(t *testing.T) {
