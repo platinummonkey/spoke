@@ -265,19 +265,24 @@ Role:
 
 **Recommendation:** Manual spec maintenance + CI validation (current approach) is working well. Add validation steps to prevent drift.
 
-## Next Steps
+## Completed Steps
 
 1. [x] Document all gaps
-2. [ ] Add Dependencies API to openapi.yaml
-3. [ ] Add Documentation API to openapi.yaml
-4. [ ] Add Basic Search API to openapi.yaml
-5. [ ] Add RBAC API to openapi.yaml
-6. [ ] Add Audit API to openapi.yaml
-7. [ ] Implement /openapi.json endpoint
-8. [ ] Add spec validation to CI
-9. [ ] Add breaking change detection to CI
-10. [ ] Generate client SDKs (Go, Python)
-11. [ ] Add SSO/Webhooks/Marketplace APIs (lower priority)
+2. [x] Add Dependencies API to openapi.yaml (7 endpoints + 4 schemas)
+3. [x] Add Documentation API to openapi.yaml (4 endpoints + 6 schemas)
+4. [x] Add Basic Search API to openapi.yaml (5 endpoints + 1 schema)
+5. [x] Add RBAC API to openapi.yaml (9 endpoints + 2 schemas)
+6. [x] Add Audit API to openapi.yaml (4 endpoints + 1 schema)
+7. [x] Implement /openapi.json endpoint (YAML to JSON conversion)
+8. [x] Spec validation in CI (Spectral linting)
+9. [x] Breaking change detection in CI (oasdiff)
+10. [x] Client SDK generation (Go and Python via scripts/generate-sdks.sh)
+
+## Remaining Steps (Lower Priority)
+
+11. [ ] Add SSO API to openapi.yaml (8 endpoints) - when SSO is implemented
+12. [ ] Add Webhooks API to openapi.yaml (7 endpoints) - when webhooks are implemented
+13. [ ] Add Marketplace API to openapi.yaml (5 endpoints) - when marketplace is implemented
 
 ## Conditional Features Documentation
 
