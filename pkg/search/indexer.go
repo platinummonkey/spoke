@@ -147,8 +147,7 @@ func (idx *Indexer) IndexVersion(ctx context.Context, moduleName, version string
 		}
 
 		// Parse proto file
-		parser := protobuf.NewStringParser(string(fileContent.Content))
-		ast, err := parser.Parse()
+		ast, err := protobuf.ParseString(string(fileContent.Content))
 		if err != nil {
 			// Log error but continue with other files
 			span.AddEvent("failed to parse file",

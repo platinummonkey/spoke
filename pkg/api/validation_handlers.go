@@ -56,8 +56,7 @@ func (h *ValidationHandlers) validateProto(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Parse the proto content
-	parser := protobuf.NewStringParser(req.Content)
-	ast, err := parser.Parse()
+	ast, err := protobuf.ParseString(req.Content)
 	if err != nil {
 		httputil.WriteBadRequest(w, "failed to parse proto: "+err.Error())
 		return
@@ -120,8 +119,7 @@ func (h *ValidationHandlers) validateVersion(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Parse the proto content
-	parser := protobuf.NewStringParser(ver.Files[0].Content)
-	ast, err := parser.Parse()
+	ast, err := protobuf.ParseString(ver.Files[0].Content)
 	if err != nil {
 		httputil.WriteInternalError(w, err)
 		return

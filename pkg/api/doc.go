@@ -97,18 +97,11 @@
 //
 // # Compilation System
 //
-// The API supports two compilation backends:
+// The API uses the orchestrator-based compilation system (pkg/codegen/orchestrator)
+// which provides Docker-based isolation, dependency management, caching, and parallel builds.
 //
-// V1 (Legacy): Direct protoc invocation in pkg/codegen. Simpler but less flexible.
-// Set SPOKE_CODEGEN_VERSION=v1 to use.
+// Compilation is triggered automatically when publishing a version, or can be invoked manually:
 //
-// V2 (Orchestrator): Docker-based compilation orchestrator in pkg/codegen/orchestrator.
-// Supports dependency management, caching, and parallel builds. This is the default.
-// Set SPOKE_CODEGEN_VERSION=v2 or leave unset.
-//
-// The Server automatically routes compilation requests to the appropriate backend:
-//
-//	// Routes to v1 or v2 based on SPOKE_CODEGEN_VERSION
 //	info, err := server.CompileGo(version)
 //	info, err := server.CompilePython(version)
 //

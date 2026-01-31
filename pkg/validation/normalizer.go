@@ -206,8 +206,7 @@ func (n *Normalizer) normalizeServices(services []*protobuf.ServiceNode) []*prot
 // NormalizeString normalizes a protobuf file content string
 func (n *Normalizer) NormalizeString(content string) (string, error) {
 	// Parse the content
-	parser := protobuf.NewStringParser(content)
-	ast, err := parser.Parse()
+	ast, err := protobuf.ParseString(content)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse proto: %w", err)
 	}

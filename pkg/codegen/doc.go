@@ -18,25 +18,15 @@
 //   5. Packages (pkg/codegen/packages): Package manager file generation (go.mod, setup.py, etc.)
 //   6. Artifacts (pkg/codegen/artifacts): S3 storage for compiled artifacts
 //
-// # Compilation Backends
+// # Compilation System
 //
-// V1 (Legacy): Direct protoc invocation on the host machine.
-//   - Simpler implementation, fewer dependencies
-//   - Requires protoc and language plugins installed locally
-//   - No dependency resolution or caching
-//   - Used as fallback when v2 unavailable
-//
-// Set SPOKE_CODEGEN_VERSION=v1 to use.
-//
-// V2 (Orchestrator): Docker-based compilation with full feature set.
+// Spoke uses an orchestrator-based compilation system with Docker containers:
 //   - Docker containers with pre-installed protoc and plugins
 //   - Automatic dependency resolution and compilation
 //   - Two-tier caching (L1 in-memory, L2 Redis)
 //   - S3 artifact storage for compiled code
 //   - Parallel compilation for multiple languages
 //   - Package manager file generation
-//
-// Set SPOKE_CODEGEN_VERSION=v2 or leave unset (v2 is default).
 //
 // # Supported Languages
 //
@@ -413,16 +403,8 @@
 //	Plugin version pinning   No      Yes
 //	Docker isolation         No      Yes
 //
-// Migration path:
-//
-//	1. Deploy v2 alongside v1 (both available)
-//	2. Route new compilations to v2 via SPOKE_CODEGEN_VERSION=v2
-//	3. Monitor for errors, fall back to v1 if needed
-//	4. Once stable, make v2 default
-//	5. Eventually deprecate v1
-//
-// The API layer automatically routes to the appropriate backend based on
-// SPOKE_CODEGEN_VERSION environment variable.
+// The orchestrator-based compilation system is the only supported compilation
+// method. Legacy v1 (direct protoc invocation) has been removed.
 //
 // # Subpackages
 //

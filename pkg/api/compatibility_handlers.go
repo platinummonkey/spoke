@@ -92,16 +92,14 @@ func (h *CompatibilityHandlers) checkCompatibility(w http.ResponseWriter, r *htt
 	}
 
 	// Parse old schema
-	oldParser := protobuf.NewStringParser(oldVer.Files[0].Content)
-	oldAST, err := oldParser.Parse()
+	oldAST, err := protobuf.ParseString(oldVer.Files[0].Content)
 	if err != nil {
 		httputil.WriteInternalError(w, err)
 		return
 	}
 
 	// Parse new schema
-	newParser := protobuf.NewStringParser(newVer.Files[0].Content)
-	newAST, err := newParser.Parse()
+	newAST, err := protobuf.ParseString(newVer.Files[0].Content)
 	if err != nil {
 		httputil.WriteInternalError(w, err)
 		return
@@ -223,16 +221,14 @@ func (h *CompatibilityHandlers) checkVersionCompatibility(w http.ResponseWriter,
 	}
 
 	// Parse old schema
-	oldParser := protobuf.NewStringParser(oldVer.Files[0].Content)
-	oldAST, err := oldParser.Parse()
+	oldAST, err := protobuf.ParseString(oldVer.Files[0].Content)
 	if err != nil {
 		httputil.WriteInternalError(w, err)
 		return
 	}
 
 	// Parse new schema
-	newParser := protobuf.NewStringParser(newVer.Files[0].Content)
-	newAST, err := newParser.Parse()
+	newAST, err := protobuf.ParseString(newVer.Files[0].Content)
 	if err != nil {
 		httputil.WriteInternalError(w, err)
 		return

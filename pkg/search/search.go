@@ -98,8 +98,7 @@ func (s *SearchEngine) Search(query SearchQuery) (*SearchResults, error) {
 			}
 
 			// Parse proto file
-			parser := protobuf.NewStringParser(version.Files[0].Content)
-			ast, err := parser.Parse()
+			ast, err := protobuf.ParseString(version.Files[0].Content)
 			if err != nil {
 				continue // Skip files that don't parse
 			}
