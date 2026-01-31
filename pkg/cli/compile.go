@@ -20,14 +20,7 @@ type ProtoFileInfo struct {
 
 // parseProtoFileForSpokeDirectives parses a proto file and extracts spoke directives
 func parseProtoFileForSpokeDirectives(filePath string) (*ProtoFileInfo, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open proto file %s: %w", filePath, err)
-	}
-	defer file.Close()
-
-	parser := protobuf.NewParser(file)
-	ast, err := parser.Parse()
+	ast, err := protobuf.ParseFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse proto file %s: %w", filePath, err)
 	}

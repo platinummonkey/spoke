@@ -95,7 +95,6 @@ func runLint(dir, configFile, format string, autoFix, failOnError, failOnWarning
 		}
 
 		ast, err := protobuf.ParseString(string(content))
-		ast, err := parser.Parse()
 		if err != nil {
 			return fmt.Errorf("failed to parse %s: %w", file, err)
 		}
