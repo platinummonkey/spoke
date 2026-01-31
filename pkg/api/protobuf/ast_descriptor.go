@@ -158,6 +158,19 @@ func messageDescriptorToProto(md protoreflect.MessageDescriptor) *descriptorpb.D
 		msgProto.EnumType = nestedEnums
 	}
 
+	// Add oneofs
+	oneofs := make([]*descriptorpb.OneofDescriptorProto, md.Oneofs().Len())
+	for i := 0; i < md.Oneofs().Len(); i++ {
+		od := md.Oneofs().Get(i)
+		name := string(od.Name())
+		oneofs[i] = &descriptorpb.OneofDescriptorProto{
+			Name: &name,
+		}
+	}
+	if len(oneofs) > 0 {
+		msgProto.OneofDecl = oneofs
+	}
+
 	return msgProto
 }
 
@@ -192,6 +205,12 @@ func fieldDescriptorToProto(fd protoreflect.FieldDescriptor) *descriptorpb.Field
 	} else if fd.Cardinality() == protoreflect.Required {
 		label := descriptorpb.FieldDescriptorProto_LABEL_REQUIRED
 		fieldProto.Label = &label
+	}
+
+	// Set oneof index if field belongs to a oneof
+	if od := fd.ContainingOneof(); od != nil {
+		index := int32(od.Index())
+		fieldProto.OneofIndex = &index
 	}
 
 	return fieldProto
@@ -263,6 +282,7 @@ type positionMap struct {
 	enums       map[string]int // enum name -> line
 	services    map[string]int // service name -> line
 	fields      map[string]int // field name -> line (for top-level and nested fields)
+	oneofs      map[string]int // oneof name -> line
 }
 
 // extractPositionsFromContent scans the proto content to find line numbers for each element
@@ -273,6 +293,7 @@ func extractPositionsFromContent(content string) *positionMap {
 		enums:    make(map[string]int),
 		services: make(map[string]int),
 		fields:   make(map[string]int),
+		oneofs:   make(map[string]int),
 	}
 
 	lines := strings.Split(content, "\n")
@@ -325,6 +346,14 @@ func extractPositionsFromContent(content string) *positionMap {
 			parts := strings.Fields(trimmed)
 			if len(parts) >= 2 {
 				pm.services[parts[1]] = lineNum
+			}
+		}
+
+		// Find oneofs
+		if strings.HasPrefix(trimmed, "oneof") {
+			parts := strings.Fields(trimmed)
+			if len(parts) >= 2 {
+				pm.oneofs[parts[1]] = lineNum
 			}
 		}
 
@@ -437,16 +466,41 @@ func convertMessage(desc *descriptorpb.DescriptorProto, positions *positionMap) 
 		Fields:          make([]*FieldNode, 0),
 		Nested:          make([]*MessageNode, 0),
 		Enums:           make([]*EnumNode, 0),
+		OneOfs:          make([]*OneOfNode, 0),
 		Options:         make([]*OptionNode, 0),
 		Comments:        make([]*CommentNode, 0),
 		SpokeDirectives: make([]*SpokeDirectiveNode, 0),
 		Pos:             Position{Line: positions.messages[desc.GetName()]},
 	}
 
-	// Convert fields
+	// Convert fields first (we'll organize them into oneofs later)
+	allFields := make([]*FieldNode, 0)
 	for _, fieldDesc := range desc.GetField() {
-		msg.Fields = append(msg.Fields, convertField(fieldDesc, positions))
+		allFields = append(allFields, convertField(fieldDesc, positions))
 	}
+
+	// Convert oneofs
+	for oneofIndex, oneofDesc := range desc.GetOneofDecl() {
+		oneof := &OneOfNode{
+			Name:            oneofDesc.GetName(),
+			Fields:          make([]*FieldNode, 0),
+			Comments:        make([]*CommentNode, 0),
+			SpokeDirectives: make([]*SpokeDirectiveNode, 0),
+			Pos:             Position{Line: positions.oneofs[oneofDesc.GetName()]},
+		}
+
+		// Find all fields that belong to this oneof
+		for i, fieldDesc := range desc.GetField() {
+			if fieldDesc.OneofIndex != nil && int(*fieldDesc.OneofIndex) == oneofIndex {
+				oneof.Fields = append(oneof.Fields, allFields[i])
+			}
+		}
+
+		msg.OneOfs = append(msg.OneOfs, oneof)
+	}
+
+	// Add all fields to message (including oneof fields)
+	msg.Fields = allFields
 
 	// Convert nested messages
 	for _, nestedDesc := range desc.GetNestedType() {
@@ -458,7 +512,7 @@ func convertMessage(desc *descriptorpb.DescriptorProto, positions *positionMap) 
 		msg.Enums = append(msg.Enums, convertEnum(enumDesc, positions))
 	}
 
-	// TODO: Convert oneofs, extensions, reserved fields
+	// TODO: Convert extensions, reserved fields (low priority - rarely used)
 
 	return msg
 }
@@ -664,6 +718,9 @@ func associateAndMarkConsumed(node interface{}, directives map[int]*SpokeDirecti
 			case *RPCNode:
 				n.SpokeDirectives = append(n.SpokeDirectives, directive)
 				consumed[line] = true
+			case *OneOfNode:
+				n.SpokeDirectives = append(n.SpokeDirectives, directive)
+				consumed[line] = true
 			}
 		}
 
@@ -690,6 +747,8 @@ func associateAndMarkConsumed(node interface{}, directives map[int]*SpokeDirecti
 				n.Comments = append(n.Comments, commentList...)
 			case *RPCNode:
 				n.Comments = append(n.Comments, commentList...)
+			case *OneOfNode:
+				n.Comments = append(n.Comments, commentList...)
 			}
 		}
 	}
@@ -699,6 +758,16 @@ func associateAndMarkConsumed(node interface{}, directives map[int]*SpokeDirecti
 func mergeDirectivesForMessage(msg *MessageNode, directives map[int]*SpokeDirectiveNode, comments map[int][]*CommentNode, consumed map[int]bool) {
 	associateAndMarkConsumed(msg, directives, comments, consumed, msg.Pos.Line)
 
+	// Process oneofs first (before fields) so oneof-level directives are consumed first
+	for _, oneof := range msg.OneOfs {
+		associateAndMarkConsumed(oneof, directives, comments, consumed, oneof.Pos.Line)
+		// Also associate directives with oneof fields
+		for _, field := range oneof.Fields {
+			associateAndMarkConsumed(field, directives, comments, consumed, field.Pos.Line)
+		}
+	}
+
+	// Process fields after oneofs
 	for _, field := range msg.Fields {
 		associateAndMarkConsumed(field, directives, comments, consumed, field.Pos.Line)
 	}
