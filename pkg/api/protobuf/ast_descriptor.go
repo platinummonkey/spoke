@@ -40,14 +40,174 @@ func ParseWithDescriptor(filename, content string) (*RootNode, error) {
 	return root, nil
 }
 
+// getDummyProtoContent returns appropriate proto content for an import path
+// For well-known Google protobuf types, returns proper definitions
+// For other imports, returns minimal valid proto
+func getDummyProtoContent(importPath string) string {
+	// Handle well-known Google protobuf types
+	switch importPath {
+	case "google/protobuf/timestamp.proto":
+		return `syntax = "proto3";
+package google.protobuf;
+
+message Timestamp {
+  int64 seconds = 1;
+  int32 nanos = 2;
+}
+`
+	case "google/protobuf/duration.proto":
+		return `syntax = "proto3";
+package google.protobuf;
+
+message Duration {
+  int64 seconds = 1;
+  int32 nanos = 2;
+}
+`
+	case "google/protobuf/any.proto":
+		return `syntax = "proto3";
+package google.protobuf;
+
+message Any {
+  string type_url = 1;
+  bytes value = 2;
+}
+`
+	case "google/protobuf/struct.proto":
+		return `syntax = "proto3";
+package google.protobuf;
+
+message Struct {
+  map<string, Value> fields = 1;
+}
+
+message Value {
+  oneof kind {
+    double number_value = 1;
+    string string_value = 2;
+    bool bool_value = 3;
+    Struct struct_value = 4;
+    ListValue list_value = 5;
+  }
+}
+
+message ListValue {
+  repeated Value values = 1;
+}
+`
+	case "google/protobuf/empty.proto":
+		return `syntax = "proto3";
+package google.protobuf;
+
+message Empty {}
+`
+	case "google/protobuf/wrappers.proto":
+		return `syntax = "proto3";
+package google.protobuf;
+
+message DoubleValue { double value = 1; }
+message FloatValue { float value = 1; }
+message Int64Value { int64 value = 1; }
+message UInt64Value { uint64 value = 1; }
+message Int32Value { int32 value = 1; }
+message UInt32Value { uint32 value = 1; }
+message BoolValue { bool value = 1; }
+message StringValue { string value = 1; }
+message BytesValue { bytes value = 1; }
+`
+	default:
+		// For unknown imports, create a minimal valid proto file
+		return "syntax = \"proto3\";\n// Dummy file for import resolution\n"
+	}
+}
+
+// extractImportPaths extracts import paths from proto content using simple text parsing
+// This is used to provide dummy files for imports before full parsing
+func extractImportPaths(content string) []string {
+	var imports []string
+	lines := strings.Split(content, "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Match import statements: import "path" or import public "path" or import weak "path"
+		if strings.HasPrefix(line, "import ") {
+			// Find the quoted string
+			start := strings.Index(line, "\"")
+			if start == -1 {
+				continue
+			}
+			end := strings.Index(line[start+1:], "\"")
+			if end == -1 {
+				continue
+			}
+
+			importPath := line[start+1 : start+1+end]
+			imports = append(imports, importPath)
+		}
+	}
+
+	return imports
+}
+
+// extractImportModifiers extracts public and weak import paths from proto content
+// Returns two slices: publicImports and weakImports
+func extractImportModifiers(content string) (publicImports []string, weakImports []string) {
+	lines := strings.Split(content, "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Match import statements
+		if strings.HasPrefix(line, "import ") {
+			// Find the quoted string
+			start := strings.Index(line, "\"")
+			if start == -1 {
+				continue
+			}
+			end := strings.Index(line[start+1:], "\"")
+			if end == -1 {
+				continue
+			}
+
+			importPath := line[start+1 : start+1+end]
+
+			// Check if import is public or weak
+			beforeQuote := line[:start]
+			if strings.Contains(beforeQuote, "public") {
+				publicImports = append(publicImports, importPath)
+			} else if strings.Contains(beforeQuote, "weak") {
+				weakImports = append(weakImports, importPath)
+			}
+		}
+	}
+
+	return publicImports, weakImports
+}
+
 // parseToDescriptor uses protocompile to parse proto content into a FileDescriptorProto
 func parseToDescriptor(filename, content string) (*descriptorpb.FileDescriptorProto, *descriptorpb.SourceCodeInfo, string, error) {
+	// Extract imports from content to provide dummy files for unresolvable imports
+	imports := extractImportPaths(content)
+
+	// Build a map with the main file and dummy files for all imports
+	fileMap := map[string]string{
+		filename: content,
+	}
+
+	// Add dummy proto files for each import so protocompile doesn't fail on unresolvable imports
+	for _, imp := range imports {
+		if imp != "" && imp != filename {
+			// Create a proto file for the import
+			// For well-known Google protobuf types, use proper definitions
+			fileMap[imp] = getDummyProtoContent(imp)
+		}
+	}
+
 	// Create a protocompile parser
 	compiler := protocompile.Compiler{
 		Resolver: &protocompile.SourceResolver{
-			Accessor: protocompile.SourceAccessorFromMap(map[string]string{
-				filename: content,
-			}),
+			Accessor: protocompile.SourceAccessorFromMap(fileMap),
 		},
 	}
 
@@ -70,6 +230,30 @@ func parseToDescriptor(filename, content string) (*descriptorpb.FileDescriptorPr
 
 	// Convert to FileDescriptorProto
 	fileDescProto := protodescriptorToProto(fileDesc)
+
+	// Extract public/weak import information from content
+	publicImports, weakImports := extractImportModifiers(content)
+
+	// Map import paths to indices
+	importMap := make(map[string]int)
+	for i, dep := range fileDescProto.Dependency {
+		importMap[dep] = i
+	}
+
+	// Set public dependency indices
+	for _, pubPath := range publicImports {
+		if idx, ok := importMap[pubPath]; ok {
+			fileDescProto.PublicDependency = append(fileDescProto.PublicDependency, int32(idx))
+		}
+	}
+
+	// Set weak dependency indices
+	for _, weakPath := range weakImports {
+		if idx, ok := importMap[weakPath]; ok {
+			fileDescProto.WeakDependency = append(fileDescProto.WeakDependency, int32(idx))
+		}
+	}
+
 	return fileDescProto, fileDescProto.GetSourceCodeInfo(), content, nil
 }
 
@@ -87,11 +271,25 @@ func protodescriptorToProto(fd protoreflect.FileDescriptor) *descriptorpb.FileDe
 
 	// Add dependencies
 	deps := make([]string, fd.Imports().Len())
+	var publicDeps []int32
+	var weakDeps []int32
+
 	for i := 0; i < fd.Imports().Len(); i++ {
-		deps[i] = string(fd.Imports().Get(i).Path())
+		imp := fd.Imports().Get(i)
+		deps[i] = string(imp.Path())
+
+		// Check if import is public or weak based on the descriptor
+		// Note: protoreflect doesn't expose IsPublic/IsWeak methods directly
+		// We'll extract this from source content in parseToDescriptor
 	}
 	if len(deps) > 0 {
 		fileProto.Dependency = deps
+	}
+	if len(publicDeps) > 0 {
+		fileProto.PublicDependency = publicDeps
+	}
+	if len(weakDeps) > 0 {
+		fileProto.WeakDependency = weakDeps
 	}
 
 	// Add messages
@@ -196,9 +394,16 @@ func fieldDescriptorToProto(fd protoreflect.FieldDescriptor) *descriptorpb.Field
 	fieldProto.Type = &typ
 
 	// Set type name for message/enum types
-	if kind == protoreflect.MessageKind || kind == protoreflect.EnumKind {
-		typeName := "." + string(fd.Message().FullName())
-		fieldProto.TypeName = &typeName
+	if kind == protoreflect.MessageKind {
+		if msg := fd.Message(); msg != nil {
+			typeName := "." + string(msg.FullName())
+			fieldProto.TypeName = &typeName
+		}
+	} else if kind == protoreflect.EnumKind {
+		if enum := fd.Enum(); enum != nil {
+			typeName := "." + string(enum.FullName())
+			fieldProto.TypeName = &typeName
+		}
 	}
 
 	// Set label
@@ -428,11 +633,17 @@ func convertDescriptorToAST(desc *descriptorpb.FileDescriptorProto, sourceInfo *
 			SpokeDirectives: make([]*SpokeDirectiveNode, 0),
 		})
 	}
-	for i, publicDep := range desc.GetPublicDependency() {
-		if int(publicDep) < len(root.Imports) {
-			root.Imports[publicDep].Public = true
+	// Mark public imports
+	for _, publicDepIdx := range desc.GetPublicDependency() {
+		if int(publicDepIdx) < len(root.Imports) {
+			root.Imports[publicDepIdx].Public = true
 		}
-		_ = i // unused
+	}
+	// Mark weak imports
+	for _, weakDepIdx := range desc.GetWeakDependency() {
+		if int(weakDepIdx) < len(root.Imports) {
+			root.Imports[weakDepIdx].Weak = true
+		}
 	}
 	for i, weakDep := range desc.GetWeakDependency() {
 		if int(weakDep) < len(root.Imports) {

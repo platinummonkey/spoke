@@ -39,7 +39,7 @@ func TestRegisterRoutes(t *testing.T) {
 			name:           "OpenAPI JSON endpoint",
 			path:           "/openapi.json",
 			method:         "GET",
-			expectedStatus: http.StatusNotImplemented,
+			expectedStatus: http.StatusOK,
 		},
 		{
 			name:           "Swagger UI endpoint",
@@ -88,12 +88,15 @@ func TestServeOpenAPISpecJSON(t *testing.T) {
 
 	handlers.serveOpenAPISpecJSON(w, req)
 
-	assert.Equal(t, http.StatusNotImplemented, w.Code)
+	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
-	assert.Contains(t, w.Body.String(), "Not implemented")
-	assert.Contains(t, w.Body.String(), "JSON format not yet supported")
-	assert.Contains(t, w.Body.String(), "/openapi.yaml")
+
+	// Verify valid JSON response
+	body := w.Body.String()
+	assert.NotEmpty(t, body)
+	assert.Contains(t, body, "openapi")
+	assert.Contains(t, body, "paths")
 }
 
 func TestServeSwaggerUI(t *testing.T) {
@@ -147,11 +150,11 @@ func TestRouteIntegration(t *testing.T) {
 			expectedBodyContains: nil, // Just check it returns data
 		},
 		{
-			name:               "JSON spec returns not implemented",
+			name:               "JSON spec returns valid JSON",
 			path:               "/openapi.json",
-			expectedStatus:     http.StatusNotImplemented,
+			expectedStatus:     http.StatusOK,
 			expectedContentType: "application/json",
-			expectedBodyContains: []string{"Not implemented", "error"},
+			expectedBodyContains: []string{"openapi", "paths"},
 		},
 		{
 			name:               "Swagger UI returns HTML",

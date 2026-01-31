@@ -370,8 +370,6 @@ syntax = "proto3";
 
 package test;
 
-import "other.proto";
-
 message TestMessage {
   string name = 1;
   int32 id = 2;
