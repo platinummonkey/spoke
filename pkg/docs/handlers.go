@@ -57,8 +57,7 @@ func (h *DocsHandlers) getVersionDocs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse proto file
-	parser := protobuf.NewStringParser(ver.Files[0].Content)
-	ast, err := parser.Parse()
+	ast, err := protobuf.ParseString(ver.Files[0].Content)
 	if err != nil {
 		http.Error(w, "failed to parse proto: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -101,8 +100,7 @@ func (h *DocsHandlers) getVersionDocsMarkdown(w http.ResponseWriter, r *http.Req
 	}
 
 	// Parse proto file
-	parser := protobuf.NewStringParser(ver.Files[0].Content)
-	ast, err := parser.Parse()
+	ast, err := protobuf.ParseString(ver.Files[0].Content)
 	if err != nil {
 		http.Error(w, "failed to parse proto: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -142,8 +140,7 @@ func (h *DocsHandlers) getVersionDocsJSON(w http.ResponseWriter, r *http.Request
 	}
 
 	// Parse proto file
-	parser := protobuf.NewStringParser(ver.Files[0].Content)
-	ast, err := parser.Parse()
+	ast, err := protobuf.ParseString(ver.Files[0].Content)
 	if err != nil {
 		http.Error(w, "failed to parse proto: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -188,16 +185,14 @@ func (h *DocsHandlers) compareVersions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse old version
-	oldParser := protobuf.NewStringParser(oldVer.Files[0].Content)
-	oldAST, err := oldParser.Parse()
+	oldAST, err := protobuf.ParseString(oldVer.Files[0].Content)
 	if err != nil {
 		http.Error(w, "failed to parse old proto: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Parse new version
-	newParser := protobuf.NewStringParser(newVer.Files[0].Content)
-	newAST, err := newParser.Parse()
+	newAST, err := protobuf.ParseString(newVer.Files[0].Content)
 	if err != nil {
 		http.Error(w, "failed to parse new proto: "+err.Error(), http.StatusInternalServerError)
 		return

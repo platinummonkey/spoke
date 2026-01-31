@@ -117,7 +117,7 @@ func parseSchema(path string) (*compatibility.SchemaGraph, error) {
 	}
 
 	// Parse protobuf
-	parser := protobuf.NewStringParser(string(content))
+	ast, err := protobuf.ParseString(string(content))
 	ast, err := parser.Parse()
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse proto: %v", err)

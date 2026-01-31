@@ -285,7 +285,7 @@ func (r *DependencyResolver) ResolveDependencies(moduleName, version string) ([]
 	}
 
 	// Parse the proto file
-	parser := protobuf.NewStringParser(ver.Files[0].Content)
+	ast, err := protobuf.ParseString(ver.Files[0].Content)
 	ast, err := parser.Parse()
 	if err != nil {
 		return nil, err
