@@ -730,9 +730,10 @@ func mergeDirectivesForService(svc *ServiceNode, directives map[int]*SpokeDirect
 	}
 }
 
-// UseDescriptorParser is a feature flag to enable the new descriptor-based parser.
-// Set to true to use ParseWithDescriptor instead of the legacy parser.
-var UseDescriptorParser = false
+// UseDescriptorParser enables the new descriptor-based parser.
+// The descriptor parser is now the default as it provides complete AST parsing
+// including field declarations, which the legacy parser did not support.
+var UseDescriptorParser = true
 
 // ParseWithFallback attempts to parse with the descriptor parser if enabled,
 // falls back to legacy parser if disabled or if descriptor parser fails.

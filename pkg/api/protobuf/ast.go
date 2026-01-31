@@ -418,6 +418,10 @@ type Parser struct {
 }
 
 // NewParser creates a new Parser
+//
+// Deprecated: Use ParseWithDescriptor for complete AST parsing including fields.
+// The legacy parser does not parse field declarations inside messages.
+// This function is maintained for backward compatibility but will be removed in a future release.
 func NewParser(r io.Reader) *Parser {
 	scanner := NewScanner(r)
 	return &Parser{
@@ -425,7 +429,11 @@ func NewParser(r io.Reader) *Parser {
 	}
 }
 
-// NewParser creates a new Parser
+// NewStringParser creates a new Parser from a string
+//
+// Deprecated: Use ParseWithDescriptor for complete AST parsing including fields.
+// The legacy parser does not parse field declarations inside messages.
+// This function is maintained for backward compatibility but will be removed in a future release.
 func NewStringParser(content string) *Parser {
 	scanner := NewScanner(strings.NewReader(content))
 	return &Parser{
@@ -434,6 +442,10 @@ func NewStringParser(content string) *Parser {
 }
 
 // Parse parses the protobuf file and returns the AST
+//
+// Deprecated: Use ParseWithDescriptor for complete AST parsing including fields.
+// This legacy parser does not parse field declarations inside messages.
+// Use ParseWithFallback to automatically use the descriptor parser with fallback support.
 func (p *Parser) Parse() (*RootNode, error) {
 	// Initialize by reading the first two tokens
 	p.advance()
