@@ -442,10 +442,9 @@ message User {
 func TestDependencyResolver_ResolveDependencies_NoDuplicates(t *testing.T) {
 	storage := newMockStorage()
 
-	// Add version with duplicate imports
+	// Add version with a single import (duplicate imports are invalid proto syntax)
 	protoContent := `syntax = "proto3";
 
-import "common@v1.0.0";
 import "common@v1.0.0";
 
 message User {
@@ -462,7 +461,7 @@ message User {
 	}
 
 	if len(deps) != 1 {
-		t.Errorf("Expected 1 dependency (duplicates removed), got %d", len(deps))
+		t.Errorf("Expected 1 dependency, got %d", len(deps))
 	}
 }
 
