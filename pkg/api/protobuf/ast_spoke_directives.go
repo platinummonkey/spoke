@@ -19,9 +19,75 @@ func ParseSpokeDirectivesFromContent(content string) (map[int]*SpokeDirectiveNod
 	comments := make(map[int][]*CommentNode)
 
 	lines := strings.Split(content, "\n")
+	inBlockComment := false
 
 	for lineNum, line := range lines {
+		originalLine := line
 		line = strings.TrimSpace(line)
+
+		// Handle block comments
+		if strings.Contains(line, "/*") {
+			inBlockComment = true
+
+			// Check if block comment ends on same line
+			if strings.Contains(line, "*/") {
+				inBlockComment = false
+				// Extract text between /* and */
+				blockText := extractBlockCommentText(line)
+				if IsSpokeDirective(blockText) {
+					directive, err := ExtractSpokeDirective(blockText, lineNum+1, 0)
+					if err != nil {
+						return nil, nil, err
+					}
+					directives[lineNum+1] = directive
+				}
+				continue
+			}
+
+			// Start of multi-line block comment
+			// Extract any text after /*
+			afterStart := line[strings.Index(line, "/*")+2:]
+			afterStart = strings.TrimSpace(afterStart)
+			if afterStart != "" && IsSpokeDirective(afterStart) {
+				directive, err := ExtractSpokeDirective(afterStart, lineNum+1, 0)
+				if err != nil {
+					return nil, nil, err
+				}
+				directives[lineNum+1] = directive
+			}
+			continue
+		}
+
+		if inBlockComment {
+			// Check if this line ends the block comment
+			if strings.Contains(line, "*/") {
+				inBlockComment = false
+				// Extract text before */
+				beforeEnd := line[:strings.Index(line, "*/")]
+				beforeEnd = strings.TrimSpace(strings.TrimPrefix(beforeEnd, "*"))
+				beforeEnd = strings.TrimSpace(beforeEnd)
+				if beforeEnd != "" && IsSpokeDirective(beforeEnd) {
+					directive, err := ExtractSpokeDirective(beforeEnd, lineNum+1, 0)
+					if err != nil {
+						return nil, nil, err
+					}
+					directives[lineNum+1] = directive
+				}
+				continue
+			}
+
+			// Line inside block comment
+			commentLine := strings.TrimPrefix(line, "*")
+			commentLine = strings.TrimSpace(commentLine)
+			if commentLine != "" && IsSpokeDirective(commentLine) {
+				directive, err := ExtractSpokeDirective(commentLine, lineNum+1, 0)
+				if err != nil {
+					return nil, nil, err
+				}
+				directives[lineNum+1] = directive
+			}
+			continue
+		}
 
 		// Check for line comments
 		if strings.HasPrefix(line, "//") {
@@ -36,7 +102,7 @@ func ParseSpokeDirectivesFromContent(content string) (map[int]*SpokeDirectiveNod
 				directives[lineNum+1] = directive
 			} else {
 				comment := &CommentNode{
-					Text: line,
+					Text: originalLine,
 					Pos: Position{
 						Line:   lineNum + 1,
 						Column: 0,
@@ -46,12 +112,20 @@ func ParseSpokeDirectivesFromContent(content string) (map[int]*SpokeDirectiveNod
 				comments[lineNum+1] = append(comments[lineNum+1], comment)
 			}
 		}
-
-		// TODO: Handle block comments /* */
-		// For now, we focus on line comments which are more common
 	}
 
 	return directives, comments, nil
+}
+
+// extractBlockCommentText extracts text from a single-line block comment /* ... */
+func extractBlockCommentText(line string) string {
+	start := strings.Index(line, "/*")
+	end := strings.Index(line, "*/")
+	if start == -1 || end == -1 || end <= start {
+		return ""
+	}
+	text := line[start+2 : end]
+	return strings.TrimSpace(text)
 }
 
 // IsSpokeDirective checks if a comment text contains a spoke directive.
