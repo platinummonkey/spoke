@@ -116,9 +116,54 @@ message StringValue { string value = 1; }
 message BytesValue { bytes value = 1; }
 `
 	default:
-		// For unknown imports, create a minimal valid proto file
-		return "syntax = \"proto3\";\n// Dummy file for import resolution\n"
+		// For unknown imports, try to create a reasonable proto file based on the import path
+		// Extract package name and potential message names from the path
+		return generateDummyProtoFromPath(importPath)
 	}
+}
+
+// generateDummyProtoFromPath generates a dummy proto file with inferred package and message names
+func generateDummyProtoFromPath(importPath string) string {
+	// Remove .proto extension
+	path := strings.TrimSuffix(importPath, ".proto")
+
+	// Extract package name from path (e.g., "user/user.proto" -> "user")
+	parts := strings.Split(path, "/")
+	var packageName string
+	var messageName string
+
+	if len(parts) > 0 {
+		// Use the last directory as package name
+		if len(parts) > 1 {
+			packageName = parts[len(parts)-2]
+		} else {
+			packageName = parts[0]
+		}
+
+		// Use the file name (last part) as a message name, capitalized
+		fileName := parts[len(parts)-1]
+		if fileName != "" {
+			// Capitalize first letter for message name
+			messageName = strings.ToUpper(fileName[:1]) + fileName[1:]
+		}
+	}
+
+	if packageName == "" {
+		packageName = "dummy"
+	}
+	if messageName == "" {
+		messageName = "DummyMessage"
+	}
+
+	// Generate a proto file with the inferred package and a dummy message
+	return fmt.Sprintf(`syntax = "proto3";
+package %s;
+
+// Auto-generated dummy message for import resolution
+message %s {
+  string id = 1;
+}
+`, packageName, messageName)
 }
 
 // extractImportPaths extracts import paths from proto content using simple text parsing
