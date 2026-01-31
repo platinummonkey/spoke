@@ -631,8 +631,9 @@ type positionMap struct {
 	messages    map[string]int // message name -> line
 	enums       map[string]int // enum name -> line
 	services    map[string]int // service name -> line
-	fields      map[string]int // field name -> line (for top-level and nested fields)
+	fields      map[string]int // field name -> line (scoped by message: "Message.field")
 	oneofs      map[string]int // oneof name -> line
+	rpcs        map[string]int // rpc name -> line (scoped by service: "Service.Method")
 }
 
 // extractPositionsFromContent scans the proto content to find line numbers for each element
@@ -644,9 +645,14 @@ func extractPositionsFromContent(content string) *positionMap {
 		services: make(map[string]int),
 		fields:   make(map[string]int),
 		oneofs:   make(map[string]int),
+		rpcs:     make(map[string]int),
 	}
 
 	lines := strings.Split(content, "\n")
+	var currentMessage string
+	var currentService string
+	braceDepth := 0
+
 	for i, line := range lines {
 		lineNum := i + 1
 		trimmed := strings.TrimSpace(line)
@@ -655,6 +661,10 @@ func extractPositionsFromContent(content string) *positionMap {
 		if trimmed == "" || strings.HasPrefix(trimmed, "//") {
 			continue
 		}
+
+		// Track brace depth to know when we exit a message
+		braceDepth += strings.Count(trimmed, "{")
+		braceDepth -= strings.Count(trimmed, "}")
 
 		// Find syntax
 		if strings.HasPrefix(trimmed, "syntax") {
@@ -679,7 +689,9 @@ func extractPositionsFromContent(content string) *positionMap {
 		if strings.HasPrefix(trimmed, "message") {
 			parts := strings.Fields(trimmed)
 			if len(parts) >= 2 {
-				pm.messages[parts[1]] = lineNum
+				messageName := parts[1]
+				pm.messages[messageName] = lineNum
+				currentMessage = messageName
 			}
 		}
 
@@ -688,6 +700,8 @@ func extractPositionsFromContent(content string) *positionMap {
 			parts := strings.Fields(trimmed)
 			if len(parts) >= 2 {
 				pm.enums[parts[1]] = lineNum
+				currentMessage = "" // Exit message context
+				currentService = "" // Exit service context
 			}
 		}
 
@@ -695,7 +709,29 @@ func extractPositionsFromContent(content string) *positionMap {
 		if strings.HasPrefix(trimmed, "service") {
 			parts := strings.Fields(trimmed)
 			if len(parts) >= 2 {
-				pm.services[parts[1]] = lineNum
+				serviceName := parts[1]
+				pm.services[serviceName] = lineNum
+				currentMessage = "" // Exit message context
+				currentService = serviceName
+			}
+		}
+
+		// Find RPCs
+		if strings.HasPrefix(trimmed, "rpc") {
+			parts := strings.Fields(trimmed)
+			if len(parts) >= 2 {
+				rpcName := parts[1]
+				// Extract just the method name before the opening parenthesis
+				// e.g., "GetUser(GetUserRequest)" -> "GetUser"
+				if idx := strings.Index(rpcName, "("); idx != -1 {
+					rpcName = rpcName[:idx]
+				}
+				// Use service-scoped key
+				key := rpcName
+				if currentService != "" {
+					key = currentService + "." + rpcName
+				}
+				pm.rpcs[key] = lineNum
 			}
 		}
 
@@ -704,6 +740,16 @@ func extractPositionsFromContent(content string) *positionMap {
 			parts := strings.Fields(trimmed)
 			if len(parts) >= 2 {
 				pm.oneofs[parts[1]] = lineNum
+			}
+		}
+
+		// Reset current message/service when we exit blocks
+		if braceDepth == 0 {
+			if currentMessage != "" {
+				currentMessage = ""
+			}
+			if currentService != "" {
+				currentService = ""
 			}
 		}
 
@@ -716,7 +762,12 @@ func extractPositionsFromContent(content string) *positionMap {
 			for idx, part := range parts {
 				if part == "=" && idx > 0 {
 					fieldName := parts[idx-1]
-					pm.fields[fieldName] = lineNum
+					// Use message-scoped key if inside a message
+					key := fieldName
+					if currentMessage != "" {
+						key = currentMessage + "." + fieldName
+					}
+					pm.fields[key] = lineNum
 					break
 				}
 			}
@@ -937,7 +988,7 @@ func convertMessage(desc *descriptorpb.DescriptorProto, positions *positionMap) 
 	// Convert fields first (we'll organize them into oneofs later)
 	allFields := make([]*FieldNode, 0)
 	for _, fieldDesc := range desc.GetField() {
-		allFields = append(allFields, convertField(fieldDesc, positions))
+		allFields = append(allFields, convertField(fieldDesc, desc.GetName(), positions))
 	}
 
 	// Convert oneofs
@@ -979,7 +1030,15 @@ func convertMessage(desc *descriptorpb.DescriptorProto, positions *positionMap) 
 }
 
 // convertField converts a FieldDescriptorProto to FieldNode
-func convertField(desc *descriptorpb.FieldDescriptorProto, positions *positionMap) *FieldNode {
+func convertField(desc *descriptorpb.FieldDescriptorProto, messageName string, positions *positionMap) *FieldNode {
+	// Try message-scoped key first, fall back to just field name
+	fieldKey := messageName + "." + desc.GetName()
+	lineNum := positions.fields[fieldKey]
+	if lineNum == 0 {
+		// Fallback to non-scoped key for backward compatibility
+		lineNum = positions.fields[desc.GetName()]
+	}
+
 	field := &FieldNode{
 		Name:            desc.GetName(),
 		Type:            getFieldTypeName(desc),
@@ -987,7 +1046,7 @@ func convertField(desc *descriptorpb.FieldDescriptorProto, positions *positionMa
 		Options:         make([]*OptionNode, 0),
 		Comments:        make([]*CommentNode, 0),
 		SpokeDirectives: make([]*SpokeDirectiveNode, 0),
-		Pos:             Position{Line: positions.fields[desc.GetName()]},
+		Pos:             Position{Line: lineNum},
 	}
 
 	// Set field modifiers
@@ -1086,6 +1145,14 @@ func convertService(desc *descriptorpb.ServiceDescriptorProto, positions *positi
 
 	// Convert RPC methods
 	for _, methodDesc := range desc.GetMethod() {
+		// Try service-scoped key first, fall back to just method name
+		rpcKey := desc.GetName() + "." + methodDesc.GetName()
+		lineNum := positions.rpcs[rpcKey]
+		if lineNum == 0 {
+			// Fallback to non-scoped key for backward compatibility
+			lineNum = positions.rpcs[methodDesc.GetName()]
+		}
+
 		svc.RPCs = append(svc.RPCs, &RPCNode{
 			Name:            methodDesc.GetName(),
 			InputType:       strings.TrimPrefix(methodDesc.GetInputType(), "."),
@@ -1095,6 +1162,7 @@ func convertService(desc *descriptorpb.ServiceDescriptorProto, positions *positi
 			Options:         make([]*OptionNode, 0),
 			Comments:        make([]*CommentNode, 0),
 			SpokeDirectives: make([]*SpokeDirectiveNode, 0),
+			Pos:             Position{Line: lineNum},
 		})
 	}
 

@@ -34,11 +34,21 @@ func parseProtoFileForSpokeDirectives(filePath string) (*ProtoFileInfo, error) {
 		info.PackageName = ast.Package.Name
 	}
 
-	// Look for domain directives
+	// Look for domain directives on root node
 	for _, directive := range ast.SpokeDirectives {
 		if directive.Option == "domain" {
 			info.Domain = directive.Value
 			break // Use the first domain directive found
+		}
+	}
+
+	// Also check package node for directives (they're often attached there)
+	if ast.Package != nil {
+		for _, directive := range ast.Package.SpokeDirectives {
+			if directive.Option == "domain" {
+				info.Domain = directive.Value
+				break
+			}
 		}
 	}
 
