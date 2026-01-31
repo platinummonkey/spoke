@@ -360,8 +360,14 @@ func (r *DependencyResolver) BuildDependencyGraph(moduleName, version string) (*
 // - "common@v1.0.0" (explicit version)
 // - "common/v1.0.0/types.proto" (path-based version)
 func parseImportPath(path string) (module, version string) {
-	// Check for @ syntax
-	if idx := indexByte(path, '@'); idx != -1 {
+	// Check for @ syntax (or - which is how @ gets preprocessed)
+	// Try @ first, then fall back to -
+	idx := indexByte(path, '@')
+	if idx == -1 {
+		idx = indexByte(path, '-')
+	}
+
+	if idx != -1 {
 		module = path[:idx]
 		versionPart := path[idx+1:]
 
