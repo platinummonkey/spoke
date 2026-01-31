@@ -182,6 +182,7 @@ func runMigrations(db *sql.DB) error {
 	migrationFiles := []string{
 		"001_create_base_schema.up.sql",
 		"002_create_auth_schema.up.sql",
+		"007_analytics_events.up.sql",
 	}
 
 	for _, filename := range migrationFiles {
