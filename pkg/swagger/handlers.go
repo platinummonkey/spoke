@@ -2,11 +2,13 @@ package swagger
 
 import (
 	_ "embed"
+	"encoding/json"
 	"html/template"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	"github.com/platinummonkey/spoke/pkg/httputil"
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed openapi.yaml
@@ -37,16 +39,25 @@ func (h *SwaggerHandlers) serveOpenAPISpec(w http.ResponseWriter, r *http.Reques
 }
 
 // serveOpenAPISpecJSON serves the OpenAPI specification in JSON format
-// Note: This requires converting YAML to JSON, which we'll implement if needed
 func (h *SwaggerHandlers) serveOpenAPISpecJSON(w http.ResponseWriter, r *http.Request) {
-	// For now, we'll just return the YAML version
-	// TODO: Implement YAML to JSON conversion using gopkg.in/yaml.v3
+	// Parse YAML into generic map
+	var spec map[string]interface{}
+	if err := yaml.Unmarshal(openapiSpec, &spec); err != nil {
+		httputil.WriteInternalError(w, err)
+		return
+	}
+
+	// Convert to JSON
+	jsonBytes, err := json.MarshalIndent(spec, "", "  ")
+	if err != nil {
+		httputil.WriteInternalError(w, err)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	httputil.WriteJSON(w, http.StatusNotImplemented, map[string]string{
-		"error":   "Not implemented",
-		"message": "JSON format not yet supported, use /openapi.yaml instead",
-	})
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonBytes)
 }
 
 // serveSwaggerUI serves the Swagger UI HTML page
