@@ -50,7 +50,7 @@ func WithCleanupTimeout(timeout time.Duration) TestContainerCleanupOption {
 //
 // The cleanup function will:
 // 1. Close the database connection
-// 2. Terminate the container with a fresh context (avoiding cancelled context issues)
+// 2. Terminate the container with a fresh context (avoiding canceled context issues)
 // 3. Remove the container and its volumes automatically
 func SetupPostgresContainer(t *testing.T, opts ...TestContainerCleanupOption) (*sql.DB, func()) {
 	t.Helper()
@@ -126,8 +126,8 @@ func SetupPostgresContainer(t *testing.T, opts ...TestContainerCleanupOption) (*
 			t.Logf("Warning: Failed to close database: %v", err)
 		}
 
-		// Use a fresh context for cleanup to avoid issues with cancelled contexts
-		// This is important because the original ctx might be cancelled by test timeout
+		// Use a fresh context for cleanup to avoid issues with canceled contexts
+		// This is important because the original ctx might be canceled by test timeout
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), config.cleanupTimeout)
 		defer cancel()
 
