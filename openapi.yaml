@@ -73,6 +73,12 @@ tags:
     description: Module version management
   - name: Analytics
     description: Usage analytics and statistics
+  - name: Audit
+    description: Audit logging and compliance
+  - name: Documentation
+    description: API documentation generation
+  - name: RBAC
+    description: Role-based access control
   - name: User Features
     description: Bookmarks and saved searches
   - name: Plugin Verification
@@ -2855,6 +2861,833 @@ paths:
           $ref: '#/components/responses/InternalError'
 
 # ==============================================================================
+  # ============================================================================
+  # DOCUMENTATION API
+  # ============================================================================
+
+  /docs/{module}/{version}:
+    get:
+      tags: [Documentation]
+      summary: Get HTML documentation
+      description: Generate and retrieve HTML documentation for a module version
+      operationId: getVersionDocs
+      security: []
+      parameters:
+        - name: module
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML documentation
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /docs/{module}/{version}/markdown:
+    get:
+      tags: [Documentation]
+      summary: Get Markdown documentation
+      description: Generate and download Markdown documentation for a module version
+      operationId: getVersionDocsMarkdown
+      security: []
+      parameters:
+        - name: module
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Markdown documentation
+          content:
+            text/markdown:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /docs/{module}/{version}/json:
+    get:
+      tags: [Documentation]
+      summary: Get JSON documentation
+      description: Get structured JSON documentation for a module version
+      operationId: getVersionDocsJSON
+      security: []
+      parameters:
+        - name: module
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: JSON documentation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Documentation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /docs/{module}/compare:
+    get:
+      tags: [Documentation]
+      summary: Compare documentation between versions
+      description: Compare documentation changes between two versions
+      operationId: compareVersionDocs
+      security: []
+      parameters:
+        - name: module
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: old
+          in: query
+          required: true
+          description: Old version number
+          schema:
+            type: string
+        - name: new
+          in: query
+          required: true
+          description: New version number
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Version comparison
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  old_version:
+                    type: string
+                  new_version:
+                    type: string
+                  changes:
+                    type: object
+                    properties:
+                      messages:
+                        type: object
+                        properties:
+                          added:
+                            type: array
+                            items:
+                              type: string
+                          removed:
+                            type: array
+                            items:
+                              type: string
+                          modified:
+                            type: array
+                            items:
+                              type: string
+                      services:
+                        type: object
+                        properties:
+                          added:
+                            type: array
+                            items:
+                              type: string
+                          removed:
+                            type: array
+                            items:
+                              type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ============================================================================
+  # BASIC SEARCH API
+  # ============================================================================
+
+  /search:
+    get:
+      tags: [Search]
+      summary: Full-text search
+      description: Search across all entities (modules, messages, fields, services)
+      operationId: search
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum results to return
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: offset
+          in: query
+          description: Pagination offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResults'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /search/modules:
+    get:
+      tags: [Search]
+      summary: Search modules
+      description: Search for modules by name or description
+      operationId: searchModules
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Module search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResults'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /search/messages:
+    get:
+      tags: [Search]
+      summary: Search message definitions
+      description: Search for Protocol Buffer message definitions
+      operationId: searchMessages
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Message search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResults'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /search/fields:
+    get:
+      tags: [Search]
+      summary: Search field definitions
+      description: Search for field definitions across all messages
+      operationId: searchFields
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Field search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResults'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /search/services:
+    get:
+      tags: [Search]
+      summary: Search service definitions
+      description: Search for gRPC service definitions
+      operationId: searchServices
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Service search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResults'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ============================================================================
+  # RBAC API
+  # ============================================================================
+
+  /rbac/roles:
+    get:
+      tags: [RBAC]
+      summary: List roles
+      description: List all available roles
+      operationId: listRoles
+      responses:
+        '200':
+          description: List of roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [RBAC]
+      summary: Create role
+      description: Create a new role with permissions
+      operationId: createRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, permissions]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                permissions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Permission'
+      responses:
+        '201':
+          description: Role created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /rbac/roles/{id}:
+    get:
+      tags: [RBAC]
+      summary: Get role details
+      description: Get detailed information about a role
+      operationId: getRole
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Role details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags: [RBAC]
+      summary: Update role
+      description: Update a role's properties
+      operationId: updateRole
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                permissions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Permission'
+      responses:
+        '200':
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags: [RBAC]
+      summary: Delete role
+      description: Delete a role
+      operationId: deleteRole
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Role deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /rbac/users/{id}/roles:
+    get:
+      tags: [RBAC]
+      summary: Get user roles
+      description: Get all roles assigned to a user
+      operationId: getUserRoles
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User's roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [RBAC]
+      summary: Assign role to user
+      description: Assign a role to a user
+      operationId: assignRoleToUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role_id]
+              properties:
+                role_id:
+                  type: string
+      responses:
+        '200':
+          description: Role assigned
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /rbac/users/{id}/roles/{role_id}:
+    delete:
+      tags: [RBAC]
+      summary: Revoke role from user
+      description: Revoke a role assignment from a user
+      operationId: revokeRoleFromUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: role_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Role revoked
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /rbac/check:
+    post:
+      tags: [RBAC]
+      summary: Check permission
+      description: Check if a user has a specific permission
+      operationId: checkPermission
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, resource, action]
+              properties:
+                user_id:
+                  type: string
+                resource:
+                  type: string
+                action:
+                  type: string
+      responses:
+        '200':
+          description: Permission check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  allowed:
+                    type: boolean
+                  reason:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /rbac/templates:
+    get:
+      tags: [RBAC]
+      summary: Get role templates
+      description: Get predefined role templates
+      operationId: getRoleTemplates
+      responses:
+        '200':
+          description: Role templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ============================================================================
+  # AUDIT API
+  # ============================================================================
+
+  /audit/events:
+    get:
+      tags: [Audit]
+      summary: List audit events
+      description: Retrieve audit log events with filtering
+      operationId: listAuditEvents
+      parameters:
+        - name: actor
+          in: query
+          description: Filter by actor
+          schema:
+            type: string
+        - name: action
+          in: query
+          description: Filter by action
+          schema:
+            type: string
+        - name: resource
+          in: query
+          description: Filter by resource
+          schema:
+            type: string
+        - name: start_time
+          in: query
+          description: Start time for date range
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          description: End time for date range
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Audit events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditEvent'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /audit/events/{id}:
+    get:
+      tags: [Audit]
+      summary: Get audit event details
+      description: Retrieve detailed information about a specific audit event
+      operationId: getAuditEvent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audit event details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEvent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /audit/export:
+    get:
+      tags: [Audit]
+      summary: Export audit events
+      description: Export audit events in CSV or JSON format
+      operationId: exportAuditEvents
+      parameters:
+        - name: format
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [csv, json]
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Exported audit events
+          content:
+            text/csv:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditEvent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /audit/stats:
+    get:
+      tags: [Audit]
+      summary: Get audit statistics
+      description: Retrieve audit log statistics
+      operationId: getAuditStats
+      parameters:
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Audit statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_events:
+                    type: integer
+                  events_by_action:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                  events_by_actor:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                  events_by_resource:
+                    type: object
+                    additionalProperties:
+                      type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
 # COMPONENTS
 # ==============================================================================
 
@@ -3510,6 +4343,190 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Dependency'
+
+    Documentation:
+      type: object
+      properties:
+        package:
+          type: string
+        syntax:
+          type: string
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageDoc'
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceDoc'
+        enums:
+          type: array
+          items:
+            $ref: '#/components/schemas/EnumDoc'
+
+    MessageDoc:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldDoc'
+        oneofs:
+          type: array
+          items:
+            type: string
+
+    FieldDoc:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        number:
+          type: integer
+        description:
+          type: string
+        deprecated:
+          type: boolean
+
+    ServiceDoc:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        methods:
+          type: array
+          items:
+            $ref: '#/components/schemas/MethodDoc'
+
+    MethodDoc:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        input_type:
+          type: string
+        output_type:
+          type: string
+        client_streaming:
+          type: boolean
+        server_streaming:
+          type: boolean
+
+    EnumDoc:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        values:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              number:
+                type: integer
+              description:
+                type: string
+
+    SearchResults:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: [module, message, field, service]
+              id:
+                type: string
+              name:
+                type: string
+              description:
+                type: string
+              module:
+                type: string
+              version:
+                type: string
+              relevance:
+                type: number
+                format: float
+        total:
+          type: integer
+        query:
+          type: string
+        took_ms:
+          type: integer
+
+    Role:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        created_at:
+          type: string
+          format: date-time
+
+    Permission:
+      type: object
+      properties:
+        resource:
+          type: string
+        action:
+          type: string
+        constraints:
+          type: object
+          additionalProperties: true
+
+    AuditEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        actor:
+          type: string
+          description: User or service that performed the action
+        action:
+          type: string
+          description: Action performed (create, update, delete, etc.)
+        resource:
+          type: string
+          description: Resource affected
+        timestamp:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional contextual information
+        ip_address:
+          type: string
+        user_agent:
+          type: string
+        success:
+          type: boolean
 
     Error:
       type: object
