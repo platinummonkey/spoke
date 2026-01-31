@@ -730,30 +730,11 @@ func mergeDirectivesForService(svc *ServiceNode, directives map[int]*SpokeDirect
 	}
 }
 
-// UseDescriptorParser enables the new descriptor-based parser.
-// The descriptor parser is now the default as it provides complete AST parsing
-// including field declarations, which the legacy parser did not support.
-var UseDescriptorParser = true
-
-// ParseWithFallback attempts to parse with the descriptor parser if enabled,
-// falls back to legacy parser if disabled or if descriptor parser fails.
+// ParseWithFallback parses proto content using the descriptor parser.
+// This function is kept for backward compatibility but now directly uses
+// the descriptor parser without fallback to the deprecated legacy parser.
+//
+// Deprecated: Use ParseWithDescriptor directly for clarity.
 func ParseWithFallback(content string) (*RootNode, error) {
-	if UseDescriptorParser {
-		// Try new parser
-		ast, err := ParseWithDescriptor("input.proto", content)
-		if err == nil {
-			return ast, nil
-		}
-		// Log error but fall back to legacy parser
-		_ = err
-	}
-
-	// Use legacy parser
-	parser := NewParserFromString(content)
-	return parser.Parse()
-}
-
-// NewParserFromString creates a parser from a string (helper for fallback)
-func NewParserFromString(content string) *Parser {
-	return NewParser(strings.NewReader(content))
+	return ParseWithDescriptor("input.proto", content)
 }

@@ -438,7 +438,8 @@ message User { string name = 0; }`, // field number 0 is invalid
 	}
 }
 
-// TestParseWithFallback tests the fallback mechanism
+// TestParseWithFallback tests the ParseWithFallback function
+// (now just a wrapper around ParseWithDescriptor for backward compatibility)
 func TestParseWithFallback(t *testing.T) {
 	content := `syntax = "proto3";
 
@@ -449,20 +450,14 @@ message User {
 }
 `
 
-	// Test with descriptor parser disabled (default)
-	UseDescriptorParser = false
 	ast, err := ParseWithFallback(content)
 	require.NoError(t, err)
 	require.NotNil(t, ast)
 	assert.Equal(t, "test", ast.Package.Name)
 
-	// Test with descriptor parser enabled
-	UseDescriptorParser = true
-	ast, err = ParseWithFallback(content)
-	require.NoError(t, err)
-	require.NotNil(t, ast)
-	assert.Equal(t, "test", ast.Package.Name)
-
-	// Reset to default
-	UseDescriptorParser = false
+	// Verify fields are parsed (descriptor parser feature)
+	require.Len(t, ast.Messages, 1)
+	assert.Equal(t, "User", ast.Messages[0].Name)
+	require.Len(t, ast.Messages[0].Fields, 1)
+	assert.Equal(t, "name", ast.Messages[0].Fields[0].Name)
 }
