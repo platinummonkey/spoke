@@ -128,23 +128,47 @@ func generateDummyProtoFromPath(importPath string) string {
 	path := strings.TrimSuffix(importPath, ".proto")
 
 	// Extract package name from path (e.g., "user/user.proto" -> "user")
+	// Handle versioned imports like "common-v1.0.0" or "types/v2.0.0/base"
 	parts := strings.Split(path, "/")
 	var packageName string
 	var messageName string
 
 	if len(parts) > 0 {
-		// Use the last directory as package name
-		if len(parts) > 1 {
-			packageName = parts[len(parts)-2]
-		} else {
-			packageName = parts[0]
+		// Start with the last part (filename)
+		lastName := parts[len(parts)-1]
+
+		// Remove version suffixes (e.g., "common-v1.0.0" -> "common")
+		// Split by dash and take parts before version-like segments
+		dashParts := strings.Split(lastName, "-")
+		for _, part := range dashParts {
+			// Skip if it looks like a version (starts with 'v' followed by digit, or contains only digits/dots)
+			if len(part) > 0 && part[0] == 'v' && len(part) > 1 && part[1] >= '0' && part[1] <= '9' {
+				break
+			}
+			if strings.Contains(part, ".") {
+				continue
+			}
+			if packageName == "" {
+				packageName = part
+			}
 		}
 
-		// Use the file name (last part) as a message name, capitalized
-		fileName := parts[len(parts)-1]
-		if fileName != "" {
-			// Capitalize first letter for message name
-			messageName = strings.ToUpper(fileName[:1]) + fileName[1:]
+		// If still no package name, try to find a non-version directory
+		if packageName == "" {
+			for i := len(parts) - 2; i >= 0; i-- {
+				part := parts[i]
+				// Skip if it looks like a version directory
+				if strings.Contains(part, ".") || (len(part) > 1 && part[0] == 'v' && part[1] >= '0' && part[1] <= '9') {
+					continue
+				}
+				packageName = part
+				break
+			}
+		}
+
+		// Use package name as base for message name, capitalized
+		if packageName != "" {
+			messageName = strings.ToUpper(packageName[:1]) + packageName[1:]
 		}
 	}
 
@@ -155,6 +179,10 @@ func generateDummyProtoFromPath(importPath string) string {
 		messageName = "DummyMessage"
 	}
 
+	// Ensure package name is valid (alphanumeric + underscore)
+	packageName = sanitizeIdentifier(packageName)
+	messageName = sanitizeIdentifier(messageName)
+
 	// Generate a proto file with the inferred package and a dummy message
 	return fmt.Sprintf(`syntax = "proto3";
 package %s;
@@ -164,6 +192,67 @@ message %s {
   string id = 1;
 }
 `, packageName, messageName)
+}
+
+// sanitizeIdentifier ensures an identifier is valid for protobuf (alphanumeric + underscore, no leading digit)
+func sanitizeIdentifier(s string) string {
+	if s == "" {
+		return "dummy"
+	}
+
+	// Replace invalid characters with underscore
+	var result strings.Builder
+	for i, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_' {
+			result.WriteRune(r)
+		} else if r >= '0' && r <= '9' {
+			// Numbers are ok, but not as first character
+			if i > 0 {
+				result.WriteRune(r)
+			} else {
+				result.WriteRune('_')
+				result.WriteRune(r)
+			}
+		} else {
+			result.WriteRune('_')
+		}
+	}
+
+	id := result.String()
+	if id == "" {
+		return "dummy"
+	}
+	return id
+}
+
+// preprocessImportPaths replaces @ symbols in import statements with dashes
+// This makes Spoke's custom versioned import syntax compatible with protocompile
+// Example: import "common@v1.0.0" becomes import "common-v1.0.0"
+func preprocessImportPaths(content string) string {
+	lines := strings.Split(content, "\n")
+	var result []string
+
+	for _, line := range lines {
+		// Check if this is an import line
+		if strings.Contains(line, "import ") && strings.Contains(line, "\"") {
+			// Find the quoted string
+			start := strings.Index(line, "\"")
+			if start != -1 {
+				end := strings.Index(line[start+1:], "\"")
+				if end != -1 {
+					// Extract the import path
+					importPath := line[start+1 : start+1+end]
+					// Replace @ with - in the import path
+					sanitized := strings.ReplaceAll(importPath, "@", "-")
+					// Reconstruct the line with sanitized import
+					line = line[:start+1] + sanitized + line[start+1+end:]
+				}
+			}
+		}
+		result = append(result, line)
+	}
+
+	return strings.Join(result, "\n")
 }
 
 // extractImportPaths extracts import paths from proto content using simple text parsing
@@ -232,12 +321,17 @@ func extractImportModifiers(content string) (publicImports []string, weakImports
 
 // parseToDescriptor uses protocompile to parse proto content into a FileDescriptorProto
 func parseToDescriptor(filename, content string) (*descriptorpb.FileDescriptorProto, *descriptorpb.SourceCodeInfo, string, error) {
-	// Extract imports from content to provide dummy files for unresolvable imports
-	imports := extractImportPaths(content)
+	// Preprocess content to handle custom Spoke import syntax with @ symbols
+	// Replace @ with - in import statements for protocompile compatibility
+	// The original import paths will still be preserved for dependency extraction
+	preprocessedContent := preprocessImportPaths(content)
+
+	// Extract imports from preprocessed content to provide dummy files for unresolvable imports
+	imports := extractImportPaths(preprocessedContent)
 
 	// Build a map with the main file and dummy files for all imports
 	fileMap := map[string]string{
-		filename: content,
+		filename: preprocessedContent,
 	}
 
 	// Add dummy proto files for each import so protocompile doesn't fail on unresolvable imports
