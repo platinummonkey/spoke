@@ -70,6 +70,14 @@ jobs:
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
           echo "$HOME/go/bin" >> $GITHUB_PATH
 
+      - name: Build Docker compiler images for codegen tests
+        # Required for Docker-based code generation tests in pkg/codegen/docker
+        # Tests in runner_test.go skip if these images are unavailable
+        run: |
+          cd deployments/docker/compilers
+          docker build -t spoke/compiler-go:latest go/
+          docker images | grep spoke/compiler
+
       - name: Run tests
         env:
           SPOKE_POSTGRES_URL: postgres://postgres:postgres@localhost:5432/spoke_test?sslmode=disable
@@ -162,6 +170,14 @@ jobs:
         run: |
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
           echo "$HOME/go/bin" >> $GITHUB_PATH
+
+      - name: Build Docker compiler images for codegen tests
+        # Required for Docker-based code generation tests in pkg/codegen/docker
+        # Tests in runner_test.go skip if these images are unavailable
+        run: |
+          cd deployments/docker/compilers
+          docker build -t spoke/compiler-go:latest go/
+          docker images | grep spoke/compiler
 
       - name: Run race detector on tests
         env:
