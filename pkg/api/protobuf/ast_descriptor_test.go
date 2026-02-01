@@ -169,7 +169,9 @@ message User {
 
 	ast, err := ParseWithDescriptor("test.proto", content)
 	if err != nil && strings.Contains(err.Error(), "could not resolve path") {
-		t.Skip("Skipping test - google protobuf types not available in test environment")
+		t.Skip("Skipping test - google protobuf well-known types not available.\n" +
+			"Install protoc to make these types available: https://github.com/protocolbuffers/protobuf/releases\n" +
+			"The protoc installation includes google/protobuf/*.proto files needed for this test.")
 	}
 	require.NoError(t, err)
 	require.NotNil(t, ast)
@@ -340,7 +342,9 @@ message GetUserRequest {
 
 	ast, err := ParseWithDescriptor("test.proto", content)
 	if err != nil && strings.Contains(err.Error(), "could not resolve path") {
-		t.Skip("Skipping test - google protobuf types not available in test environment")
+		t.Skip("Skipping test - google protobuf well-known types not available.\n" +
+			"Install protoc to make these types available: https://github.com/protocolbuffers/protobuf/releases\n" +
+			"The protoc installation includes google/protobuf/*.proto files needed for this test.")
 	}
 	require.NoError(t, err)
 	require.NotNil(t, ast)

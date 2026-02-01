@@ -369,7 +369,9 @@ service IntegrationService {
 	t.Run("parse content", func(t *testing.T) {
 		root, err := ParseString(content)
 		if err != nil && strings.Contains(err.Error(), "could not resolve path") {
-			t.Skip("Skipping test - google protobuf types not available")
+			t.Skip("Skipping test - google protobuf well-known types not available.\n" +
+				"Install protoc to make these types available: https://github.com/protocolbuffers/protobuf/releases\n" +
+				"The protoc installation includes google/protobuf/*.proto files needed for this test.")
 		}
 		require.NoError(t, err)
 		assert.NotNil(t, root)
@@ -378,7 +380,9 @@ service IntegrationService {
 	t.Run("extract package", func(t *testing.T) {
 		pkg, err := ExtractPackageName(content)
 		if err != nil && strings.Contains(err.Error(), "could not resolve path") {
-			t.Skip("Skipping test - google protobuf types not available")
+			t.Skip("Skipping test - google protobuf well-known types not available.\n" +
+				"Install protoc to make these types available: https://github.com/protocolbuffers/protobuf/releases\n" +
+				"The protoc installation includes google/protobuf/*.proto files needed for this test.")
 		}
 		require.NoError(t, err)
 		assert.Equal(t, "integration.test", pkg)
@@ -387,7 +391,9 @@ service IntegrationService {
 	t.Run("extract imports", func(t *testing.T) {
 		imports, err := ExtractImports(content)
 		if err != nil && strings.Contains(err.Error(), "could not resolve path") {
-			t.Skip("Skipping test - google protobuf types not available")
+			t.Skip("Skipping test - google protobuf well-known types not available.\n" +
+				"Install protoc to make these types available: https://github.com/protocolbuffers/protobuf/releases\n" +
+				"The protoc installation includes google/protobuf/*.proto files needed for this test.")
 		}
 		require.NoError(t, err)
 		assert.Len(t, imports, 2)
