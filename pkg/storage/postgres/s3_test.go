@@ -1230,16 +1230,7 @@ func TestS3Client_GetObject_EdgeCases(t *testing.T) {
 	// - Corrupted data
 }
 
-// TestS3Client_PutObjectWithHash_Integration tests the full workflow
-func TestS3Client_PutObjectWithHash_Integration(t *testing.T) {
-	t.Skip("Requires S3 mock client - would test in integration tests")
-
-	// This would test:
-	// - Upload new object
-	// - Upload duplicate (deduplication)
-	// - Verify hash matches
-	// - Retrieve and verify content
-}
+// TestS3Client_PutObjectWithHash_Integration - implemented in s3_integration_test.go
 
 // TestS3Client_ObjectExists_Scenarios tests existence checks
 func TestS3Client_ObjectExists_Scenarios(t *testing.T) {
