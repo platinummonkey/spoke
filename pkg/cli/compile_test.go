@@ -4,17 +4,39 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// requireProtoc skips the test if protoc is not available, providing installation instructions
+func requireProtoc(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("protoc"); err != nil {
+		installMsg := getProtocInstallInstructions()
+		t.Skipf("protoc not found in PATH. Install protoc to run this test:\n%s", installMsg)
+	}
+}
+
+// getProtocInstallInstructions returns platform-specific instructions for installing protoc
+func getProtocInstallInstructions() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "  brew install protobuf\n  # or download from https://github.com/protocolbuffers/protobuf/releases"
+	case "linux":
+		return "  # Debian/Ubuntu:\n  apt-get install protobuf-compiler\n  # or download from https://github.com/protocolbuffers/protobuf/releases"
+	case "windows":
+		return "  # Download from https://github.com/protocolbuffers/protobuf/releases\n  # or use chocolatey: choco install protoc"
+	default:
+		return "  # Download from https://github.com/protocolbuffers/protobuf/releases"
+	}
+}
+
 func TestCompileCommand(t *testing.T) {
 	// Skip if protoc is not available
-	if _, err := exec.LookPath("protoc"); err != nil {
-		t.Skip("protoc not found in PATH, skipping compilation tests")
-	}
+	requireProtoc(t)
 	// Create test proto files
 	commonProto := `syntax = "proto3";
 package common;
@@ -357,9 +379,7 @@ func TestNewCompileCommand(t *testing.T) {
 // TestCompileMultipleLanguages tests compilation for multiple languages
 func TestCompileMultipleLanguages(t *testing.T) {
 	// Skip if protoc is not available
-	if _, err := exec.LookPath("protoc"); err != nil {
-		t.Skip("protoc not found in PATH, skipping compilation tests")
-	}
+	requireProtoc(t)
 
 	tempDir := t.TempDir()
 	protoDir := filepath.Join(tempDir, "proto")
@@ -400,9 +420,7 @@ message TestMessage {
 // TestCompileWithGRPC tests gRPC flag
 func TestCompileWithGRPC(t *testing.T) {
 	// Skip if protoc is not available
-	if _, err := exec.LookPath("protoc"); err != nil {
-		t.Skip("protoc not found in PATH")
-	}
+	requireProtoc(t)
 
 	tempDir := t.TempDir()
 	protoDir := filepath.Join(tempDir, "proto")
@@ -479,9 +497,7 @@ message TestMessage {
 // TestCompileParallelMode tests parallel compilation flag
 func TestCompileParallelMode(t *testing.T) {
 	// Skip if protoc is not available
-	if _, err := exec.LookPath("protoc"); err != nil {
-		t.Skip("protoc not found in PATH")
-	}
+	requireProtoc(t)
 
 	tempDir := t.TempDir()
 	protoDir := filepath.Join(tempDir, "proto")
@@ -554,9 +570,7 @@ func TestCompileNoProtoFiles(t *testing.T) {
 // TestCompileRecursiveFlag tests recursive dependency resolution
 func TestCompileRecursiveFlag(t *testing.T) {
 	// Skip if protoc is not available
-	if _, err := exec.LookPath("protoc"); err != nil {
-		t.Skip("protoc not found in PATH")
-	}
+	requireProtoc(t)
 
 	tempDir := t.TempDir()
 	protoDir := filepath.Join(tempDir, "proto")

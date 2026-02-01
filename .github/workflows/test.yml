@@ -50,6 +50,8 @@ jobs:
           cache: true
 
       - name: Install protoc
+        # Required for compile tests in pkg/cli/compile_test.go
+        # Tests provide installation instructions when skipped locally
         uses: arduino/setup-protoc@v3
         with:
           version: '25.x'
@@ -141,6 +143,8 @@ jobs:
           cache: true
 
       - name: Install protoc
+        # Required for compile tests in pkg/cli/compile_test.go
+        # Tests provide installation instructions when skipped locally
         uses: arduino/setup-protoc@v3
         with:
           version: '25.x'
