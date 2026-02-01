@@ -32,8 +32,6 @@ func TestIntegration_ModuleWorkflow(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	t.Skip("TODO: Fix module view tracking - requires additional database setup")
-
 	db, cleanup := setupIntegrationTestDB(t)
 	defer cleanup()
 

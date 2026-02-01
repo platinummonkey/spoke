@@ -45,8 +45,13 @@ func NewServer(storage Storage, db *sql.DB) *Server {
 		storageAdapter := NewSearchStorageAdapter(storage)
 		s.searchIndexer = search.NewIndexer(db, storageAdapter)
 
-		// Initialize analytics event tracker
-		s.eventTracker = analytics.NewEventTracker(db)
+		// Initialize analytics event tracker only if tables exist
+		// This allows tests to run without analytics schema
+		var tableExists bool
+		err := db.QueryRow("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'module_view_events')").Scan(&tableExists)
+		if err == nil && tableExists {
+			s.eventTracker = analytics.NewEventTracker(db)
+		}
 	}
 
 	s.setupRoutes()
