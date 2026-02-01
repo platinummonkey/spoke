@@ -2,8 +2,6 @@
 
 ![Spoke Logo](./web/public/logos/logo_main.png)
 
-[![CI](https://github.com/platinummonkey/spoke/actions/workflows/spoke-validate.yml/badge.svg)](https://github.com/platinummonkey/spoke/actions/workflows/spoke-validate.yml)
-[![Push](https://github.com/platinummonkey/spoke/actions/workflows/spoke-push.yml/badge.svg)](https://github.com/platinummonkey/spoke/actions/workflows/spoke-push.yml)
 [![Docs](https://github.com/platinummonkey/spoke/actions/workflows/hugo.yml/badge.svg)](https://github.com/platinummonkey/spoke/actions/workflows/hugo.yml)
 [![Test](https://github.com/platinummonkey/spoke/actions/workflows/test.yml/badge.svg)](https://github.com/platinummonkey/spoke/actions/workflows/test.yml)
 [![Coverage](https://raw.githubusercontent.com/platinummonkey/spoke/badges/.badges/main/coverage.svg)](https://github.com/platinummonkey/spoke/actions/workflows/test.yml)
