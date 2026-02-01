@@ -171,6 +171,8 @@ func TestDockerRunner_Execute_Integration(t *testing.T) {
 syntax = "proto3";
 package test;
 
+option go_package = "github.com/example/test";
+
 message TestMessage {
   string name = 1;
   int32 value = 2;

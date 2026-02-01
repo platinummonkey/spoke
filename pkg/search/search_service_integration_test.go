@@ -109,12 +109,29 @@ func runSearchMigrations(db *sql.DB) error {
 func seedSearchTestData(t *testing.T, db *sql.DB) {
 	t.Helper()
 
-	// Create test module
-	_, err := db.Exec(`
-		INSERT INTO modules (name, description) VALUES
-		('test-module', 'Test module for search')
-	`)
-	require.NoError(t, err)
+	// Create test organization first (required for modules with multitenancy)
+	var orgID int64
+	err := db.QueryRow(`
+		INSERT INTO organizations (name, display_name, created_at)
+		VALUES ('test-org', 'Test Organization', NOW())
+		RETURNING id
+	`).Scan(&orgID)
+	if err != nil {
+		// If organizations table doesn't exist, try without org_id
+		// (for minimal test setups without multitenancy schema)
+		_, err = db.Exec(`
+			INSERT INTO modules (name, description) VALUES
+			('test-module', 'Test module for search')
+		`)
+		require.NoError(t, err)
+	} else {
+		// Create test module with organization
+		_, err = db.Exec(`
+			INSERT INTO modules (name, description, org_id) VALUES
+			('test-module', 'Test module for search', $1)
+		`, orgID)
+		require.NoError(t, err)
+	}
 
 	// Get module ID
 	var moduleID int64
