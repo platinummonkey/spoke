@@ -284,8 +284,6 @@ func TestIntegration_VersionDependencies(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	t.Skip("TODO: Fix version indexing - requires additional backend support")
-
 	db, cleanup := setupIntegrationTestDB(t)
 	defer cleanup()
 

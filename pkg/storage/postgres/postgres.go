@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"time"
@@ -429,9 +430,15 @@ func (s *PostgresStorage) GetVersionContext(ctx context.Context, moduleName, ver
 		return nil, fmt.Errorf("failed to get version: %w", err)
 	}
 
-	// Parse dependencies (simple JSON array parsing)
+	// Parse dependencies from JSON array
 	var dependencies []string
-	// TODO: Use proper JSON parsing for dependencies
+	if depsJSON != "" && depsJSON != "[]" {
+		if err := json.Unmarshal([]byte(depsJSON), &dependencies); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to parse dependencies")
+			return nil, fmt.Errorf("failed to parse dependencies: %w", err)
+		}
+	}
 
 	// Get file metadata
 	fileQuery := `
@@ -531,7 +538,14 @@ func (s *PostgresStorage) ListVersionsContext(ctx context.Context, moduleName st
 		}
 
 		v.ModuleName = moduleName
-		// TODO: Parse dependencies JSON properly
+
+		// Parse dependencies from JSON array
+		if depsJSON != "" && depsJSON != "[]" {
+			if err := json.Unmarshal([]byte(depsJSON), &v.Dependencies); err != nil {
+				return nil, fmt.Errorf("failed to parse dependencies for version %s: %w", v.Version, err)
+			}
+		}
+
 		versions = append(versions, &v)
 	}
 
