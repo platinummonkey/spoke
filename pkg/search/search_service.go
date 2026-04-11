@@ -173,15 +173,21 @@ func (s *SearchService) Search(ctx context.Context, req SearchRequest) (*SearchR
 		return nil, fmt.Errorf("error iterating results: %w", err)
 	}
 
+	// Always record scan_error_count so span-based queries work uniformly
+	// regardless of whether errors occurred.
+	span.SetAttributes(attribute.Int("scan_error_count", scanErrors))
 	if scanErrors > 0 {
 		span.SetStatus(codes.Error, "search completed with scan failures")
-		span.SetAttributes(attribute.Int("scan_error_count", scanErrors))
 	}
 
 	// Get total count (without pagination)
+	totalCountOk := true
 	totalCount, err := s.getTotalCount(ctx, parsedQuery)
 	if err != nil {
-		// Log error but don't fail the request
+		totalCountOk = false
+		// Don't fail the request, but record the degradation so the span
+		// reflects that TotalCount is a fallback value, not an accurate count.
+		span.RecordError(err)
 		span.AddEvent("failed to get total count",
 			trace.WithAttributes(attribute.String("error", err.Error())),
 		)
@@ -192,7 +198,7 @@ func (s *SearchService) Search(ctx context.Context, req SearchRequest) (*SearchR
 		attribute.Int("result_count", len(results)),
 		attribute.Int("total_count", totalCount),
 	)
-	if scanErrors == 0 {
+	if scanErrors == 0 && totalCountOk {
 		span.SetStatus(codes.Ok, "search completed")
 	}
 
@@ -478,9 +484,11 @@ func (s *SearchService) GetSuggestions(ctx context.Context, prefix string, limit
 	defer rows.Close()
 
 	suggestions := make([]string, 0, limit)
+	scanErrors := 0
 	for rows.Next() {
 		var suggestion string
 		if err := rows.Scan(&suggestion); err != nil {
+			scanErrors++
 			span.RecordError(err)
 			log.Printf("ERROR: search_service: failed to scan suggestion row: %v", err)
 			continue
@@ -494,8 +502,15 @@ func (s *SearchService) GetSuggestions(ctx context.Context, prefix string, limit
 		return nil, fmt.Errorf("error iterating suggestions: %w", err)
 	}
 
-	span.SetAttributes(attribute.Int("suggestion_count", len(suggestions)))
-	span.SetStatus(codes.Ok, "suggestions retrieved")
+	span.SetAttributes(
+		attribute.Int("suggestion_count", len(suggestions)),
+		attribute.Int("scan_error_count", scanErrors),
+	)
+	if scanErrors == 0 {
+		span.SetStatus(codes.Ok, "suggestions retrieved")
+	} else {
+		span.SetStatus(codes.Error, "suggestions retrieved with scan failures")
+	}
 
 	return suggestions, nil
 }
