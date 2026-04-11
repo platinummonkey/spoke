@@ -20,7 +20,7 @@
         "cytoscape": "^3.28.1",
         "cytoscape-cola": "^2.5.1",
         "cytoscape-dagre": "^2.5.0",
-        "framer-motion": "^11.0.3",
+        "framer-motion": "^12.38.0",
         "lunr": "^2.3.9",
         "prismjs": "^1.30.0",
         "protobufjs": "^7.5.0",
