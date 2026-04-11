@@ -621,14 +621,16 @@ func TestShutdownFunctionContextTimeout(t *testing.T) {
 	logger := NewLogger(InfoLevel, io.Discard)
 	sm := NewShutdownManager(logger, nil, 1*time.Second)
 
-	var contextTimedOut bool
-	var mu sync.Mutex
+	// Use a channel instead of mutex+bool: executeShutdownLogic returns as soon
+	// as the timeout fires without waiting for goroutines to finish. The
+	// goroutine that sets the flag may not be scheduled before the assertion
+	// runs, causing a race under the race detector. A channel receive properly
+	// blocks until the goroutine has actually executed.
+	contextCancelled := make(chan struct{})
 
 	sm.RegisterShutdownFunc(func(ctx context.Context) error {
 		<-ctx.Done()
-		mu.Lock()
-		contextTimedOut = true
-		mu.Unlock()
+		close(contextCancelled)
 		return ctx.Err()
 	})
 
@@ -638,12 +640,11 @@ func TestShutdownFunctionContextTimeout(t *testing.T) {
 		t.Error("Expected timeout error but got nil")
 	}
 
-	mu.Lock()
-	timedOut := contextTimedOut
-	mu.Unlock()
-
-	if !timedOut {
-		t.Error("Context should have timed out")
+	select {
+	case <-contextCancelled:
+		// goroutine ran after context was cancelled — correct
+	case <-time.After(2 * time.Second):
+		t.Error("Context should have timed out and unblocked the shutdown goroutine")
 	}
 }
 
