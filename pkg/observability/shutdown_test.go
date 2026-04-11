@@ -626,11 +626,11 @@ func TestShutdownFunctionContextTimeout(t *testing.T) {
 	// goroutine that sets the flag may not be scheduled before the assertion
 	// runs, causing a race under the race detector. A channel receive properly
 	// blocks until the goroutine has actually executed.
-	contextCancelled := make(chan struct{})
+	contextCanceled := make(chan struct{})
 
 	sm.RegisterShutdownFunc(func(ctx context.Context) error {
 		<-ctx.Done()
-		close(contextCancelled)
+		close(contextCanceled)
 		return ctx.Err()
 	})
 
@@ -641,7 +641,7 @@ func TestShutdownFunctionContextTimeout(t *testing.T) {
 	}
 
 	select {
-	case <-contextCancelled:
+	case <-contextCanceled:
 		// goroutine ran after context was cancelled — correct
 	case <-time.After(2 * time.Second):
 		t.Error("Context should have timed out and unblocked the shutdown goroutine")
