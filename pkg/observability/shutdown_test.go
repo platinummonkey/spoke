@@ -642,7 +642,7 @@ func TestShutdownFunctionContextTimeout(t *testing.T) {
 
 	select {
 	case <-contextCanceled:
-		// goroutine ran after context was cancelled — correct
+		// goroutine ran after context was canceled — correct
 	case <-time.After(2 * time.Second):
 		t.Error("Context should have timed out and unblocked the shutdown goroutine")
 	}
