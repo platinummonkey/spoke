@@ -28,7 +28,7 @@ jobs:
           node-version: '20'
 
       - name: Install Spectral
-        run: npm install -g @stoplight/spectral-cli
+        run: npm install -g @stoplight/spectral-cli@6.15.0
 
       - name: Validate OpenAPI spec
         run: spectral lint openapi.yaml
@@ -60,7 +60,7 @@ jobs:
           go-version: '1.24.2'
 
       - name: Install oasdiff
-        run: go install github.com/tufin/oasdiff@latest
+        run: go install github.com/tufin/oasdiff@v1.13.5
 
       - name: Check for breaking changes
         run: |
@@ -88,7 +88,7 @@ jobs:
           go-version: '1.24.2'
 
       - name: Install oapi-codegen
-        run: go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+        run: go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.6.0
 
       - name: Generate Go client
         run: |

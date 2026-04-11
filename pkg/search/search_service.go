@@ -212,8 +212,8 @@ func (s *SearchService) buildSearchQuery(q *ParsedQuery, limit, offset int) (str
 			COALESCE(psi.comments, ''),
 			COALESCE(psi.field_type, ''),
 			COALESCE(psi.field_number, 0),
-			psi.is_repeated,
-			psi.is_optional,
+			COALESCE(psi.is_repeated, false),
+			COALESCE(psi.is_optional, false),
 			COALESCE(psi.method_input_type, ''),
 			COALESCE(psi.method_output_type, ''),
 	`)
@@ -303,6 +303,7 @@ func (s *SearchService) buildSearchQuery(q *ParsedQuery, limit, offset int) (str
 		queryBuilder.WriteString(fmt.Sprintf(`
 			AND v.version = $%d
 		`, argIndex))
+		argIndex++
 	}
 
 	// Add has-comment filter
@@ -410,6 +411,7 @@ func (s *SearchService) getTotalCount(ctx context.Context, q *ParsedQuery) (int,
 		queryBuilder.WriteString(fmt.Sprintf(`
 			AND v.version = $%d
 		`, argIndex))
+		argIndex++
 	}
 
 	// Add has-comment filter
@@ -418,6 +420,8 @@ func (s *SearchService) getTotalCount(ctx context.Context, q *ParsedQuery) (int,
 			AND (psi.comments IS NOT NULL AND psi.comments != '')
 		`)
 	}
+
+	_ = argIndex // consumed above; guard against future filter additions forgetting to increment
 
 	var count int
 	err := s.db.QueryRowContext(ctx, queryBuilder.String(), args...).Scan(&count)
