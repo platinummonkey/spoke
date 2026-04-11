@@ -24,7 +24,7 @@
         "lunr": "^2.3.9",
         "prismjs": "^1.30.0",
         "protobufjs": "^7.5.0",
-        "react": "^18.2.0",
+        "react": "^19.2.5",
         "react-dom": "^19.2.5",
         "react-router-dom": "^6.30.3",
         "recharts": "^2.15.4"
@@ -32,7 +32,7 @@
     "devDependencies": {
         "@types/cytoscape": "^3.21.0",
         "@types/lunr": "^2.3.7",
-        "@types/react": "^18.2.43",
+        "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
         "@vitejs/plugin-react": "^4.2.1",
         "typescript": "^6.0.2",
