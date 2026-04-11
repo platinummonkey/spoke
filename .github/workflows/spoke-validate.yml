@@ -28,7 +28,10 @@ jobs:
       - name: Setup Spoke CLI
         run: |
           # SECURITY: This downloads an unpinned binary from 'latest' with no integrity check.
-          # Pinning is not yet possible because spoke has no published releases.
+          # Pinning is not yet possible because spoke has no published releases; the curl
+          # will fail at runtime regardless since no binary exists at that URL yet.
+          # Accepted risk: these workflows are non-functional without releases and are
+          # aspirational placeholders only.
           # TODO: Once releases exist, replace with a pinned version URL and verify:
           #   echo '<expected-sha256>  spoke-cli-linux-amd64' | sha256sum --check
           curl -sSL https://github.com/platinummonkey/spoke/releases/latest/download/spoke-cli-linux-amd64 -o /usr/local/bin/spoke

@@ -128,6 +128,7 @@ func (s *SearchService) Search(ctx context.Context, req SearchRequest) (*SearchR
 
 	// Parse results
 	results := make([]EntitySearchResult, 0, req.Limit)
+	scanErrors := 0
 	for rows.Next() {
 		var result EntitySearchResult
 		var metadataJSON []byte
@@ -154,8 +155,8 @@ func (s *SearchService) Search(ctx context.Context, req SearchRequest) (*SearchR
 			&metadataJSON,
 		)
 		if err != nil {
+			scanErrors++
 			span.RecordError(err)
-			span.SetStatus(codes.Error, "failed to scan search result row")
 			log.Printf("ERROR: search_service: failed to scan result row: %v", err)
 			continue
 		}
@@ -172,6 +173,11 @@ func (s *SearchService) Search(ctx context.Context, req SearchRequest) (*SearchR
 		return nil, fmt.Errorf("error iterating results: %w", err)
 	}
 
+	if scanErrors > 0 {
+		span.SetStatus(codes.Error, "search completed with scan failures")
+		span.SetAttributes(attribute.Int("scan_error_count", scanErrors))
+	}
+
 	// Get total count (without pagination)
 	totalCount, err := s.getTotalCount(ctx, parsedQuery)
 	if err != nil {
@@ -186,7 +192,9 @@ func (s *SearchService) Search(ctx context.Context, req SearchRequest) (*SearchR
 		attribute.Int("result_count", len(results)),
 		attribute.Int("total_count", totalCount),
 	)
-	span.SetStatus(codes.Ok, "search completed")
+	if scanErrors == 0 {
+		span.SetStatus(codes.Ok, "search completed")
+	}
 
 	return &SearchResponse{
 		Results:     results,
@@ -473,9 +481,17 @@ func (s *SearchService) GetSuggestions(ctx context.Context, prefix string, limit
 	for rows.Next() {
 		var suggestion string
 		if err := rows.Scan(&suggestion); err != nil {
+			span.RecordError(err)
+			log.Printf("ERROR: search_service: failed to scan suggestion row: %v", err)
 			continue
 		}
 		suggestions = append(suggestions, suggestion)
+	}
+
+	if err = rows.Err(); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "error iterating suggestions")
+		return nil, fmt.Errorf("error iterating suggestions: %w", err)
 	}
 
 	span.SetAttributes(attribute.Int("suggestion_count", len(suggestions)))
