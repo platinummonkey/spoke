@@ -27,7 +27,10 @@ jobs:
 
       - name: Setup Spoke CLI
         run: |
-          # TODO: pin to a specific version once releases exist, and verify SHA256 checksum.
+          # SECURITY: This downloads an unpinned binary from 'latest' with no integrity check.
+          # Pinning is not yet possible because spoke has no published releases.
+          # TODO: Once releases exist, replace with a pinned version URL and verify:
+          #   echo '<expected-sha256>  spoke-cli-linux-amd64' | sha256sum --check
           curl -sSL https://github.com/platinummonkey/spoke/releases/latest/download/spoke-cli-linux-amd64 -o /usr/local/bin/spoke
           chmod +x /usr/local/bin/spoke
           spoke --version

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 
 	"go.opentelemetry.io/otel"
@@ -154,7 +155,9 @@ func (s *SearchService) Search(ctx context.Context, req SearchRequest) (*SearchR
 		)
 		if err != nil {
 			span.RecordError(err)
-			continue // Skip invalid rows
+			span.SetStatus(codes.Error, "failed to scan search result row")
+			log.Printf("ERROR: search_service: failed to scan result row: %v", err)
+			continue
 		}
 
 		// TODO: Parse metadata JSON if needed

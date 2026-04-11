@@ -60,6 +60,8 @@ jobs:
           go-version: '1.24.2'
 
       - name: Install oasdiff
+        # go install with a semver tag is reproducible: the Go module proxy (sum.golang.org)
+        # records content hashes in a transparency log, making @vX.Y.Z tamper-evident.
         run: go install github.com/tufin/oasdiff@v1.13.5
 
       - name: Check for breaking changes
@@ -88,6 +90,8 @@ jobs:
           go-version: '1.24.2'
 
       - name: Install oapi-codegen
+        # go install with a semver tag is reproducible: the Go module proxy (sum.golang.org)
+        # records content hashes in a transparency log, making @vX.Y.Z tamper-evident.
         run: go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.6.0
 
       - name: Generate Go client

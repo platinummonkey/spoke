@@ -69,6 +69,7 @@ jobs:
 
       - name: Install protoc-gen-go
         run: |
+          # go install with a semver tag is reproducible via Go module proxy content hashes.
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
           echo "$HOME/go/bin" >> $GITHUB_PATH
 
@@ -170,6 +171,7 @@ jobs:
 
       - name: Install protoc-gen-go
         run: |
+          # go install with a semver tag is reproducible via Go module proxy content hashes.
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
           echo "$HOME/go/bin" >> $GITHUB_PATH
 
