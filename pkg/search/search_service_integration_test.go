@@ -5,6 +5,7 @@ package search
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -67,23 +68,26 @@ func setupPostgresTestDB(t *testing.T) (*sql.DB, func()) {
 
 // runSearchMigrations applies necessary migrations for search functionality
 func runSearchMigrations(db *sql.DB) error {
-	// Get migrations directory
 	wd, err := os.Getwd()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get working directory: %w", err)
 	}
 
 	// Navigate up to find migrations directory
 	migrationsDir := filepath.Join(wd, "..", "..", "migrations")
 	if _, err := os.Stat(migrationsDir); os.IsNotExist(err) {
-		// Try one more level up
 		migrationsDir = filepath.Join(wd, "..", "..", "..", "migrations")
+		if _, err := os.Stat(migrationsDir); os.IsNotExist(err) {
+			return fmt.Errorf("migrations directory not found; searched relative paths from %s", wd)
+		}
 	}
 
-	// Read and apply migrations
 	migrationFiles, err := filepath.Glob(filepath.Join(migrationsDir, "*.up.sql"))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to list migrations in %s: %w", migrationsDir, err)
+	}
+	if len(migrationFiles) == 0 {
+		return fmt.Errorf("no migration files found in %s", migrationsDir)
 	}
 
 	sort.Strings(migrationFiles)
@@ -91,14 +95,14 @@ func runSearchMigrations(db *sql.DB) error {
 	for _, migrationPath := range migrationFiles {
 		content, err := os.ReadFile(migrationPath)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to read migration %s: %w", migrationPath, err)
 		}
 
 		_, err = db.Exec(string(content))
 		if err != nil {
-			// Log but continue - some migrations may have dependencies
-			// that aren't available in test environment
-			continue
+			// Log but continue - some migrations may depend on features not
+			// available in the test environment (e.g. extensions, external tables).
+			fmt.Printf("Warning: migration %s failed: %v\n", filepath.Base(migrationPath), err)
 		}
 	}
 
@@ -112,26 +116,18 @@ func seedSearchTestData(t *testing.T, db *sql.DB) {
 	// Create test organization first (required for modules with multitenancy)
 	var orgID int64
 	err := db.QueryRow(`
-		INSERT INTO organizations (name, display_name, created_at)
-		VALUES ('test-org', 'Test Organization', NOW())
+		INSERT INTO organizations (name, display_name, slug, created_at)
+		VALUES ('test-org', 'Test Organization', 'test-org', NOW())
 		RETURNING id
 	`).Scan(&orgID)
-	if err != nil {
-		// If organizations table doesn't exist, try without org_id
-		// (for minimal test setups without multitenancy schema)
-		_, err = db.Exec(`
-			INSERT INTO modules (name, description) VALUES
-			('test-module', 'Test module for search')
-		`)
-		require.NoError(t, err)
-	} else {
-		// Create test module with organization
-		_, err = db.Exec(`
-			INSERT INTO modules (name, description, org_id) VALUES
-			('test-module', 'Test module for search', $1)
-		`, orgID)
-		require.NoError(t, err)
-	}
+	require.NoError(t, err, "Failed to create test organization")
+
+	// Create test module with organization
+	_, err = db.Exec(`
+		INSERT INTO modules (name, description, org_id) VALUES
+		('test-module', 'Test module for search', $1)
+	`, orgID)
+	require.NoError(t, err)
 
 	// Get module ID
 	var moduleID int64
