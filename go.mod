@@ -11,7 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.3
 	github.com/bufbuild/protocompile v0.14.1
 	github.com/coreos/go-oidc/v3 v3.17.0
-	github.com/docker/docker v28.5.1+incompatible
+	github.com/docker/docker v28.5.2+incompatible
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/google/uuid v1.6.0
