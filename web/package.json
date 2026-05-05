@@ -17,7 +17,7 @@
         "@types/prismjs": "^1.26.6",
         "@types/protobufjs": "^6.0.0",
         "axios": "^1.16.0",
-        "cytoscape": "^3.33.2",
+        "cytoscape": "^3.33.3",
         "cytoscape-cola": "^2.5.1",
         "cytoscape-dagre": "^2.5.0",
         "framer-motion": "^12.38.0",
