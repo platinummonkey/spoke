@@ -12,7 +12,7 @@ require (
 	github.com/bufbuild/protocompile v0.14.1
 	github.com/coreos/go-oidc/v3 v3.18.0
 	github.com/docker/docker v28.5.2+incompatible
-	github.com/fsnotify/fsnotify v1.9.0
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
